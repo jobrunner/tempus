@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/jobrunner/tempus/compare/v0.2.0...v0.3.0) (2026-07-21)
+
+
+### Features
+
+* multi-arch (amd64/arm64) Alpine image, digest-pinned deps ([#4](https://github.com/jobrunner/tempus/issues/4)) ([fda3b46](https://github.com/jobrunner/tempus/commit/fda3b46987ca39ef5b2471df977a4d889fc9b43f))
+
 ## [0.2.0](https://github.com/jobrunner/tempus/compare/v0.1.0...v0.2.0) (2026-07-21)
 
 
