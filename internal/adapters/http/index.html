@@ -689,7 +689,7 @@
                         if (err.code === err.PERMISSION_DENIED) {
                             showError('Standortzugriff wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen.');
                         } else {
-                            showError('Standort konnte nicht ermittelt werden: ' + err.message);
+                            showError('Standort konnte nicht ermittelt werden.');
                         }
                         locationBtn.disabled = false;
                     },
@@ -704,7 +704,7 @@
                 lonInput.value = '';
                 datetimeInput.value = '';
                 // Restore timezone to browser default.
-                try { timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch(e) {}
+                try { timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch(e) { timezoneInput.value = 'UTC'; }
                 hideError();
                 results.classList.remove('active');
                 resultsContent.innerHTML = '';
@@ -767,7 +767,11 @@
                         throw new Error('Die Serverantwort konnte nicht verarbeitet werden.');
                     }
 
-                    renderResults(data);
+                    try {
+                        renderResults(data);
+                    } catch (_) {
+                        showError('Die Wetterdaten konnten nicht dargestellt werden.');
+                    }
                 } catch (err) {
                     showError(err.message);
                 } finally {
@@ -957,8 +961,9 @@
                     html += '<div class="attribution-block">';
                     html += '<div class="attribution-title">Quelle / Attribution</div>';
                     html += '<div class="attribution-license">';
-                    if (license.url) {
-                        html += '<a href="' + esc(license.url) + '" target="_blank" rel="noopener noreferrer">' + esc(license.name || 'Lizenz') + '</a>';
+                    const safeUrl = /^https?:\/\//i.test(license.url || '') ? license.url : '';
+                    if (safeUrl) {
+                        html += '<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(license.name || 'Lizenz') + '</a>';
                     } else {
                         html += esc(license.name || '-');
                     }

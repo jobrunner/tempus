@@ -83,7 +83,7 @@ func TestHandleIndex_OK(t *testing.T) {
 		t.Fatalf("GET / status = %d, want 200", rr.Code)
 	}
 	ct := rr.Header().Get("Content-Type")
-	if ct == "" || ct[:9] != "text/html" {
+	if ct == "" || !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("Content-Type = %q, want text/html…", ct)
 	}
 	body := rr.Body.String()
