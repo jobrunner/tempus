@@ -64,7 +64,7 @@ func TestFetch_SelectsHourAndAttributes(t *testing.T) {
 }
 
 func TestFetch_MissingHourIsNotYetAvailable(t *testing.T) {
-	p, done := newProvider(t, func(w http.ResponseWriter, r *http.Request) {
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"latitude":49.8,"longitude":9.94,"hourly_units":{},"hourly":{"time":["2025-06-15T13:00"],"temperature_2m":[null]}}`))
 	})
 	defer done()
@@ -76,7 +76,7 @@ func TestFetch_MissingHourIsNotYetAvailable(t *testing.T) {
 }
 
 func TestFetch_ServerErrorIsTransient(t *testing.T) {
-	p, done := newProvider(t, func(w http.ResponseWriter, r *http.Request) {
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 	})
 	defer done()

@@ -9,8 +9,8 @@ import (
 
 type stubProvider struct{ id, kind string }
 
-func (s stubProvider) ID() string                 { return s.id }
-func (s stubProvider) Kind() string               { return s.kind }
+func (s stubProvider) ID() string                  { return s.id }
+func (s stubProvider) Kind() string                { return s.kind }
 func (s stubProvider) Attribution() domain.License { return domain.License{Name: s.id} }
 func (s stubProvider) Fetch(context.Context, domain.QueryRequest) (domain.ProviderResult, error) {
 	return domain.ProviderResult{}, nil

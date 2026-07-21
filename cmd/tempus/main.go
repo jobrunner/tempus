@@ -34,11 +34,12 @@ func main() {
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 	if err := application.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		stop()
 		logger.Error("run", "error", err)
 		os.Exit(1)
 	}
+	stop()
 }
 
 func setupLogger(cfg config.LoggingConfig) *slog.Logger {

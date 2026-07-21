@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jobrunner/tempus/internal/domain"
@@ -130,7 +131,7 @@ func (p *Provider) buildURL(base string, req domain.QueryRequest, useArchive boo
 	for i, v := range hourlyVars {
 		names[i] = v.api
 	}
-	q.Set("hourly", joinComma(names))
+	q.Set("hourly", strings.Join(names, ","))
 	day := req.Instant.UTC().Format("2006-01-02")
 	if useArchive {
 		q.Set("start_date", day)
@@ -233,15 +234,4 @@ func indexOf(s []string, target string) int {
 		}
 	}
 	return -1
-}
-
-func joinComma(s []string) string {
-	out := ""
-	for i, v := range s {
-		if i > 0 {
-			out += ","
-		}
-		out += v
-	}
-	return out
 }

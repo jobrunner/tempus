@@ -23,7 +23,9 @@ type ProviderError struct {
 	Err        error
 }
 
-func (e ProviderError) Error() string { return fmt.Sprintf("provider error (class %d): %v", e.Class, e.Err) }
+func (e ProviderError) Error() string {
+	return fmt.Sprintf("provider error (class %d): %v", e.Class, e.Err)
+}
 func (e ProviderError) Unwrap() error { return e.Err }
 
 // NewTransientError: source unreachable / temporary — retryable.

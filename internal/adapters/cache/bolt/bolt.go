@@ -45,17 +45,17 @@ func (c *Cache) Close() error { return c.db.Close() }
 // Get returns the value if present and unexpired.
 func (c *Cache) Get(_ context.Context, key string) ([]byte, bool, error) {
 	var (
-		out    []byte
-		found  bool
+		out     []byte
+		found   bool
 		expired bool
 	)
 	err := c.db.View(func(tx *bolt.Tx) error {
 		raw := tx.Bucket(bucket).Get([]byte(key))
-		if raw == nil || len(raw) < 8 {
+		if len(raw) < 8 {
 			return nil
 		}
 		found = true
-		expNano := int64(binary.BigEndian.Uint64(raw[:8]))
+		expNano := int64(binary.BigEndian.Uint64(raw[:8])) //nolint:gosec // nanosecond timestamp written by this same code; value is always a valid int64
 		if expNano != 0 && time.Now().UnixNano() > expNano {
 			expired = true
 			return nil
@@ -83,7 +83,7 @@ func (c *Cache) Set(_ context.Context, key string, value []byte, ttl time.Durati
 		expNano = time.Now().Add(ttl).UnixNano()
 	}
 	buf := make([]byte, 8+len(value))
-	binary.BigEndian.PutUint64(buf[:8], uint64(expNano))
+	binary.BigEndian.PutUint64(buf[:8], uint64(expNano)) //nolint:gosec // expNano is time.Now().Add(ttl).UnixNano(); always non-negative when ttl > 0
 	copy(buf[8:], value)
 	return c.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bucket).Put([]byte(key), buf)

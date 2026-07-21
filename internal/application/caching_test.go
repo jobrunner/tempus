@@ -10,8 +10,8 @@ import (
 )
 
 type fakeCache struct {
-	store map[string][]byte
-	sets  int
+	store  map[string][]byte
+	sets   int
 	setTTL time.Duration
 }
 
@@ -27,13 +27,18 @@ func (c *fakeCache) Set(_ context.Context, k string, v []byte, ttl time.Duration
 	return nil
 }
 
+const (
+	testProviderID   = "open-meteo"
+	testProviderKind = "weather"
+)
+
 type countingProvider struct {
 	calls int
 	feat  domain.Feature
 }
 
-func (p *countingProvider) ID() string                 { return "open-meteo" }
-func (p *countingProvider) Kind() string               { return "weather" }
+func (p *countingProvider) ID() string                  { return testProviderID }
+func (p *countingProvider) Kind() string                { return testProviderKind }
 func (p *countingProvider) Attribution() domain.License { return domain.License{Name: "CC-BY 4.0"} }
 func (p *countingProvider) Fetch(context.Context, domain.QueryRequest) (domain.ProviderResult, error) {
 	p.calls++
@@ -41,6 +46,7 @@ func (p *countingProvider) Fetch(context.Context, domain.QueryRequest) (domain.P
 }
 
 type fixedClock struct{ t time.Time }
+
 func (c fixedClock) Now() time.Time { return c.t }
 
 func req(instant time.Time) domain.QueryRequest {
@@ -74,14 +80,18 @@ func TestCaching_MissThenHit(t *testing.T) {
 func TestCaching_TTLByMaturity(t *testing.T) {
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	mature := newFakeCache()
-	NewCachingProvider(&countingProvider{}, mature, fixedClock{now}, opts()).
-		Fetch(context.Background(), req(now.Add(-30*24*time.Hour)))
+	if _, err := NewCachingProvider(&countingProvider{}, mature, fixedClock{now}, opts()).
+		Fetch(context.Background(), req(now.Add(-30*24*time.Hour))); err != nil {
+		t.Fatalf("mature fetch: %v", err)
+	}
 	if mature.setTTL != 365*24*time.Hour {
 		t.Errorf("mature TTL = %v, want 8760h", mature.setTTL)
 	}
 	immature := newFakeCache()
-	NewCachingProvider(&countingProvider{}, immature, fixedClock{now}, opts()).
-		Fetch(context.Background(), req(now.Add(-2*time.Hour)))
+	if _, err := NewCachingProvider(&countingProvider{}, immature, fixedClock{now}, opts()).
+		Fetch(context.Background(), req(now.Add(-2*time.Hour))); err != nil {
+		t.Fatalf("immature fetch: %v", err)
+	}
 	if immature.setTTL != time.Hour {
 		t.Errorf("immature TTL = %v, want 1h", immature.setTTL)
 	}
@@ -89,8 +99,8 @@ func TestCaching_TTLByMaturity(t *testing.T) {
 
 func TestCacheKey_RoundsCoords(t *testing.T) {
 	instant := time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)
-	a := CacheKey("open-meteo", "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.791, Lon: 9.934}, Instant: instant}, 2)
-	b := CacheKey("open-meteo", "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.789, Lon: 9.931}, Instant: instant}, 2)
+	a := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.791, Lon: 9.934}, Instant: instant}, 2)
+	b := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.789, Lon: 9.931}, Instant: instant}, 2)
 	if a != b {
 		t.Errorf("coords within rounding must share a key: %s vs %s", a, b)
 	}
@@ -111,8 +121,8 @@ func TestCaching_InnerErrorNotCached(t *testing.T) {
 
 type errorProvider struct{ err error }
 
-func (e errorProvider) ID() string                  { return "open-meteo" }
-func (e errorProvider) Kind() string                { return "weather" }
+func (e errorProvider) ID() string                  { return testProviderID }
+func (e errorProvider) Kind() string                { return testProviderKind }
 func (e errorProvider) Attribution() domain.License { return domain.License{} }
 func (e errorProvider) Fetch(context.Context, domain.QueryRequest) (domain.ProviderResult, error) {
 	return domain.ProviderResult{}, e.err

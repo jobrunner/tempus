@@ -16,9 +16,9 @@ func TestRoutesMatchOpenAPISpec(t *testing.T) {
 	// 1. Registered /api/v1 operations (path relative to the /api/v1 prefix).
 	routes := map[string]bool{}
 	err := srv.Router().Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-		// GetPathTemplate errors for matcher-only routes (no path); skip those.
-		tmpl, tErr := route.GetPathTemplate()
-		if tErr != nil {
+		// GetPathTemplate errors for matcher-only routes (no path template); skip those.
+		tmpl, _ := route.GetPathTemplate()
+		if tmpl == "" {
 			return nil
 		}
 		rel, ok := strings.CutPrefix(tmpl, "/api/v1")

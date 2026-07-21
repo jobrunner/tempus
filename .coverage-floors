@@ -1,0 +1,12 @@
+# Per-package statement-coverage floors — a RATCHET (raise only).
+# package                                             floor(%)
+internal/domain                                       95
+internal/application                                  89
+internal/config                                       88
+internal/adapters/cache/memory                        94
+internal/adapters/cache/bolt                          83
+internal/adapters/openmeteo                           83
+internal/adapters/http                                61
+internal/ports/output                                 58
+internal/app                                          47
+TOTAL                                                 72

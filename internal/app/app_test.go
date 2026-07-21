@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -25,7 +26,11 @@ func TestApp_QueryEndToEndWithMemoryCache(t *testing.T) {
 	defer srv.Close()
 
 	// providers endpoint proves wiring without hitting the network.
-	resp, err := http.Get(srv.URL + "/api/v1/providers")
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/api/v1/providers", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

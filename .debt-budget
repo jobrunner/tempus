@@ -1,0 +1,4 @@
+# Technical-debt suppression budget — total of #nosec + //nolint directives.
+# A RATCHET: this number may only go DOWN. New suppressions must either be
+# offset by removing an old one, or accompanied by a justified increase here.
+2
