@@ -22,3 +22,6 @@ coverage.txt
 # OS / editor
 .DS_Store
 *.swp
+
+# air build output
+/tmp/

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# git pre-commit hook — lightweight, non-mutating.
+# Install: make hooks  (sets core.hooksPath = .githooks)
+# Bypass:  git commit --no-verify
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "pre-commit: fmt check…"
+unformatted=$(gofmt -l cmd internal 2>/dev/null)
+if [ -n "$unformatted" ]; then
+  echo "Not formatted (run 'make fmt'):"
+  echo "$unformatted"
+  exit 1
+fi
+
+echo "pre-commit: build check…"
+go build ./... 2>&1
+
+echo "pre-commit: debt-guard…"
+./scripts/debt-guard.sh
+
+echo "pre-commit: OK"
