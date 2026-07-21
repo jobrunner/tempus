@@ -1,9 +1,10 @@
 module github.com/jobrunner/tempus
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/spf13/viper v1.21.0
+	go.etcd.io/bbolt v1.3.11
 	go.opentelemetry.io/otel/trace v1.34.0
 )
 
@@ -20,7 +21,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
