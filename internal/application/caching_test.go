@@ -90,7 +90,7 @@ func TestCaching_TTLByMaturity(t *testing.T) {
 func TestCacheKey_RoundsCoords(t *testing.T) {
 	instant := time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)
 	a := CacheKey("open-meteo", "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.791, Lon: 9.934}, Instant: instant}, 2)
-	b := CacheKey("open-meteo", "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.789, Lon: 9.934}, Instant: instant}, 2)
+	b := CacheKey("open-meteo", "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.789, Lon: 9.931}, Instant: instant}, 2)
 	if a != b {
 		t.Errorf("coords within rounding must share a key: %s vs %s", a, b)
 	}
