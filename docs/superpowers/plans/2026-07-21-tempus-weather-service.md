@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.23+, gorilla/mux, spf13/viper, go.etcd.io/bbolt, OpenTelemetry, gopkg.in/yaml.v3, golangci-lint (depguard), gremlins, MkDocs, release-please, goreleaser.
 
-**Harness source:** The `new-go-service` skill and its templates live in this repo at `claude-skills/skills/new-go-service/` (`templates/`, `reference/`). "Copy template X" means copy from there and apply the substitutions below.
+**Harness source:** The `new-go-service` skill and its templates live in this repo at `.claude/vendor/claude-skills/skills/new-go-service/` (`templates/`, `reference/`). "Copy template X" means copy from there and apply the substitutions below.
 
 ## Global Constraints
 
@@ -51,9 +51,9 @@ go get go.etcd.io/bbolt@latest
 - [ ] **Step 2: Copy core templates with substitutions**
 
 ```bash
-cp claude-skills/skills/new-go-service/templates/config.go internal/config/config.go
-cp claude-skills/skills/new-go-service/templates/tracer_port.go internal/ports/output/tracer.go
-cp claude-skills/skills/new-go-service/templates/slog_setup.go internal/adapters/telemetry/sloghandler.go
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/config.go internal/config/config.go
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/tracer_port.go internal/ports/output/tracer.go
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/slog_setup.go internal/adapters/telemetry/sloghandler.go
 # substitutions
 sed -i '' 's/<PREFIX>/TEMPUS/g; s/<module>/github.com\/jobrunner\/tempus/g; s/<svc>/tempus/g' \
   internal/config/config.go internal/ports/output/tracer.go internal/adapters/telemetry/sloghandler.go
@@ -177,8 +177,8 @@ git commit -m "chore: scaffold hexagonal skeleton and core templates"
 - [ ] **Step 1: Copy the lint + Makefile templates**
 
 ```bash
-cp claude-skills/skills/new-go-service/templates/golangci.yml .golangci.yml
-cp claude-skills/skills/new-go-service/templates/Makefile Makefile
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/golangci.yml .golangci.yml
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/Makefile Makefile
 sed -i '' 's/<PREFIX>/TEMPUS/g; s/<module>/github.com\/jobrunner\/tempus/g; s/<svc>/tempus/g' .golangci.yml Makefile
 ```
 
@@ -2255,7 +2255,7 @@ git add -A && git commit -m "feat: add Open-Meteo weather provider"
 - [ ] **Step 1: Copy the template and adapt**
 
 ```bash
-cp claude-skills/skills/new-go-service/templates/http_server.go internal/adapters/http/server.go
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/http_server.go internal/adapters/http/server.go
 sed -i '' 's/<module>/github.com\/jobrunner\/tempus/g; s/<svc>/tempus/g' internal/adapters/http/server.go
 ```
 
@@ -2478,8 +2478,8 @@ components:
 - [ ] **Step 2: Copy the embed + contract templates**
 
 ```bash
-cp claude-skills/skills/new-go-service/templates/openapi_embed.go internal/adapters/http/openapi.go
-cp claude-skills/skills/new-go-service/templates/contract_test.go internal/adapters/http/contract_test.go
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/openapi_embed.go internal/adapters/http/openapi.go
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/contract_test.go internal/adapters/http/contract_test.go
 sed -i '' 's/<module>/github.com\/jobrunner\/tempus/g; s/<svc>/tempus/g' internal/adapters/http/openapi.go internal/adapters/http/contract_test.go
 cp internal/adapters/http/openapi.yaml api/openapi/openapi.yaml
 ```
@@ -2714,7 +2714,7 @@ git add -A && git commit -m "feat: wire composition root and end-to-end query pa
 
 ## Phase F — Complete the quality harness
 
-> These tasks scaffold the remaining `new-go-service` machinery. Each copies a concrete template/reference from `claude-skills/skills/new-go-service/` and runs its gate. Open the cited reference file before starting the task.
+> These tasks scaffold the remaining `new-go-service` machinery. Each copies a concrete template/reference from `.claude/vendor/claude-skills/skills/new-go-service/` and runs its gate. Open the cited reference file before starting the task.
 
 ### Task 17: Ratchets (debt, coverage, mutation)
 
@@ -2722,12 +2722,12 @@ git add -A && git commit -m "feat: wire composition root and end-to-end query pa
 
 - [ ] **Step 1:** Copy the templates and reference:
 ```bash
-cp claude-skills/skills/new-go-service/templates/debt-guard.sh debt-guard.sh
-cp claude-skills/skills/new-go-service/templates/coverage-gate.sh coverage-gate.sh
-cp claude-skills/skills/new-go-service/templates/gremlins.yaml gremlins.yaml
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/debt-guard.sh debt-guard.sh
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/coverage-gate.sh coverage-gate.sh
+cp .claude/vendor/claude-skills/skills/new-go-service/templates/gremlins.yaml gremlins.yaml
 chmod +x debt-guard.sh coverage-gate.sh
 ```
-Open `claude-skills/skills/new-go-service/reference/ratchets-and-harnesses.md` and follow the exact file formats.
+Open `.claude/vendor/claude-skills/skills/new-go-service/reference/ratchets-and-harnesses.md` and follow the exact file formats.
 - [ ] **Step 2:** Baseline `.debt-budget` at the current suppression count (`./debt-guard.sh` prints it) and confirm zero `TODO`/`FIXME`.
 - [ ] **Step 3:** Run `go test ./... -coverprofile=coverage.out`, then write per-package floors into `.coverage-floors` at (or just below) current coverage; run `./coverage-gate.sh` → passes.
 - [ ] **Step 4:** `make verify` green. Commit: `chore: add debt, coverage, and mutation ratchets`.
@@ -2736,19 +2736,19 @@ Open `claude-skills/skills/new-go-service/reference/ratchets-and-harnesses.md` a
 
 **Files:** Create `internal/adapters/telemetry/tracer.go` (OTel implementation of `output.Tracer`), `internal/adapters/metrics/metrics.go`; wire into `app.New` (tracing enabled by `cfg.Tracing.Enabled`, NoOp otherwise) and expose `/metrics` on `cfg.Metrics.Port`.
 
-- [ ] Follow `claude-skills/skills/new-go-service/reference/observability.md`. Keep domain/application telemetry-free (only the `output.Tracer` port). Default is `NoOpTracer` so existing tests are unaffected. `make verify` green. Commit: `feat: add OpenTelemetry tracing and metrics adapters`.
+- [ ] Follow `.claude/vendor/claude-skills/skills/new-go-service/reference/observability.md`. Keep domain/application telemetry-free (only the `output.Tracer` port). Default is `NoOpTracer` so existing tests are unaffected. `make verify` green. Commit: `feat: add OpenTelemetry tracing and metrics adapters`.
 
 ### Task 19: Docs (MkDocs + OpenAPI mirror) & doc-drift gate
 
 **Files:** Create `mkdocs.yml`, `docs/{tutorials,how-to,reference,explanation}/` with initial pages; add the doc-drift check that fails if `internal/adapters/http/openapi.yaml` and `api/openapi/openapi.yaml` differ.
 
-- [ ] Copy `mkdocs.yml` guidance from `claude-skills/skills/new-go-service/reference/ci-and-release.md`; document the `/api/v1/query` contract (attribution requirement, retry semantics, no-future rule) under `reference/`. `make docs` (`mkdocs build --strict`) green. Commit: `docs: add MkDocs site and OpenAPI mirror gate`.
+- [ ] Copy `mkdocs.yml` guidance from `.claude/vendor/claude-skills/skills/new-go-service/reference/ci-and-release.md`; document the `/api/v1/query` contract (attribution requirement, retry semantics, no-future rule) under `reference/`. `make docs` (`mkdocs build --strict`) green. Commit: `docs: add MkDocs site and OpenAPI mirror gate`.
 
 ### Task 20: Claude hooks, dev env, CI/CD & release
 
 **Files:** `.claude/settings.json` hooks + hook scripts; `Dockerfile` + `deploy/dev/`; `.github/workflows/*`; `release-please-config.json`; `.goreleaser.yml`; `.commitlintrc.yml`.
 
-- [ ] **Step 1:** Copy `claude-skills/skills/new-go-service/templates/settings.json` into `.claude/settings.json` and the hook scripts; `make hooks`. Follow `reference/ci-and-release.md` and `reference/dev-environment.md`.
+- [ ] **Step 1:** Copy `.claude/vendor/claude-skills/skills/new-go-service/templates/settings.json` into `.claude/settings.json` and the hook scripts; `make hooks`. Follow `reference/ci-and-release.md` and `reference/dev-environment.md`.
 - [ ] **Step 2:** Add CI workflows (ci, mutation, commitlint, release-please, security), `.goreleaser.yml`, and the required-status-checks note. Substitute `tempus`/module path.
 - [ ] **Step 3:** Push the branch and confirm every CI gate is green. Commit: `chore: add CI/CD, release pipeline, dev environment, and Claude hooks`.
 - [ ] **Step 4:** Open a PR from `feat/weather-service` (see `superpowers:finishing-a-development-branch`).
