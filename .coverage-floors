@@ -1,0 +1,17 @@
+# Per-package statement-coverage floors — a RATCHET (raise only).
+# Floors carry ~2% headroom below observed coverage because statement counting
+# varies slightly across Go toolchain versions (CI vs local); razor-thin floors
+# caused false failures. Re-tighten once the toolchain is pinned consistently.
+# package                                             floor(%)
+internal/domain                                       93
+internal/application                                  89
+internal/config                                       86
+internal/adapters/cache/memory                        92
+internal/adapters/cache/bolt                          81
+internal/adapters/openmeteo                           81
+internal/adapters/http                                59
+internal/adapters/metrics                             66
+internal/adapters/telemetry                           71
+internal/ports/output                                 82
+internal/app                                          50
+TOTAL                                                 71

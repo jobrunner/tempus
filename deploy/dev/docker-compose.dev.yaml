@@ -1,0 +1,35 @@
+# Per-feature dev stack. Usage: NAME=<slug> docker compose -f deploy/dev/docker-compose.dev.yaml up
+# Set COMPOSE_PROJECT_NAME=tempus-dev-${NAME} before running.
+
+services:
+  tempus:
+    build:
+      context: ../..
+      dockerfile: deploy/dev/Dockerfile.dev
+    volumes:
+      - ../..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      - TEMPUS_SERVER_HOST=0.0.0.0
+      - TEMPUS_SERVER_PORT=8080
+      - TEMPUS_LOGGING_FORMAT=json
+      - TEMPUS_LOGGING_LEVEL=debug
+    networks:
+      - tempus-dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:-tempus-dev}-api.rule=Host(`${NAME:-dev}.tempus.local`)"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME:-tempus-dev}-api.loadbalancer.server.port=8080"
+
+volumes:
+  go-mod-cache:
+    name: tempus-go-mod-cache
+    external: true
+  go-build-cache:
+    name: tempus-go-build-cache-${NAME:-dev}
+
+networks:
+  tempus-dev:
+    name: tempus-dev
+    external: true

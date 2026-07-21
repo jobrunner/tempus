@@ -1,0 +1,15 @@
+{
+  "latitude": 49.8,
+  "longitude": 9.94,
+  "hourly_units": {"temperature_2m": "°C", "wind_speed_10m": "km/h", "precipitation": "mm"},
+  "hourly": {
+    "time": ["2025-06-15T12:00", "2025-06-15T13:00", "2025-06-15T14:00"],
+    "temperature_2m": [20.1, 21.4, 22.0],
+    "relative_humidity_2m": [58, 55, 52],
+    "precipitation": [0.0, 0.0, 0.1],
+    "weather_code": [2, 3, 61],
+    "wind_speed_10m": [10.0, 12.1, 12.5],
+    "cloud_cover": [60, 75, 90],
+    "is_day": [1, 1, 1]
+  }
+}

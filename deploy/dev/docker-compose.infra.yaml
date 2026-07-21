@@ -1,0 +1,37 @@
+name: tempus-dev-infra
+
+services:
+  traefik:
+    image: traefik:v3.2
+    command:
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=tempus-dev
+      - --entrypoints.web.address=:80
+    ports:
+      - "127.0.0.1:80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - tempus-dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.tempus.local`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+
+  dozzle:
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - tempus-dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dozzle.rule=Host(`logs.tempus.local`)"
+      - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
+
+networks:
+  tempus-dev:
+    name: tempus-dev
+    external: true

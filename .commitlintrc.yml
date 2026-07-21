@@ -1,0 +1,12 @@
+extends:
+  - '@commitlint/config-conventional'
+rules:
+  header-max-length: [2, always, 120]
+  # Bodies carry detailed fix lists, URLs, and the Claude-Session trailer that
+  # legitimately exceed 100 chars; disable the line-length caps on body/footer.
+  body-max-line-length: [0, always, 100]
+  footer-max-line-length: [0, always, 100]
+  type-enum:
+    - 2
+    - always
+    - [build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test]

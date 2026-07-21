@@ -1,0 +1,38 @@
+# Template: mutation-testing CI gate. Copy to .github/workflows/mutation.yml.
+# Runs gremlins per-package with ratcheted efficacy/mcover thresholds. Ubuntu
+# only — gremlins panics on macOS. Raise the baselines as tests improve.
+name: Mutation
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 1" # weekly, Monday 04:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: gremlins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install gremlins
+        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
+      - name: Run mutation gate
+        run: |
+          fail=0
+          run_pkg() {
+            local pkg="$1" eff="$2" mcov="$3"
+            echo "===== gremlins: $pkg (min efficacy ${eff}%, min mutator-coverage ${mcov}%) ====="
+            if ! gremlins unleash --threshold-efficacy "$eff" --threshold-mcover "$mcov" "$pkg"; then
+              fail=1
+            fi
+          }
+          # Per-package baselines — ratchet UP as tests improve.
+          run_pkg ./internal/domain      90 95
+          run_pkg ./internal/application 77 94
+          exit $fail

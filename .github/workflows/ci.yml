@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, feat/**, fix/**, chore/**]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Run tests with coverage
+        run: |
+          mkdir -p coverage
+          go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage/coverage.out
+      - name: Coverage gate
+        run: ./scripts/coverage-gate.sh coverage/coverage.out
+
+  vet:
+    name: Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - run: go vet ./...
+
+  architecture:
+    name: Architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+          args: --enable-only depguard,gomodguard_v2
+      - name: go mod tidy check
+        run: go mod tidy -diff
+      - name: Debt guard
+        run: ./scripts/debt-guard.sh
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Build binary
+        run: go build -o tempus ./cmd/tempus
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+      # gosec runs inside golangci-lint (Lint job), which honors the repo's
+      # //nolint:gosec directives; a standalone gosec CLI here would re-flag
+      # those and uses different (#nosec) suppression semantics, so it's dropped.
+
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    needs: [lint, test, vet, architecture, build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
+      - name: Full verify
+        run: |
+          make fmt-check
+          make vet
+          make arch
+          make debt-guard
+          go build ./...

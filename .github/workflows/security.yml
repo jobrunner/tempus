@@ -1,0 +1,31 @@
+name: Security Scan
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # gosec is covered by golangci-lint (see the CI Lint job), which honors this
+  # repo's //nolint:gosec directives. A standalone gosec CLI job re-flags those
+  # (it only honors #nosec) and pulls a newer Go toolchain, so it is intentionally
+  # not run here.

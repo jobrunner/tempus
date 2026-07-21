@@ -1,0 +1,99 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+linters:
+  enable:
+    - bodyclose
+    - depguard
+    - dupl
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gomodguard_v2
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - revive
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        adapters:
+          files:
+            - '**/internal/adapters/**'
+          deny:
+            - pkg: github.com/jobrunner/tempus/internal/application
+              desc: adapters talk to the core only through ports
+            - pkg: github.com/jobrunner/tempus/internal/app
+              desc: adapters do not know the composition root
+            - pkg: github.com/jobrunner/tempus/internal/adapters
+              desc: no adapter->adapter import; shared logic goes in domain/ports
+        application:
+          files:
+            - '**/internal/application/**'
+          deny:
+            - pkg: github.com/jobrunner/tempus/internal/adapters
+              desc: the core talks to adapters only through ports
+            - pkg: github.com/jobrunner/tempus/internal/app
+              desc: the core does not know the composition root
+        domain:
+          files:
+            - '**/internal/domain/**'
+          deny:
+            - pkg: github.com/jobrunner/tempus/internal/application
+              desc: domain is the innermost core and imports nothing internal
+            - pkg: github.com/jobrunner/tempus/internal/ports
+              desc: domain must not know ports
+            - pkg: github.com/jobrunner/tempus/internal/adapters
+              desc: domain must not know adapters
+            - pkg: github.com/jobrunner/tempus/internal/app
+              desc: domain must not know the composition root
+            - pkg: github.com/jobrunner/tempus/internal/config
+              desc: domain stays config-free
+        ports:
+          files:
+            - '**/internal/ports/**'
+          deny:
+            - pkg: github.com/jobrunner/tempus/internal/application
+              desc: ports define contracts over domain only
+            - pkg: github.com/jobrunner/tempus/internal/adapters
+              desc: ports must not know adapters
+            - pkg: github.com/jobrunner/tempus/internal/app
+            - pkg: github.com/jobrunner/tempus/internal/config
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - depguard
+          - dupl
+          - goconst
+          - noctx
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
