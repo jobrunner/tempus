@@ -12,7 +12,9 @@ import (
 	memcache "github.com/jobrunner/tempus/internal/adapters/cache/memory"
 	"github.com/jobrunner/tempus/internal/adapters/clock"
 	httpapi "github.com/jobrunner/tempus/internal/adapters/http"
+	"github.com/jobrunner/tempus/internal/adapters/metrics"
 	"github.com/jobrunner/tempus/internal/adapters/openmeteo"
+	"github.com/jobrunner/tempus/internal/adapters/telemetry"
 	"github.com/jobrunner/tempus/internal/application"
 	"github.com/jobrunner/tempus/internal/config"
 	"github.com/jobrunner/tempus/internal/ports/output"
@@ -25,6 +27,8 @@ type App struct {
 	server  *httpapi.Server
 	closers []func() error
 }
+
+const cacheTypeMemory = "memory"
 
 type readyAlways struct{}
 
@@ -63,15 +67,47 @@ func New(cfg *config.Config, logger *slog.Logger) (*App, error) {
 		registry.Register(cached)
 	}
 
+	// Wire tracing. When disabled the NoOpTracer is used so downstream code
+	// never has to nil-check the tracer.
+	serverOpts := httpapi.Options{ServiceName: "tempus"}
+	_ = output.NoOpTracer{} // ensure NoOpTracer is available
+
+	if cfg.Tracing.Enabled {
+		tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), cfg.Tracing, "tempus")
+		if err != nil {
+			return nil, err
+		}
+		serverOpts.TracerProvider = tp
+		a.closers = append(a.closers, func() error { return shutdown(context.Background()) })
+	}
+
+	// Wire metrics server. When disabled nothing is started.
+	if cfg.Metrics.Enabled {
+		metricsSrv, err := metrics.New(cfg.Metrics)
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			if err := metricsSrv.Start(); err != nil {
+				logger.Error("metrics server error", "error", err)
+			}
+		}()
+		a.closers = append(a.closers, func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			return metricsSrv.Shutdown(ctx)
+		})
+	}
+
 	features := application.NewFeatureService(registry, logger, cfg.Query.Timeout)
 	addr := cfg.Server.Host + ":" + strconv.Itoa(cfg.Server.Port)
-	a.server = httpapi.NewServer(addr, features, registry, readyAlways{}, clk, logger, httpapi.Options{ServiceName: "tempus"})
+	a.server = httpapi.NewServer(addr, features, registry, readyAlways{}, clk, logger, serverOpts)
 	return a, nil
 }
 
 func buildCache(cfg config.CacheConfig) (output.Cache, func() error, error) {
 	switch cfg.Type {
-	case "memory":
+	case cacheTypeMemory:
 		return memcache.New(), nil, nil
 	default: // "disk" or anything else
 		c, err := boltcache.Open(cfg.Path)

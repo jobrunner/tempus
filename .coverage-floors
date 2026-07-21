@@ -7,6 +7,8 @@ internal/adapters/cache/memory                        94
 internal/adapters/cache/bolt                          83
 internal/adapters/openmeteo                           83
 internal/adapters/http                                61
-internal/ports/output                                 58
-internal/app                                          47
-TOTAL                                                 72
+internal/adapters/metrics                             68
+internal/adapters/telemetry                           73
+internal/ports/output                                 84
+internal/app                                          55
+TOTAL                                                 73

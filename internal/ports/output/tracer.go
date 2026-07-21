@@ -38,15 +38,20 @@ type Attribute struct {
 }
 
 // StartSpanOption configures a span at creation (span kind, initial attributes…).
-type StartSpanOption func(*startSpanConfig)
+type StartSpanOption func(*StartSpanConfig)
 
-type startSpanConfig struct {
+// StartSpanConfig holds the resolved options for a new span. Adapters apply
+// all options to a zero-value StartSpanConfig to extract the configuration.
+type StartSpanConfig struct {
 	attributes []Attribute
 }
 
+// Attributes returns the initial attributes collected from all applied options.
+func (c *StartSpanConfig) Attributes() []Attribute { return c.attributes }
+
 // WithAttributes sets initial attributes on the span.
 func WithAttributes(attrs ...Attribute) StartSpanOption {
-	return func(c *startSpanConfig) { c.attributes = append(c.attributes, attrs...) }
+	return func(c *StartSpanConfig) { c.attributes = append(c.attributes, attrs...) }
 }
 
 // NoOpTracer is the zero-value Tracer; it discards everything.
