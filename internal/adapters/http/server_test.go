@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,5 +72,25 @@ func TestHandleProviders_OK(t *testing.T) {
 	testServer().Router().ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+}
+
+func TestHandleIndex_OK(t *testing.T) {
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	testServer().Router().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", rr.Code)
+	}
+	ct := rr.Header().Get("Content-Type")
+	if ct == "" || ct[:9] != "text/html" {
+		t.Errorf("Content-Type = %q, want text/html…", ct)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "tempus") {
+		t.Error("body does not contain 'tempus'")
+	}
+	if !strings.Contains(body, `id="lat"`) {
+		t.Error("body does not contain lat input (id=\"lat\")")
 	}
 }

@@ -34,12 +34,16 @@ type Server struct {
 	logger         *slog.Logger
 	serviceName    string
 	tracerProvider trace.TracerProvider // may be nil (tracing disabled)
+	frontendPage   []byte
 }
 
 // Options carries optional dependencies (tracing, service name, …).
 type Options struct {
 	TracerProvider trace.TracerProvider
 	ServiceName    string
+	// Version is substituted into the frontend footer (e.g. from -ldflags). When
+	// empty, "dev" is shown.
+	Version string
 }
 
 // NewServer builds the server, wires routes, and prepares the http.Server.
@@ -47,6 +51,10 @@ func NewServer(addr string, features input.FeatureService, providers input.Provi
 	name := opts.ServiceName
 	if name == "" {
 		name = "tempus"
+	}
+	version := opts.Version
+	if version == "" {
+		version = "dev"
 	}
 	s := &Server{
 		features:       features,
@@ -56,6 +64,7 @@ func NewServer(addr string, features input.FeatureService, providers input.Provi
 		logger:         logger,
 		serviceName:    name,
 		tracerProvider: opts.TracerProvider,
+		frontendPage:   renderFrontend(version),
 	}
 	s.router = s.setupRoutes()
 	s.server = &http.Server{
@@ -96,6 +105,10 @@ func (s *Server) setupRoutes() *mux.Router {
 	// business contract, so the contract test ignores them).
 	r.HandleFunc("/openapi.json", s.handleOpenAPI).Methods(http.MethodGet)
 	r.HandleFunc("/docs", s.handleSwaggerUI).Methods(http.MethodGet)
+
+	// Frontend — serves the web UI at the root. Matches only GET / exactly;
+	// does not shadow /api/v1/*, /health*, /openapi.json, or /docs.
+	r.HandleFunc("/", s.handleIndex).Methods(http.MethodGet)
 
 	return r
 }
