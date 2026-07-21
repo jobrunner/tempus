@@ -93,10 +93,9 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
-      - name: gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -quiet ./...
+      # gosec runs inside golangci-lint (Lint job), which honors the repo's
+      # //nolint:gosec directives; a standalone gosec CLI here would re-flag
+      # those and uses different (#nosec) suppression semantics, so it's dropped.
 
   verify:
     name: Verify

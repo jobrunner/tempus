@@ -25,16 +25,7 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
-  gosec:
-    name: gosec
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
-      - name: gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -quiet ./...
+  # gosec is covered by golangci-lint (see the CI Lint job), which honors this
+  # repo's //nolint:gosec directives. A standalone gosec CLI job re-flags those
+  # (it only honors #nosec) and pulls a newer Go toolchain, so it is intentionally
+  # not run here.
