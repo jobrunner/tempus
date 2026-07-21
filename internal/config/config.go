@@ -14,11 +14,14 @@ const EnvPrefix = "TEMPUS"
 
 // Config is the whole service configuration. Add sub-structs per concern.
 type Config struct {
-	Server  ServerConfig  `mapstructure:"server"`
-	Logging LoggingConfig `mapstructure:"logging"`
-	Metrics MetricsConfig `mapstructure:"metrics"`
-	Tracing TracingConfig `mapstructure:"tracing"`
-	Auth    AuthConfig    `mapstructure:"auth"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Logging   LoggingConfig   `mapstructure:"logging"`
+	Metrics   MetricsConfig   `mapstructure:"metrics"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
+	Auth      AuthConfig      `mapstructure:"auth"`
+	Cache     CacheConfig     `mapstructure:"cache"`
+	Providers ProvidersConfig `mapstructure:"providers"`
+	Query     QueryConfig     `mapstructure:"query"`
 }
 
 type ServerConfig struct {
@@ -50,6 +53,27 @@ type AuthConfig struct {
 	Token string `mapstructure:"-"` // secret: loaded from env directly, never from file
 }
 
+type CacheConfig struct {
+	Type string `mapstructure:"type"` // disk|memory|redis
+	Path string `mapstructure:"path"`
+}
+
+type QueryConfig struct {
+	Timeout time.Duration `mapstructure:"timeout"`
+}
+
+type ProvidersConfig struct {
+	OpenMeteo OpenMeteoConfig `mapstructure:"openmeteo"`
+}
+
+type OpenMeteoConfig struct {
+	Enabled         bool          `mapstructure:"enabled"`
+	ArchiveBaseURL  string        `mapstructure:"archive_base_url"`
+	ForecastBaseURL string        `mapstructure:"forecast_base_url"`
+	Timeout         time.Duration `mapstructure:"timeout"`
+	ArchiveDelay    time.Duration `mapstructure:"archive_delay"`
+}
+
 // Defaults registers every default. Call before Load (and from cmd initConfig).
 func Defaults() {
 	viper.SetDefault("server.host", "0.0.0.0")
@@ -68,6 +92,15 @@ func Defaults() {
 	viper.SetDefault("tracing.endpoint", "")
 	viper.SetDefault("tracing.transport", "http")
 	viper.SetDefault("tracing.sample_ratio", 1.0)
+
+	viper.SetDefault("cache.type", "disk")
+	viper.SetDefault("cache.path", "./data/cache.bolt")
+	viper.SetDefault("query.timeout", 30*time.Second)
+	viper.SetDefault("providers.openmeteo.enabled", true)
+	viper.SetDefault("providers.openmeteo.archive_base_url", "https://archive-api.open-meteo.com/v1/archive")
+	viper.SetDefault("providers.openmeteo.forecast_base_url", "https://api.open-meteo.com/v1/forecast")
+	viper.SetDefault("providers.openmeteo.timeout", 10*time.Second)
+	viper.SetDefault("providers.openmeteo.archive_delay", 5*24*time.Hour)
 }
 
 // Load merges defaults, an optional config file, and environment variables.
