@@ -17,6 +17,9 @@ import (
 	"github.com/jobrunner/tempus/internal/config"
 )
 
+// defaultMetricsPath is the Prometheus scrape path used when none is configured.
+const defaultMetricsPath = "/metrics"
+
 // Server wraps a Prometheus MeterProvider and a lightweight HTTP server that
 // serves the /metrics scrape endpoint.
 type Server struct {
@@ -38,7 +41,7 @@ func New(cfg config.MetricsConfig) (*Server, error) {
 
 	path := cfg.Path
 	if path == "" {
-		path = "/metrics"
+		path = defaultMetricsPath
 	}
 
 	mux := http.NewServeMux()

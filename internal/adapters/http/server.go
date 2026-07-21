@@ -20,6 +20,9 @@ import (
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
+// keyStatus is the JSON key used in health/status response envelopes.
+const keyStatus = "status"
+
 // Server wraps the HTTP server and its router. It holds only driving ports.
 type Server struct {
 	server         *http.Server
@@ -143,11 +146,11 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	s.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	s.writeJSON(w, http.StatusOK, map[string]string{keyStatus: "ok"})
 }
 
 func (s *Server) handleLiveness(w http.ResponseWriter, _ *http.Request) {
-	s.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	s.writeJSON(w, http.StatusOK, map[string]string{keyStatus: "ok"})
 }
 
 func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +158,7 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusServiceUnavailable, "not ready")
 		return
 	}
-	s.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	s.writeJSON(w, http.StatusOK, map[string]string{keyStatus: "ok"})
 }
 
 // --- response envelope -------------------------------------------------------
@@ -194,7 +197,7 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(wrapped, r)
 		fields := []any{
 			"method", r.Method, "path", r.URL.Path,
-			"status", wrapped.statusCode, "duration", time.Since(start),
+			keyStatus, wrapped.statusCode, "duration", time.Since(start),
 		}
 		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
 			fields = append(fields, "trace_id", sc.TraceID().String())

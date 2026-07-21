@@ -26,6 +26,13 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("invalid %s: %s", e.Field, e.Message)
 }
 
+// Field name constants used in ValidationError — kept here so test assertions
+// on Field values never drift from the production strings.
+const (
+	fieldDatetime = "datetime"
+	fieldTimezone = "timezone"
+)
+
 // datetimeLayouts are tried in order. RFC3339 (with offset) first; the
 // offset-less forms are interpreted as UTC per the service contract.
 var datetimeLayouts = []string{
@@ -48,19 +55,19 @@ func ParseQueryRequest(lat, lon, datetime, tzID string, providers []string, now 
 
 	instant, ok := parseInstant(datetime)
 	if !ok {
-		return QueryRequest{}, ValidationError{"datetime", "must be RFC3339 or YYYY-MM-DDTHH:MM[:SS] (UTC assumed)"}
+		return QueryRequest{}, ValidationError{fieldDatetime, "must be RFC3339 or YYYY-MM-DDTHH:MM[:SS] (UTC assumed)"}
 	}
 	instant = instant.UTC().Truncate(time.Hour)
 	if instant.After(now.UTC()) {
-		return QueryRequest{}, ValidationError{"datetime", "must not be in the future"}
+		return QueryRequest{}, ValidationError{fieldDatetime, "must not be in the future"}
 	}
 
 	if tzID == "" {
-		return QueryRequest{}, ValidationError{"timezone", "is required (IANA timezone id)"}
+		return QueryRequest{}, ValidationError{fieldTimezone, "is required (IANA timezone id)"}
 	}
 	loc, err := time.LoadLocation(tzID)
 	if err != nil {
-		return QueryRequest{}, ValidationError{"timezone", "must be a valid IANA timezone id"}
+		return QueryRequest{}, ValidationError{fieldTimezone, "must be a valid IANA timezone id"}
 	}
 
 	return QueryRequest{

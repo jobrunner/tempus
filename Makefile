@@ -48,7 +48,7 @@ fmt-check: ## Check formatting without changing (CI/hook)
 
 ## Architecture fitness: import boundaries + module hygiene
 arch: ## depguard + gomodguard + go.mod tidiness
-	$(GOLINT) run --enable-only depguard,gomodguard ./...
+	$(GOLINT) run --enable-only depguard,gomodguard_v2 ./...
 	$(GO) mod tidy -diff
 	@echo "arch ok."
 

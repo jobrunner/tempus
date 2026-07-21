@@ -83,7 +83,7 @@ func (c *Cache) Set(_ context.Context, key string, value []byte, ttl time.Durati
 		expNano = time.Now().Add(ttl).UnixNano()
 	}
 	buf := make([]byte, 8+len(value))
-	binary.BigEndian.PutUint64(buf[:8], uint64(expNano)) //nolint:gosec // expNano is time.Now().Add(ttl).UnixNano(); always non-negative when ttl > 0
+	binary.BigEndian.PutUint64(buf[:8], uint64(expNano))
 	copy(buf[8:], value)
 	return c.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bucket).Put([]byte(key), buf)
