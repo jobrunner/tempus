@@ -4,6 +4,9 @@
 /tempus
 *.exe
 
+# MkDocs build output
+/site/
+
 # Test / coverage
 *.out
 coverage.txt

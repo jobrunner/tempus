@@ -1,0 +1,45 @@
+site_name: tempus
+site_description: Coordinate + time feature queries with per-feature attribution
+repo_url: https://github.com/jobrunner/tempus
+
+# Exclude internal planning/design docs from the public site.
+exclude_docs: |
+  superpowers/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - Getting started: tutorials/index.md
+  - How-to guides:
+      - Overview: how-to/index.md
+      - Run the service: how-to/run-service.md
+      - Query past weather: how-to/query-past-weather.md
+      - Configure providers and cache: how-to/configure-providers.md
+  - Reference:
+      - Overview: reference/index.md
+      - HTTP API: reference/http-api.md
+      - Configuration: reference/configuration.md
+      - Observability: reference/observability.md
+  - Explanation:
+      - Overview: explanation/index.md
+      - Architecture: explanation/architecture.md
+      - Retry semantics: explanation/retry-semantics.md
+      - Attribution requirement: explanation/attribution.md
+      - Caching model: explanation/caching.md
+      - No future datetimes: explanation/no-future-datetimes.md

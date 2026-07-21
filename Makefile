@@ -1,6 +1,6 @@
 .PHONY: all build run test test-coverage lint vet fmt fmt-check arch debt \
-        debt-guard debt-coverage mutation verify docs docs-serve doc-drift \
-        hooks security vuln licenses release-dry help
+        debt-guard debt-coverage mutation verify docs docs-serve docs-openapi-check \
+        doc-drift hooks security vuln licenses release-dry help
 
 BINARY_NAME := tempus
 MODULE      := github.com/jobrunner/tempus
@@ -85,7 +85,10 @@ licenses: ## Dependency license compliance
 		--allowed_licenses=Apache-2.0,MIT,BSD-3-Clause,BSD-2-Clause,ISC,MPL-2.0 --ignore $(MODULE)
 
 ## Docs (Diátaxis, MkDocs Material). --strict fails on broken links/nav.
-docs: ## Build docs strictly
+docs-openapi-check: ## Fail if the two OpenAPI spec copies have drifted
+	@./scripts/openapi-mirror-check.sh
+
+docs: docs-openapi-check ## Build docs strictly (runs OpenAPI mirror check first)
 	$(MKDOCS) build --strict
 docs-serve: ## Serve docs with live reload
 	$(MKDOCS) serve
