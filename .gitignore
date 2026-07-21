@@ -1,0 +1,21 @@
+# Build output
+/bin/
+/dist/
+tempus
+*.exe
+
+# Test / coverage
+*.out
+coverage.txt
+*.test
+
+# Local data / cache (BoltDB etc.)
+/data/
+
+# Env / secrets
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+*.swp
