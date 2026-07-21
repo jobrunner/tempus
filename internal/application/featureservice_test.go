@@ -101,6 +101,48 @@ func TestFeatureService_AllFailStill200Shape(t *testing.T) {
 	}
 }
 
+func TestFeatureService_PermanentErrorStatus(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(failProvider{"p1", output.NewPermanentError(errors.New("bad request"))})
+	svc := NewFeatureService(reg, discard(), 5*time.Second)
+
+	res, err := svc.Query(context.Background(), sampleReq())
+	if err != nil {
+		t.Fatalf("Query must not error: %v", err)
+	}
+	if len(res.Providers) != 1 {
+		t.Fatalf("want 1 provider status, got %d", len(res.Providers))
+	}
+	st := res.Providers[0]
+	if st.Status != domain.StatusError {
+		t.Errorf("status = %q, want %q", st.Status, domain.StatusError)
+	}
+	if st.Retryable {
+		t.Error("permanent error must not be retryable")
+	}
+}
+
+func TestFeatureService_UnclassifiedErrorStatus(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(failProvider{"p2", errors.New("boom")})
+	svc := NewFeatureService(reg, discard(), 5*time.Second)
+
+	res, err := svc.Query(context.Background(), sampleReq())
+	if err != nil {
+		t.Fatalf("Query must not error: %v", err)
+	}
+	if len(res.Providers) != 1 {
+		t.Fatalf("want 1 provider status, got %d", len(res.Providers))
+	}
+	st := res.Providers[0]
+	if st.Status != domain.StatusUnavailable {
+		t.Errorf("status = %q, want %q", st.Status, domain.StatusUnavailable)
+	}
+	if !st.Retryable {
+		t.Error("unclassified error must be retryable")
+	}
+}
+
 func TestFeatureService_ProviderFilter(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(okProv("open-meteo"))

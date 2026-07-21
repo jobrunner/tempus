@@ -35,6 +35,7 @@ func TestParseQueryRequest_BadInputs(t *testing.T) {
 		{"lon-range", "0", "181", "2020-01-01T00:00:00Z", "UTC", "lon"},
 		{"bad-datetime", "0", "0", "not-a-date", "UTC", "datetime"},
 		{"bad-tz", "0", "0", "2020-01-01T00:00:00Z", "Mars/Phobos", "timezone"},
+		{"empty-tz", "0", "0", "2020-01-01T00:00:00Z", "", "timezone"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

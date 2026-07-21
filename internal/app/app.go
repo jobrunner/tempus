@@ -70,7 +70,6 @@ func New(cfg *config.Config, logger *slog.Logger) (*App, error) {
 	// Wire tracing. When disabled the NoOpTracer is used so downstream code
 	// never has to nil-check the tracer.
 	serverOpts := httpapi.Options{ServiceName: "tempus"}
-	_ = output.NoOpTracer{} // ensure NoOpTracer is available
 
 	if cfg.Tracing.Enabled {
 		tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), cfg.Tracing, "tempus")
@@ -123,6 +122,12 @@ func (a *App) Handler() http.Handler { return a.server.Router() }
 
 // Run starts the server and shuts down gracefully on ctx cancellation.
 func (a *App) Run(ctx context.Context) error {
+	defer func() {
+		for _, c := range a.closers {
+			_ = c()
+		}
+	}()
+
 	errCh := make(chan error, 1)
 	go func() {
 		if err := a.server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -135,10 +140,6 @@ func (a *App) Run(ctx context.Context) error {
 	case <-ctx.Done():
 		shutCtx, cancel := context.WithTimeout(context.Background(), a.cfg.Server.ShutdownTimeout)
 		defer cancel()
-		err := a.server.Shutdown(shutCtx)
-		for _, c := range a.closers {
-			_ = c()
-		}
-		return err
+		return a.server.Shutdown(shutCtx)
 	}
 }

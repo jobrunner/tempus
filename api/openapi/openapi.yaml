@@ -38,6 +38,11 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProviderInfo"
 components:
   schemas:
     Error:
@@ -84,8 +89,18 @@ components:
           type: boolean
         retryAfter:
           type: string
+          description: "Go duration string indicating how long to wait before retrying (e.g. \"30s\", \"2h0m0s\")"
         error:
           type: string
+    ProviderInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        license:
+          $ref: "#/components/schemas/License"
     QueryResult:
       type: object
       properties:

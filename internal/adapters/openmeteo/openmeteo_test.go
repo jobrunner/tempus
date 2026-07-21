@@ -61,6 +61,9 @@ func TestFetch_SelectsHourAndAttributes(t *testing.T) {
 	if res.Feature.License.Attribution == "" || res.Feature.License.Name == "" {
 		t.Error("feature must carry attribution")
 	}
+	if res.Feature.License.URL == "" {
+		t.Error("feature must carry license URL")
+	}
 }
 
 func TestFetch_MissingHourIsNotYetAvailable(t *testing.T) {

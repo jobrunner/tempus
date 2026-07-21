@@ -59,7 +59,7 @@ type ProviderStatus struct {
 	Kind       string `json:"kind"`
 	Status     string `json:"status"`
 	Cached     bool   `json:"cached,omitempty"`
-	Retryable  bool   `json:"retryable,omitempty"`
+	Retryable  bool   `json:"retryable"`
 	RetryAfter string `json:"retryAfter,omitempty"`
 	Error      string `json:"error,omitempty"`
 }

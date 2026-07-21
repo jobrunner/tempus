@@ -55,6 +55,9 @@ func ParseQueryRequest(lat, lon, datetime, tzID string, providers []string, now 
 		return QueryRequest{}, ValidationError{"datetime", "must not be in the future"}
 	}
 
+	if tzID == "" {
+		return QueryRequest{}, ValidationError{"timezone", "is required (IANA timezone id)"}
+	}
 	loc, err := time.LoadLocation(tzID)
 	if err != nil {
 		return QueryRequest{}, ValidationError{"timezone", "must be a valid IANA timezone id"}
