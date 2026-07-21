@@ -1,0 +1,92 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Correctness / static analysis
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - nilerr
+    - noctx
+    - sqlclosecheck
+    # Style / complexity
+    - gocognit
+    - gocyclo
+    - goconst
+    - gocritic
+    - godot
+    - misspell
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+    - dupl
+    # Security
+    - gosec
+    # Architecture harness
+    - depguard # hexagonal import boundaries
+    - gomodguard # external-module blocklist
+    # Debt harness
+    - nolintlint # every //nolint must name its linter + say why
+
+linters-settings:
+  # Hexagonal import boundaries. Allowed direction:
+  #   domain      -> (nothing internal)
+  #   ports       -> domain
+  #   application -> domain, ports
+  #   adapters    -> domain, ports          (NOT application, NOT sibling adapters)
+  #   app / cmd   -> everything (composition root)
+  depguard:
+    rules:
+      domain:
+        files: ["**/internal/domain/**"]
+        deny:
+          - { pkg: "github.com/jobrunner/tempus/internal/application", desc: "domain is the innermost core and imports nothing internal" }
+          - { pkg: "github.com/jobrunner/tempus/internal/ports", desc: "domain must not know ports" }
+          - { pkg: "github.com/jobrunner/tempus/internal/adapters", desc: "domain must not know adapters" }
+          - { pkg: "github.com/jobrunner/tempus/internal/app", desc: "domain must not know the composition root" }
+          - { pkg: "github.com/jobrunner/tempus/internal/config", desc: "domain stays config-free" }
+      ports:
+        files: ["**/internal/ports/**"]
+        deny:
+          - { pkg: "github.com/jobrunner/tempus/internal/application", desc: "ports define contracts over domain only" }
+          - { pkg: "github.com/jobrunner/tempus/internal/adapters", desc: "ports must not know adapters" }
+          - { pkg: "github.com/jobrunner/tempus/internal/app" }
+          - { pkg: "github.com/jobrunner/tempus/internal/config" }
+      application:
+        files: ["**/internal/application/**"]
+        deny:
+          - { pkg: "github.com/jobrunner/tempus/internal/adapters", desc: "the core talks to adapters only through ports" }
+          - { pkg: "github.com/jobrunner/tempus/internal/app", desc: "the core does not know the composition root" }
+      adapters:
+        files: ["**/internal/adapters/**"]
+        deny:
+          - { pkg: "github.com/jobrunner/tempus/internal/application", desc: "adapters talk to the core only through ports" }
+          - { pkg: "github.com/jobrunner/tempus/internal/app", desc: "adapters do not know the composition root" }
+          - { pkg: "github.com/jobrunner/tempus/internal/adapters", desc: "no adapter->adapter import; shared logic goes in domain/ports" }
+
+  gomodguard:
+    blocked:
+      modules: []
+    # Example — block a heavy dep you only tolerate transitively:
+    # - module: go.mongodb.org/mongo-driver
+    #   reason: "transitive only; do not import directly"
+
+  nolintlint:
+    require-explanation: true # every //nolint must say WHY
+    require-specific: true # ...and name the exact linter(s), never bare //nolint
+    allow-unused: false # a //nolint that suppresses nothing is itself debt
+
+issues:
+  exclude-rules:
+    # Tests are the "test composition root": they may wire across layers.
+    - path: _test\.go
+      linters:
+        - depguard
+        - dupl
