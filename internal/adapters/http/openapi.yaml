@@ -1,0 +1,101 @@
+openapi: 3.0.3
+info:
+  title: tempus API
+  version: 0.1.0
+  description: Coordinate + time feature queries with per-feature attribution.
+servers:
+  - url: /api/v1
+paths:
+  /query:
+    get:
+      summary: Query cached feature providers for a coordinate and time
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number}}
+        - {name: lon, in: query, required: true, schema: {type: number}}
+        - {name: datetime, in: query, required: true, schema: {type: string}, description: "RFC3339 or YYYY-MM-DDTHH:MM[:SS]; no offset => UTC; must not be in the future"}
+        - {name: timezone, in: query, required: true, schema: {type: string}, description: IANA timezone id}
+        - {name: providers, in: query, required: false, schema: {type: string}, description: comma-separated provider ids}
+      responses:
+        "200":
+          description: Feature collection with per-provider status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /providers:
+    get:
+      summary: List available providers and their attribution
+      responses:
+        "200":
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                type: object
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+    License:
+      type: object
+      required: [name, url, attribution]
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        attribution:
+          type: string
+    Feature:
+      type: object
+      properties:
+        type:
+          type: string
+        geometry:
+          type: object
+        properties:
+          type: object
+        license:
+          $ref: "#/components/schemas/License"
+    ProviderStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        status:
+          type: string
+          enum: [ok, unavailable, error]
+        cached:
+          type: boolean
+        retryable:
+          type: boolean
+        retryAfter:
+          type: string
+        error:
+          type: string
+    QueryResult:
+      type: object
+      properties:
+        query:
+          type: object
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/Feature"
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderStatus"

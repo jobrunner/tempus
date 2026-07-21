@@ -89,7 +89,10 @@ func (s *Server) setupRoutes() *mux.Router {
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
 	api.HandleFunc("/providers", s.handleProviders).Methods(http.MethodGet)
 
-	// /openapi.json and /docs are registered in Task 15 (openapi.go).
+	// OpenAPI spec and Swagger UI — root-level, NOT under /api/v1 (not in the
+	// business contract, so the contract test ignores them).
+	r.HandleFunc("/openapi.json", s.handleOpenAPI).Methods(http.MethodGet)
+	r.HandleFunc("/docs", s.handleSwaggerUI).Methods(http.MethodGet)
 
 	return r
 }
