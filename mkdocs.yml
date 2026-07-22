@@ -44,3 +44,4 @@ nav:
       - Caching model: explanation/caching.md
       - No future datetimes: explanation/no-future-datetimes.md
       - Derived features: explanation/derived-features.md
+      - Day/Night from solar position: explanation/solar-day-night.md

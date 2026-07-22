@@ -51,7 +51,10 @@ func TestFetch_SelectsHourAndAttributes(t *testing.T) {
 		t.Errorf("temperature2m = %v, want 21.4", got)
 	}
 	if res.Feature.Properties["isDay"] != true {
-		t.Errorf("isDay = %v, want true", res.Feature.Properties["isDay"])
+		t.Errorf("isDay = %v, want true (solar-computed)", res.Feature.Properties["isDay"])
+	}
+	if src, ok := res.Feature.Properties["isDaySource"].(string); !ok || src == "" {
+		t.Errorf("isDaySource = %v, want non-empty string", res.Feature.Properties["isDaySource"])
 	}
 	// geometry uses the provider-resolved grid cell.
 	if c := res.Feature.Geometry.Coordinates; c[0] != 9.94 || c[1] != 49.8 {

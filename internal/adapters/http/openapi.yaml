@@ -116,10 +116,25 @@ components:
         Properties of a weather feature (kind "weather") returned by the
         Open-Meteo provider. In addition to numeric measurements such as
         temperature2m, relativeHumidity2m, precipitation, windSpeed10m,
-        cloudCover, isDay, and weatherCode, the feature carries a bilingual
-        human-readable explanation of the WMO weather code and its source
-        citation.
+        cloudCover, and weatherCode, the feature carries isDay (computed from
+        the sun's elevation angle via the NOAA approximation, not from the
+        weather provider — Open-Meteo's archive is_day is unreliable for
+        historical dates), isDaySource (citation for the solar computation), a
+        bilingual human-readable explanation of the WMO weather code and its
+        source citation.
       properties:
+        isDay:
+          type: boolean
+          description: >
+            Whether it is daytime at the queried location and instant.
+            Computed from the sun's elevation angle (NOAA Spencer approximation);
+            true when the sun is above −0.833° (refraction + solar radius
+            threshold). Not sourced from the weather provider.
+        isDaySource:
+          type: string
+          description: >
+            Citation for the isDay computation: "Tag/Nacht aus Sonnenstand
+            berechnet (NOAA-Näherung), tempus".
         weatherCode:
           type: integer
           description: >
