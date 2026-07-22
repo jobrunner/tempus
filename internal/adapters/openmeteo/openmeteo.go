@@ -185,6 +185,21 @@ func (p *Provider) toFeature(data apiResponse, req domain.QueryRequest, useArchi
 	}
 	props["units"] = units
 
+	// Enrich with WMO-4677 weather-code description when available.
+	if wcRaw, present := props["weatherCode"]; present {
+		var code int
+		switch wc := wcRaw.(type) {
+		case int:
+			code = wc
+		case float64:
+			code = int(wc)
+		}
+		if de, en, ok := domain.WeatherCodeDescription(code); ok {
+			props["weatherCodeDescription"] = map[string]string{"de": de, "en": en}
+			props["weatherCodeSource"] = domain.WMOCodeSource
+		}
+	}
+
 	feat := domain.NewPointFeature(
 		domain.Coordinate{Lat: data.Latitude, Lon: data.Longitude},
 		props,
