@@ -909,8 +909,13 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
             // Auto-detect zone on coordinate or datetime change.
             latInput.addEventListener('input', updateDetectedZone);
             lonInput.addEventListener('input', updateDetectedZone);
-            datetimeInput.addEventListener('change', function() { updateDetectedZone(); updateMax(); updateAbbrev(); });
-            datetimeInput.addEventListener('input', function() { updateDetectedZone(); updateMax(); updateAbbrev(); });
+            // Editing the date/time must NOT call updateMax()/updateDetectedZone():
+            // re-setting datetimeInput.max on each keystroke re-clamps the in-progress
+            // value and blocks typing the year, and the zone is coordinate-derived (not
+            // date-derived) so a date edit must not re-detect/override it. Only the DST
+            // abbreviation label depends on the entered date, so refresh just that.
+            datetimeInput.addEventListener('change', updateAbbrev);
+            datetimeInput.addEventListener('input', updateAbbrev);
 
             // Smart coordinate paste: "lat, lon" or "lat lon" into either field
             // fills both.
