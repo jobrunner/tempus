@@ -43,3 +43,4 @@ nav:
       - Attribution requirement: explanation/attribution.md
       - Caching model: explanation/caching.md
       - No future datetimes: explanation/no-future-datetimes.md
+      - Derived features: explanation/derived-features.md

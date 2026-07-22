@@ -1179,6 +1179,19 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
             function renderFeature(f) {
                 const props = (f.properties) || {};
+                const kind = props.kind || '';
+
+                if (kind === 'dewpoint') {
+                    return renderDewpointFeature(f);
+                } else if (kind === 'weather' || kind === '') {
+                    return renderWeatherFeature(f);
+                } else {
+                    return renderGenericFeature(f);
+                }
+            }
+
+            function renderWeatherFeature(f) {
+                const props = (f.properties) || {};
                 const license = f.license || null;
                 const geom = f.geometry || {};
                 const coords = geom.coordinates || [];
@@ -1267,6 +1280,83 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                 html += '</div>'; // .weather-body
                 html += '</div>'; // .card.weather-panel
+                return html;
+            }
+
+            function renderDewpointFeature(f) {
+                const props = (f.properties) || {};
+                const license = f.license || null;
+                const units = props.units || {};
+
+                const dpValue = props.dewPoint2m;
+                const dpUnit = units.dewPoint2m || '°C';
+
+                let html = '<div class="card weather-panel">';
+                html += '<div class="weather-header">';
+                html += '<div class="weather-icon">&#x1F4A7;</div>';
+                html += '<div class="weather-header-info">';
+                if (dpValue !== undefined && dpValue !== null) {
+                    html += '<div class="weather-temp">' + esc(dpValue) + '&#x202F;' + esc(dpUnit) + '</div>';
+                }
+                html += '<div class="weather-desc">Taupunkt</div>';
+                html += '</div>';
+                html += '</div>'; // .weather-header
+
+                html += '<div class="weather-body">';
+
+                if (props.method) {
+                    html += '<div class="provider-hint" style="margin-bottom:0.5rem;">Berechnungsmethode: ' + esc(props.method) + '</div>';
+                }
+
+                // Attribution.
+                if (license) {
+                    html += '<div class="attribution-block">';
+                    html += '<div class="attribution-title">Quelle / Attribution</div>';
+                    html += '<div class="attribution-license">';
+                    const safeUrl = /^https?:\/\//i.test(license.url || '') ? license.url : '';
+                    if (safeUrl) {
+                        html += '<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(license.name || 'Lizenz') + '</a>';
+                    } else {
+                        html += esc(license.name || '-');
+                    }
+                    html += '</div>';
+                    if (license.attribution) {
+                        html += '<div class="attribution-text">' + esc(license.attribution) + '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // .weather-body
+                html += '</div>'; // .card.weather-panel
+                return html;
+            }
+
+            function renderGenericFeature(f) {
+                const props = (f.properties) || {};
+                const license = f.license || null;
+                const kind = props.kind || 'unbekannt';
+
+                let html = '<div class="card">';
+                html += '<div class="card-title">' + esc(kind) + '</div>';
+
+                if (license) {
+                    html += '<div class="attribution-block">';
+                    html += '<div class="attribution-title">Quelle / Attribution</div>';
+                    html += '<div class="attribution-license">';
+                    const safeUrl = /^https?:\/\//i.test(license.url || '') ? license.url : '';
+                    if (safeUrl) {
+                        html += '<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(license.name || 'Lizenz') + '</a>';
+                    } else {
+                        html += esc(license.name || '-');
+                    }
+                    html += '</div>';
+                    if (license.attribution) {
+                        html += '<div class="attribution-text">' + esc(license.attribution) + '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>'; // .card
                 return html;
             }
 

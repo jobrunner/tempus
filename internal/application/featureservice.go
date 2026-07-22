@@ -10,16 +10,24 @@ import (
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
+// providerIdentifier is the minimal interface required by statusFor; both
+// output.FeatureProvider and output.FeatureDeriver satisfy it.
+type providerIdentifier interface {
+	ID() string
+	Kind() string
+}
+
 // FeatureService orchestrates providers and assembles the response envelope.
 type FeatureService struct {
 	registry *Registry
+	derivers []output.FeatureDeriver
 	logger   *slog.Logger
 	timeout  time.Duration
 }
 
 // NewFeatureService builds the service.
-func NewFeatureService(reg *Registry, logger *slog.Logger, timeout time.Duration) *FeatureService {
-	return &FeatureService{registry: reg, logger: logger, timeout: timeout}
+func NewFeatureService(reg *Registry, derivers []output.FeatureDeriver, logger *slog.Logger, timeout time.Duration) *FeatureService {
+	return &FeatureService{registry: reg, derivers: derivers, logger: logger, timeout: timeout}
 }
 
 // Query fetches from the selected providers concurrently and assembles the
@@ -57,6 +65,21 @@ func (s *FeatureService) Query(ctx context.Context, req domain.QueryRequest) (do
 		}
 		res.Providers = append(res.Providers, o.status)
 	}
+
+	for _, d := range s.derivers {
+		derived, err := d.Derive(ctx, req, res.Features)
+		if err == nil {
+			res.Features = append(res.Features, derived...)
+			res.Providers = append(res.Providers, domain.ProviderStatus{
+				ID:     d.ID(),
+				Kind:   d.Kind(),
+				Status: domain.StatusOK,
+			})
+		} else {
+			res.Providers = append(res.Providers, s.statusFor(d, err))
+		}
+	}
+
 	return res, nil
 }
 
@@ -88,7 +111,7 @@ func (s *FeatureService) fetchOne(ctx context.Context, p output.FeatureProvider,
 	return o
 }
 
-func (s *FeatureService) statusFor(p output.FeatureProvider, err error) domain.ProviderStatus {
+func (s *FeatureService) statusFor(p providerIdentifier, err error) domain.ProviderStatus {
 	st := domain.ProviderStatus{ID: p.ID(), Kind: p.Kind(), Error: err.Error()}
 	pe, ok := output.AsProviderError(err)
 	if !ok {
