@@ -1198,9 +1198,11 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                 const wmoCode = props.weatherCode;
                 const isDay = props.isDay !== false && props.isDay !== 0;
+                const apiDesc = (props.weatherCodeDescription && props.weatherCodeDescription.de) || null;
                 const wmoLabel = (wmoCode !== undefined && wmoCode !== null)
-                    ? (wmoDescriptions[wmoCode] || 'Wettercode ' + wmoCode)
+                    ? (apiDesc || wmoDescriptions[wmoCode] || 'Wettercode ' + wmoCode)
                     : '';
+                const wmoSource = (props.weatherCodeSource) || null;
                 const units = props.units || {};
 
                 let html = '<div class="card weather-panel">';
@@ -1215,7 +1217,11 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     html += '<div class="weather-temp">' + esc(props.temperature2m) + '&#x202F;' + esc(units.temperature2m || '°C') + '</div>';
                 }
                 if (wmoLabel) {
-                    html += '<div class="weather-desc">' + esc(wmoLabel) + '</div>';
+                    if (wmoSource) {
+                        html += '<div class="weather-desc" title="' + esc(wmoSource) + '">' + esc(wmoLabel) + '</div>';
+                    } else {
+                        html += '<div class="weather-desc">' + esc(wmoLabel) + '</div>';
+                    }
                 }
                 html += '</div>';
                 const dayLabel = isDay ? '<span class="weather-daytime badge-day">Tag</span>' : '<span class="weather-daytime badge-night">Nacht</span>';
@@ -1299,6 +1305,15 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     html += '<div class="weather-temp">' + esc(dpValue) + '&#x202F;' + esc(dpUnit) + '</div>';
                 }
                 html += '<div class="weather-desc">Taupunkt</div>';
+                const comfortLabel = (props.comfort && props.comfort.de) || null;
+                const comfortSource = (props.comfortSource) || null;
+                if (comfortLabel) {
+                    if (comfortSource) {
+                        html += '<div class="weather-desc" style="margin-top:0.25rem;font-style:italic;" title="' + esc(comfortSource) + '">' + esc(comfortLabel) + '</div>';
+                    } else {
+                        html += '<div class="weather-desc" style="margin-top:0.25rem;font-style:italic;">' + esc(comfortLabel) + '</div>';
+                    }
+                }
                 html += '</div>';
                 html += '</div>'; // .weather-header
 
