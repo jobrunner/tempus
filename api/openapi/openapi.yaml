@@ -102,6 +102,11 @@ components:
           $ref: "#/components/schemas/License"
     QueryResult:
       type: object
+      description: >
+        Feature collection with per-provider status. The features[] array may
+        include a derived feature with kind "dewpoint" containing a dewPoint2m
+        property (°C, Magnus-Tetens formula). The providers[] array may include
+        an entry with id "dewpoint" reflecting the derivation status.
       properties:
         query:
           type: object

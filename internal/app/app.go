@@ -11,6 +11,7 @@ import (
 	boltcache "github.com/jobrunner/tempus/internal/adapters/cache/bolt"
 	memcache "github.com/jobrunner/tempus/internal/adapters/cache/memory"
 	"github.com/jobrunner/tempus/internal/adapters/clock"
+	"github.com/jobrunner/tempus/internal/adapters/dewpoint"
 	httpapi "github.com/jobrunner/tempus/internal/adapters/http"
 	"github.com/jobrunner/tempus/internal/adapters/metrics"
 	"github.com/jobrunner/tempus/internal/adapters/openmeteo"
@@ -98,7 +99,8 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 		})
 	}
 
-	features := application.NewFeatureService(registry, logger, cfg.Query.Timeout)
+	derivers := []output.FeatureDeriver{dewpoint.New()}
+	features := application.NewFeatureService(registry, derivers, logger, cfg.Query.Timeout)
 	addr := cfg.Server.Host + ":" + strconv.Itoa(cfg.Server.Port)
 	a.server = httpapi.NewServer(addr, features, registry, readyAlways{}, clk, logger, serverOpts)
 	return a, nil

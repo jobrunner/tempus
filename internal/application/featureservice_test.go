@@ -12,6 +12,23 @@ import (
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
+// fakeDeriver is a test double for output.FeatureDeriver.
+type fakeDeriver struct {
+	id   string
+	feat *domain.Feature
+	err  error
+}
+
+func (f fakeDeriver) ID() string                  { return f.id }
+func (f fakeDeriver) Kind() string                { return "dewpoint" }
+func (f fakeDeriver) Attribution() domain.License { return domain.License{} }
+func (f fakeDeriver) Derive(_ context.Context, _ domain.QueryRequest, _ []domain.Feature) ([]domain.Feature, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return []domain.Feature{*f.feat}, nil
+}
+
 func discard() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
 func okProv(id string) output.FeatureProvider {
@@ -54,7 +71,7 @@ func TestFeatureService_PartialFailure(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(okProv("open-meteo"))
 	reg.Register(failProvider{"astro", output.NewTransientError(errors.New("dial timeout"), 30*time.Second)})
-	svc := NewFeatureService(reg, discard(), 5*time.Second)
+	svc := NewFeatureService(reg, nil, discard(), 5*time.Second)
 
 	res, err := svc.Query(context.Background(), sampleReq())
 	if err != nil {
@@ -81,7 +98,7 @@ func TestFeatureService_PartialFailure(t *testing.T) {
 func TestFeatureService_AllFailStill200Shape(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(failProvider{"open-meteo", output.NewNotYetAvailableError(2 * time.Hour)})
-	svc := NewFeatureService(reg, discard(), 5*time.Second)
+	svc := NewFeatureService(reg, nil, discard(), 5*time.Second)
 
 	res, err := svc.Query(context.Background(), sampleReq())
 	if err != nil {
@@ -98,7 +115,7 @@ func TestFeatureService_AllFailStill200Shape(t *testing.T) {
 func TestFeatureService_PermanentErrorStatus(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(failProvider{"p1", output.NewPermanentError(errors.New("bad request"))})
-	svc := NewFeatureService(reg, discard(), 5*time.Second)
+	svc := NewFeatureService(reg, nil, discard(), 5*time.Second)
 
 	res, err := svc.Query(context.Background(), sampleReq())
 	if err != nil {
@@ -119,7 +136,7 @@ func TestFeatureService_PermanentErrorStatus(t *testing.T) {
 func TestFeatureService_UnclassifiedErrorStatus(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(failProvider{"p2", errors.New("boom")})
-	svc := NewFeatureService(reg, discard(), 5*time.Second)
+	svc := NewFeatureService(reg, nil, discard(), 5*time.Second)
 
 	res, err := svc.Query(context.Background(), sampleReq())
 	if err != nil {
@@ -141,12 +158,63 @@ func TestFeatureService_ProviderFilter(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(okProv("open-meteo"))
 	reg.Register(okProv("astro"))
-	svc := NewFeatureService(reg, discard(), 5*time.Second)
+	svc := NewFeatureService(reg, nil, discard(), 5*time.Second)
 
 	r := sampleReq()
 	r.Providers = []string{"astro"}
 	res, _ := svc.Query(context.Background(), r)
 	if len(res.Providers) != 1 || res.Providers[0].ID != "astro" {
 		t.Fatalf("filter ignored: %+v", res.Providers)
+	}
+}
+
+func TestFeatureService_DeriverSuccess(t *testing.T) {
+	reg := NewRegistry()
+	derivedFeat := domain.NewPointFeature(
+		domain.Coordinate{Lat: 49.79, Lon: 9.93},
+		map[string]any{"kind": "dewpoint", "dewPoint2m": 12.0},
+		domain.License{Name: "Magnus-Formel", Attribution: "Taupunkt"},
+	)
+	d := fakeDeriver{id: "fake", feat: &derivedFeat}
+	svc := NewFeatureService(reg, []output.FeatureDeriver{d}, discard(), 5*time.Second)
+
+	res, err := svc.Query(context.Background(), sampleReq())
+	if err != nil {
+		t.Fatalf("Query must not error: %v", err)
+	}
+	if len(res.Features) != 1 {
+		t.Fatalf("want 1 feature (from deriver), got %d", len(res.Features))
+	}
+	byID := map[string]domain.ProviderStatus{}
+	for _, p := range res.Providers {
+		byID[p.ID] = p
+	}
+	if byID["fake"].Status != domain.StatusOK {
+		t.Errorf("fake deriver status = %q, want %q", byID["fake"].Status, domain.StatusOK)
+	}
+}
+
+func TestFeatureService_DeriverNotYetAvailable(t *testing.T) {
+	reg := NewRegistry()
+	d := fakeDeriver{id: "fake", err: output.NewNotYetAvailableError(2 * time.Hour)}
+	svc := NewFeatureService(reg, []output.FeatureDeriver{d}, discard(), 5*time.Second)
+
+	res, err := svc.Query(context.Background(), sampleReq())
+	if err != nil {
+		t.Fatalf("Query must not error: %v", err)
+	}
+	if len(res.Features) != 0 {
+		t.Errorf("want 0 features from failed deriver, got %d", len(res.Features))
+	}
+	byID := map[string]domain.ProviderStatus{}
+	for _, p := range res.Providers {
+		byID[p.ID] = p
+	}
+	st := byID["fake"]
+	if st.Status != domain.StatusUnavailable {
+		t.Errorf("fake deriver status = %q, want unavailable", st.Status)
+	}
+	if !st.Retryable {
+		t.Error("not-yet-available must be retryable")
 	}
 }
