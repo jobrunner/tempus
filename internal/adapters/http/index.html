@@ -544,8 +544,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="datetime">Datum &amp; Uhrzeit (UTC)</label>
-                    <input type="datetime-local" id="datetime" name="datetime" required>
+                    <label for="datetime">Datum &amp; Uhrzeit (Ortszeit)</label>
+                    <input type="datetime-local" id="datetime" name="datetime" step="900" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="tzoffset">Zeitzone der Ortszeit</label>
+                    <small style="display:block;color:var(--text-muted);font-size:0.8rem;margin-bottom:0.375rem;">am Ort geltende Zeit/Sommerzeit wählen — z.&#8239;B. Kanaren im Sommer: WEST (UTC+1)</small>
+                    <select id="tzoffset" name="tzoffset"></select>
                 </div>
 
                 <div class="btn-row">
@@ -588,6 +594,7 @@
             const latInput = document.getElementById('lat');
             const lonInput = document.getElementById('lon');
             const datetimeInput = document.getElementById('datetime');
+            const tzoffsetSelect = document.getElementById('tzoffset');
             const submitBtn = document.getElementById('submitBtn');
             const locationBtn = document.getElementById('locationBtn');
             const clearBtn = document.getElementById('clearBtn');
@@ -596,20 +603,100 @@
             const results = document.getElementById('results');
             const resultsContent = document.getElementById('resultsContent');
 
-            // --- Initialise defaults ------------------------------------------------
+            // --- Timezone offset dropdown -------------------------------------------
 
-            // Set the datetime max to "now" in UTC (YYYY-MM-DDTHH:MM) so the
-            // browser's date picker discourages future values (the API 400s on them).
-            function utcNowString() {
-                const now = new Date();
-                const pad = function(n) { return String(n).padStart(2, '0'); };
-                return now.getUTCFullYear() + '-' +
-                    pad(now.getUTCMonth() + 1) + '-' +
-                    pad(now.getUTCDate()) + 'T' +
-                    pad(now.getUTCHours()) + ':' +
-                    pad(now.getUTCMinutes());
+            // All standard UTC offsets (whole hours −12..+14 plus real fractional ones).
+            // minutes: east-of-UTC positive (same sign convention as Date.getTimezoneOffset() negated).
+            var OFFSETS = [
+                { minutes: -720, label: 'UTC−12:00' },
+                { minutes: -660, label: 'UTC−11:00' },
+                { minutes: -600, label: 'UTC−10:00' },
+                { minutes: -570, label: 'UTC−09:30' },
+                { minutes: -540, label: 'UTC−09:00' },
+                { minutes: -480, label: 'UTC−08:00' },
+                { minutes: -420, label: 'UTC−07:00' },
+                { minutes: -360, label: 'UTC−06:00' },
+                { minutes: -300, label: 'UTC−05:00' },
+                { minutes: -240, label: 'UTC−04:00' },
+                { minutes: -210, label: 'UTC−03:30' },
+                { minutes: -180, label: 'UTC−03:00' },
+                { minutes: -120, label: 'UTC−02:00' },
+                { minutes: -60,  label: 'UTC−01:00' },
+                { minutes: 0,    label: 'UTC±00:00 — WET / GMT (Kanaren Winter)' },
+                { minutes: 60,   label: 'UTC+01:00 — WEST / CET (Kanaren Sommer, MEZ)' },
+                { minutes: 120,  label: 'UTC+02:00 — CEST / EET (MESZ)' },
+                { minutes: 180,  label: 'UTC+03:00 — EEST' },
+                { minutes: 210,  label: 'UTC+03:30' },
+                { minutes: 240,  label: 'UTC+04:00' },
+                { minutes: 270,  label: 'UTC+04:30' },
+                { minutes: 300,  label: 'UTC+05:00' },
+                { minutes: 330,  label: 'UTC+05:30' },
+                { minutes: 345,  label: 'UTC+05:45' },
+                { minutes: 360,  label: 'UTC+06:00' },
+                { minutes: 390,  label: 'UTC+06:30' },
+                { minutes: 420,  label: 'UTC+07:00' },
+                { minutes: 480,  label: 'UTC+08:00' },
+                { minutes: 540,  label: 'UTC+09:00' },
+                { minutes: 570,  label: 'UTC+09:30' },
+                { minutes: 600,  label: 'UTC+10:00' },
+                { minutes: 630,  label: 'UTC+10:30' },
+                { minutes: 660,  label: 'UTC+11:00' },
+                { minutes: 720,  label: 'UTC+12:00' },
+                { minutes: 765,  label: 'UTC+12:45' },
+                { minutes: 780,  label: 'UTC+13:00' },
+                { minutes: 840,  label: 'UTC+14:00' }
+            ];
+
+            // Populate the dropdown.
+            var browserOffsetMin = -(new Date().getTimezoneOffset()); // east-of-UTC positive
+            var defaultFound = false;
+            OFFSETS.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = String(o.minutes);
+                opt.textContent = o.label;
+                if (!defaultFound && o.minutes === browserOffsetMin) {
+                    opt.selected = true;
+                    defaultFound = true;
+                }
+                tzoffsetSelect.appendChild(opt);
+            });
+            // Fallback to UTC±00:00 if browser offset not in list.
+            if (!defaultFound) {
+                for (var i = 0; i < tzoffsetSelect.options.length; i++) {
+                    if (Number(tzoffsetSelect.options[i].value) === 0) {
+                        tzoffsetSelect.options[i].selected = true;
+                        break;
+                    }
+                }
             }
-            datetimeInput.max = utcNowString();
+
+            // --- Helpers ------------------------------------------------------------
+
+            var pad = function(n) { return String(n).padStart(2, '0'); };
+
+            // Format a Date as YYYY-MM-DDTHH:MM using UTC getters.
+            function formatUTC(d) {
+                return d.getUTCFullYear() + '-' +
+                    pad(d.getUTCMonth() + 1) + '-' +
+                    pad(d.getUTCDate()) + 'T' +
+                    pad(d.getUTCHours()) + ':' +
+                    pad(d.getUTCMinutes());
+            }
+
+            // Compute the local wall-clock time at the given offset and format it
+            // as YYYY-MM-DDTHH:MM for use as the datetime-local max.
+            // max = UTC now shifted forward by offsetMin → gives "local now" at that offset.
+            function localNowString(offsetMin) {
+                return formatUTC(new Date(Date.now() + offsetMin * 60000));
+            }
+
+            // Update the datetime max whenever the offset changes.
+            function updateMax() {
+                var offsetMin = Number(tzoffsetSelect.value);
+                datetimeInput.max = localNowString(offsetMin);
+            }
+            updateMax();
+            tzoffsetSelect.addEventListener('change', updateMax);
 
             // Smart coordinate paste: "lat, lon" or "lat lon" into either field
             // fills both.
@@ -690,6 +777,7 @@
                 latInput.value = '';
                 lonInput.value = '';
                 datetimeInput.value = '';
+                updateMax();
                 hideError();
                 results.classList.remove('active');
                 resultsContent.innerHTML = '';
@@ -703,18 +791,32 @@
 
                 const lat = latInput.value.trim().replace(',', '.');
                 const lon = lonInput.value.trim().replace(',', '.');
-                // datetime-local value is already YYYY-MM-DDTHH:MM — send as-is;
-                // the API treats offset-less values as UTC.
-                const datetime = datetimeInput.value.trim();
+                const localDatetime = datetimeInput.value.trim(); // YYYY-MM-DDTHH:MM (local time at selected offset)
+                const offsetMin = Number(tzoffsetSelect.value);   // east-of-UTC positive
 
                 if (!lat || !lon || isNaN(parseFloat(lat)) || isNaN(parseFloat(lon))) {
                     showError('Bitte geben Sie gültige Koordinaten ein.');
                     return;
                 }
-                if (!datetime) {
+                if (!localDatetime) {
                     showError('Bitte geben Sie Datum und Uhrzeit ein.');
                     return;
                 }
+
+                // Convert local time to UTC: parse YYYY-MM-DDTHH:MM, treat it as
+                // wall-clock time at the selected offset, then subtract the offset
+                // to get the UTC instant.
+                // local 15:30 + WEST(+60) → UTC = Date.UTC(...) - 60*60000 → 14:30
+                var parts = localDatetime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+                if (!parts) {
+                    showError('Ungültiges Datumsformat.');
+                    return;
+                }
+                var utcMs = Date.UTC(
+                    Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]),
+                    Number(parts[4]), Number(parts[5])
+                ) - offsetMin * 60000;
+                var datetime = formatUTC(new Date(utcMs));
 
                 const url = '/api/v1/query?' +
                     'lat=' + encodeURIComponent(lat) +
