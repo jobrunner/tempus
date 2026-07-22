@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/jobrunner/tempus/compare/v0.4.0...v0.5.0) (2026-07-22)
+
+
+### Features
+
+* image ships app-owned /data so a mounted volume needs no init/chown ([#9](https://github.com/jobrunner/tempus/issues/9)) ([44fb901](https://github.com/jobrunner/tempus/commit/44fb90156c860ee1e97db594e50b7be9cbcdfec5))
+
 ## [0.4.0](https://github.com/jobrunner/tempus/compare/v0.3.0...v0.4.0) (2026-07-21)
 
 
