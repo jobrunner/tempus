@@ -38,15 +38,22 @@ FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc
 # CA roots for outbound HTTPS (e.g. Open-Meteo), taken from the builder image.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-# Non-root runtime user.
-RUN addgroup -S app && adduser -S app -G app && mkdir -p /app && chown app:app /app
+# Non-root runtime user. /data is the cache/state dir and is owned by the app
+# user: a fresh named volume mounted at /data inherits this ownership (Docker
+# copies the mountpoint's owner), so the BoltDB cache is writable without any
+# init/chown step.
+RUN addgroup -S app && adduser -S app -G app \
+    && mkdir -p /app /data \
+    && chown app:app /app /data
 WORKDIR /app
 COPY --from=builder /out/tempus /app/tempus
 USER app
 
 ENV TEMPUS_SERVER_HOST=0.0.0.0 \
     TEMPUS_SERVER_PORT=8080 \
-    TEMPUS_LOGGING_FORMAT=json
+    TEMPUS_LOGGING_FORMAT=json \
+    TEMPUS_CACHE_TYPE=disk \
+    TEMPUS_CACHE_PATH=/data/cache.bolt
 EXPOSE 8080
 
 # busybox wget ships in the Alpine base; /health/live needs no dependencies.
