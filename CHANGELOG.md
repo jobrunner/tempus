@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/jobrunner/tempus/compare/v0.10.1...v0.10.2) (2026-07-22)
+
+
+### Bug Fixes
+
+* compute day/night from solar position (Open-Meteo archive is_day is unreliable) ([#23](https://github.com/jobrunner/tempus/issues/23)) ([2e393f0](https://github.com/jobrunner/tempus/commit/2e393f07da014e0fa45419723288690063830baa))
+
 ## [0.10.1](https://github.com/jobrunner/tempus/compare/v0.10.0...v0.10.1) (2026-07-22)
 
 
