@@ -35,7 +35,7 @@ type readyAlways struct{}
 func (readyAlways) Ready(context.Context) bool { return true }
 
 // New wires adapters into ports.
-func New(cfg *config.Config, logger *slog.Logger) (*App, error) {
+func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) {
 	a := &App{cfg: cfg, logger: logger}
 
 	cache, closer, err := buildCache(cfg.Cache)
@@ -69,7 +69,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*App, error) {
 
 	// Wire tracing. When disabled the NoOpTracer is used so downstream code
 	// never has to nil-check the tracer.
-	serverOpts := httpapi.Options{ServiceName: "tempus"}
+	serverOpts := httpapi.Options{ServiceName: "tempus", Version: version}
 
 	if cfg.Tracing.Enabled {
 		tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), cfg.Tracing, "tempus")

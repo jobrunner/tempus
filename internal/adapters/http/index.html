@@ -535,7 +535,7 @@
     <div class="container">
         <header>
             <h1>Tempus</h1>
-            <p>Historische Wetterdaten abfragen</p>
+            <p>Ortsdaten mit Zeitbezug</p>
         </header>
 
         <div class="card">
@@ -554,14 +554,15 @@
 
                 <div class="form-group">
                     <label for="datetime">Datum &amp; Uhrzeit (Ortszeit)</label>
-                    <input type="datetime-local" id="datetime" name="datetime" step="900" required>
+                    <input type="datetime-local" id="datetime" name="datetime" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="tzoffset">Zeitzone der Ortszeit</label>
+                    <label for="tzzone">Zeitzone der Ortszeit</label>
                     <small class="tz-detect-hint" id="tzdetect" aria-live="polite"></small>
-                    <small style="display:block;color:var(--text-muted);font-size:0.8rem;margin-bottom:0.375rem;">am Ort geltende Zeit/Sommerzeit wählen — z.&#8239;B. Kanaren im Sommer: WEST (UTC+1) &middot; <em>Erkennung ist an Grenzen ungenau, Auswahl kann manuell korrigiert werden.</em></small>
-                    <select id="tzoffset" name="tzoffset"></select>
+                    <small style="display:block;color:var(--text-muted);font-size:0.8rem;margin-bottom:0.375rem;">Wird aus der Koordinate erkannt — bei Bedarf anpassen. Sommer-/Winterzeit wird automatisch ber&uuml;cksichtigt.</small>
+                    <select id="tzzone" name="tzzone"></select>
+                    <small id="tzabbrev" aria-live="polite" style="display:block;color:var(--text-muted);font-size:0.8rem;margin-top:0.25rem;min-height:1.2em;"></small>
                 </div>
 
                 <div class="btn-row">
@@ -610,7 +611,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
             const latInput = document.getElementById('lat');
             const lonInput = document.getElementById('lon');
             const datetimeInput = document.getElementById('datetime');
-            const tzoffsetSelect = document.getElementById('tzoffset');
+            const tzzoneSelect = document.getElementById('tzzone');
+            const tzabbrevEl = document.getElementById('tzabbrev');
             const submitBtn = document.getElementById('submitBtn');
             const locationBtn = document.getElementById('locationBtn');
             const clearBtn = document.getElementById('clearBtn');
@@ -620,72 +622,83 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
             const resultsContent = document.getElementById('resultsContent');
             const tzdetectEl = document.getElementById('tzdetect');
 
-            // --- Timezone offset dropdown -------------------------------------------
+            // --- IANA timezone dropdown ---------------------------------------------
 
-            // All standard UTC offsets (whole hours −12..+14 plus real fractional ones).
-            // minutes: east-of-UTC positive (same sign convention as Date.getTimezoneOffset() negated).
-            var OFFSETS = [
-                { minutes: -720, label: 'UTC−12:00' },
-                { minutes: -660, label: 'UTC−11:00' },
-                { minutes: -600, label: 'UTC−10:00' },
-                { minutes: -570, label: 'UTC−09:30' },
-                { minutes: -540, label: 'UTC−09:00' },
-                { minutes: -480, label: 'UTC−08:00' },
-                { minutes: -420, label: 'UTC−07:00' },
-                { minutes: -360, label: 'UTC−06:00' },
-                { minutes: -300, label: 'UTC−05:00' },
-                { minutes: -240, label: 'UTC−04:00' },
-                { minutes: -210, label: 'UTC−03:30' },
-                { minutes: -180, label: 'UTC−03:00' },
-                { minutes: -120, label: 'UTC−02:00' },
-                { minutes: -60,  label: 'UTC−01:00' },
-                { minutes: 0,    label: 'UTC±00:00 — WET / GMT (Kanaren Winter)' },
-                { minutes: 60,   label: 'UTC+01:00 — WEST / CET (Kanaren Sommer, MEZ)' },
-                { minutes: 120,  label: 'UTC+02:00 — CEST / EET (MESZ)' },
-                { minutes: 180,  label: 'UTC+03:00 — EEST' },
-                { minutes: 210,  label: 'UTC+03:30' },
-                { minutes: 240,  label: 'UTC+04:00' },
-                { minutes: 270,  label: 'UTC+04:30' },
-                { minutes: 300,  label: 'UTC+05:00' },
-                { minutes: 330,  label: 'UTC+05:30' },
-                { minutes: 345,  label: 'UTC+05:45' },
-                { minutes: 360,  label: 'UTC+06:00' },
-                { minutes: 390,  label: 'UTC+06:30' },
-                { minutes: 420,  label: 'UTC+07:00' },
-                { minutes: 480,  label: 'UTC+08:00' },
-                { minutes: 540,  label: 'UTC+09:00' },
-                { minutes: 570,  label: 'UTC+09:30' },
-                { minutes: 600,  label: 'UTC+10:00' },
-                { minutes: 630,  label: 'UTC+10:30' },
-                { minutes: 660,  label: 'UTC+11:00' },
-                { minutes: 720,  label: 'UTC+12:00' },
-                { minutes: 765,  label: 'UTC+12:45' },
-                { minutes: 780,  label: 'UTC+13:00' },
-                { minutes: 840,  label: 'UTC+14:00' }
+            // Fallback list for browsers without Intl.supportedValuesOf.
+            var FALLBACK_ZONES = [
+                'Africa/Abidjan','Africa/Cairo','Africa/Casablanca','Africa/Johannesburg',
+                'Africa/Lagos','Africa/Nairobi','America/Anchorage','America/Argentina/Buenos_Aires',
+                'America/Bogota','America/Chicago','America/Denver','America/Los_Angeles',
+                'America/Mexico_City','America/New_York','America/Sao_Paulo','America/Toronto',
+                'Asia/Bangkok','Asia/Colombo','Asia/Dubai','Asia/Hong_Kong','Asia/Jakarta',
+                'Asia/Karachi','Asia/Kolkata','Asia/Seoul','Asia/Shanghai','Asia/Singapore',
+                'Asia/Tehran','Asia/Tokyo','Atlantic/Azores','Atlantic/Canary','Atlantic/Reykjavik',
+                'Australia/Adelaide','Australia/Brisbane','Australia/Melbourne','Australia/Perth',
+                'Australia/Sydney','Europe/Amsterdam','Europe/Athens','Europe/Berlin',
+                'Europe/Bratislava','Europe/Brussels','Europe/Bucharest','Europe/Budapest',
+                'Europe/Copenhagen','Europe/Dublin','Europe/Helsinki','Europe/Istanbul',
+                'Europe/Kyiv','Europe/Lisbon','Europe/Ljubljana','Europe/London',
+                'Europe/Luxembourg','Europe/Madrid','Europe/Nicosia','Europe/Oslo',
+                'Europe/Paris','Europe/Prague','Europe/Riga','Europe/Rome','Europe/Sofia',
+                'Europe/Stockholm','Europe/Tallinn','Europe/Vienna','Europe/Vilnius',
+                'Europe/Warsaw','Europe/Zurich','Pacific/Auckland','Pacific/Fiji',
+                'Pacific/Honolulu','UTC'
             ];
 
-            // Populate the dropdown.
-            var browserOffsetMin = -(new Date().getTimezoneOffset()); // east-of-UTC positive
-            var defaultFound = false;
-            OFFSETS.forEach(function(o) {
-                var opt = document.createElement('option');
-                opt.value = String(o.minutes);
-                opt.textContent = o.label;
-                if (!defaultFound && o.minutes === browserOffsetMin) {
-                    opt.selected = true;
-                    defaultFound = true;
-                }
-                tzoffsetSelect.appendChild(opt);
-            });
-            // Fallback to UTC±00:00 if browser offset not in list.
-            if (!defaultFound) {
-                for (var i = 0; i < tzoffsetSelect.options.length; i++) {
-                    if (Number(tzoffsetSelect.options[i].value) === 0) {
-                        tzoffsetSelect.options[i].selected = true;
-                        break;
-                    }
-                }
+            // Obscure enclave/microstate zones that duplicate a well-known neighbour's
+            // clock (tzdata "backward" links); show the recognisable identifier instead
+            // (e.g. Europe/Berlin, not Europe/Busingen). Etc/* pseudo-zones are dropped too.
+            var BLOCKED_ZONES = {
+                'Europe/Busingen': 1, 'Europe/Vatican': 1, 'Europe/San_Marino': 1,
+                'Europe/Mariehamn': 1, 'Europe/Guernsey': 1, 'Europe/Jersey': 1,
+                'Europe/Isle_of_Man': 1, 'Europe/Vaduz': 1, 'Europe/Bratislava': 1,
+                'Europe/Ljubljana': 1, 'Europe/Podgorica': 1, 'Europe/Sarajevo': 1,
+                'Europe/Skopje': 1, 'Europe/Zagreb': 1, 'Arctic/Longyearbyen': 1
+            };
+            function keepZone(z) {
+                if (BLOCKED_ZONES[z]) return false;
+                if (z.indexOf('Etc/') === 0) return false;
+                return true;
             }
+            function getZoneList() {
+                var list;
+                try {
+                    if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
+                        list = Intl.supportedValuesOf('timeZone').slice();
+                    }
+                } catch (_) {}
+                if (!list) {
+                    // Feature not available -- use fallback; ensure browser zone is included.
+                    list = FALLBACK_ZONES.slice();
+                    try {
+                        var bz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                        if (bz && list.indexOf(bz) < 0) list.push(bz);
+                    } catch (_) {}
+                }
+                list = list.filter(keepZone);
+                if (list.indexOf('UTC') < 0) list.push('UTC');
+                return list.sort();
+            }
+
+            var ZONES = getZoneList();
+
+            // Browser's IANA zone (default selection).
+            var browserZone = 'UTC';
+            try {
+                browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            } catch (_) {}
+
+            // Ensure the browser's own zone is always selectable, even if filtered.
+            if (browserZone && ZONES.indexOf(browserZone) < 0) { ZONES.push(browserZone); ZONES.sort(); }
+
+            // Populate the dropdown.
+            ZONES.forEach(function(z) {
+                var opt = document.createElement('option');
+                opt.value = z;
+                opt.textContent = z;
+                if (z === browserZone) opt.selected = true;
+                tzzoneSelect.appendChild(opt);
+            });
 
             // --- Helpers ------------------------------------------------------------
 
@@ -700,23 +713,6 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     pad(d.getUTCMinutes());
             }
 
-            // Compute the local wall-clock time at the given offset and format it
-            // as YYYY-MM-DDTHH:MM for use as the datetime-local max.
-            // max = UTC now shifted forward by offsetMin → gives "local now" at that offset.
-            function localNowString(offsetMin) {
-                return formatUTC(new Date(Date.now() + offsetMin * 60000));
-            }
-
-            // Update the datetime max whenever the offset changes.
-            function updateMax() {
-                var offsetMin = Number(tzoffsetSelect.value);
-                datetimeInput.max = localNowString(offsetMin);
-            }
-            updateMax();
-            tzoffsetSelect.addEventListener('change', updateMax);
-
-            // --- Timezone auto-detect from coordinate --------------------------------
-
             // Given an IANA zone id and a local datetime string "YYYY-MM-DDTHH:MM",
             // return the DST-correct UTC offset in signed minutes (east-of-UTC positive).
             // Uses Temporal if available, otherwise Intl.DateTimeFormat.
@@ -724,28 +720,21 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 try {
                     // --- Temporal path (Chrome 121+, Firefox 139+, Safari 18+) ---
                     if (typeof Temporal !== 'undefined' && Temporal.ZonedDateTime) {
-                        // Parse the local wall-clock time as a PlainDateTime, then
-                        // instantiate it in the target zone to get the real offset.
                         var pd = Temporal.PlainDateTime.from(localDatetimeStr);
                         var zdt = pd.toZonedDateTime(zone);
-                        return zdt.offsetNanoseconds / 60e9; // nanoseconds → minutes
+                        return zdt.offsetNanoseconds / 60e9; // nanoseconds -> minutes
                     }
                 } catch (_) {}
 
                 // --- Intl.DateTimeFormat path (all modern browsers) ---
-                // Strategy: parse the local datetime, treat it as UTC to build a Date,
-                // then use Intl to find what the clock shows in the target zone for that
-                // instant, compute the delta, and iterate once to converge.
                 var parts = localDatetimeStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
                 if (!parts) return null;
-                // Treat the entered local time as a UTC instant (rough initial guess).
                 var guessMs = Date.UTC(
                     Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]),
                     Number(parts[4]), Number(parts[5])
                 );
 
                 function getOffsetForInstant(ms) {
-                    // Ask Intl what the clock shows in this zone at this instant.
                     var fmt = new Intl.DateTimeFormat('en-US', {
                         timeZone: zone,
                         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -755,21 +744,18 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     fmt.formatToParts(new Date(ms)).forEach(function(x) {
                         if (x.type !== 'literal') p[x.type] = Number(x.value);
                     });
-                    // Reconstruct the "local" time as a UTC ms to find the delta.
                     var localMs = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute);
                     return Math.round((localMs - ms) / 60000); // minutes, east positive
                 }
 
-                // One iteration: initial guess → better offset.
                 var offset1 = getOffsetForInstant(guessMs);
-                // Adjust the guess by applying that offset, then re-derive.
                 var adjustedMs = guessMs - offset1 * 60000;
                 var offset2 = getOffsetForInstant(adjustedMs);
                 return offset2;
             }
 
             // Returns German timezone abbreviation (e.g. "MESZ", "MEZ") for the given
-            // zone at the given instant (ms). Falls back to null if Intl returns a GMT±... string.
+            // zone at the given instant (ms). Falls back to null if Intl returns a GMT+... string.
             function getZoneAbbrev(zone, instantMs) {
                 try {
                     var fmt = new Intl.DateTimeFormat('de-DE', {
@@ -781,13 +767,76 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     parts.forEach(function(p) {
                         if (p.type === 'timeZoneName') abbrev = p.value;
                     });
-                    // If it looks like "GMT+2" or "UTC+2", return null (not a real abbrev).
                     if (/^(GMT|UTC)[+-]/.test(abbrev)) return null;
                     return abbrev || null;
                 } catch (_) {
                     return null;
                 }
             }
+
+            // Build an offset label string like "UTC+2" or "UTC+5:30".
+            function offsetLabel(offsetMin) {
+                var sign = offsetMin >= 0 ? '+' : '-';
+                var abs = Math.abs(offsetMin);
+                var s = 'UTC' + sign + Math.floor(abs / 60);
+                if (abs % 60 !== 0) s += ':' + pad(abs % 60);
+                return s;
+            }
+
+            // Compute the datetime-local max for the selected zone (prevents future-UTC).
+            function updateMax() {
+                var zone = tzzoneSelect.value;
+                var dtVal = datetimeInput.value.trim() || (function() {
+                    var n = new Date();
+                    return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':00';
+                }());
+                var offsetMin = getOffsetMinutes(zone, dtVal);
+                if (offsetMin === null || isNaN(offsetMin)) offsetMin = 0;
+                datetimeInput.max = formatUTC(new Date(Date.now() + offsetMin * 60000));
+            }
+            updateMax();
+            tzzoneSelect.addEventListener('change', function() {
+                updateMax();
+                updateAbbrev();
+            });
+
+            // Update the abbreviation/offset helper next to the dropdown.
+            function updateAbbrev() {
+                if (!tzabbrevEl) return;
+                var zone = tzzoneSelect.value;
+                var dtVal = datetimeInput.value.trim() || (function() {
+                    var n = new Date();
+                    return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':00';
+                }());
+                var offsetMin = getOffsetMinutes(zone, dtVal);
+                if (offsetMin === null || isNaN(offsetMin)) {
+                    tzabbrevEl.textContent = '';
+                    return;
+                }
+                offsetMin = Math.round(offsetMin);
+                var dparts = dtVal.split('T');
+                var dymd = dparts[0].split('-');
+                var dhm = (dparts[1] || '00:00').split(':');
+                var instantMs = Date.UTC(+dymd[0], +dymd[1] - 1, +dymd[2], +dhm[0], +dhm[1]) - offsetMin * 60000;
+                var abbrev = getZoneAbbrev(zone, instantMs);
+                var oLabel = offsetLabel(offsetMin);
+                tzabbrevEl.textContent = abbrev ? abbrev + ' · ' + oLabel : oLabel;
+            }
+            updateAbbrev();
+
+            // --- Default datetime: current hour, minutes = 00 -----------------------
+            (function() {
+                var n = new Date();
+                var localDefault = n.getFullYear() + '-' +
+                    pad(n.getMonth() + 1) + '-' +
+                    pad(n.getDate()) + 'T' +
+                    pad(n.getHours()) + ':00';
+                datetimeInput.value = localDefault;
+                updateMax();
+                updateAbbrev();
+            }());
+
+            // --- Timezone auto-detect from coordinate --------------------------------
 
             function updateDetectedZone() {
                 if (!tzdetectEl) return;
@@ -809,69 +858,50 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     return;
                 }
 
-                // Get datetime value; fall back to "now" in the zone if empty.
-                var dtVal = datetimeInput.value.trim();
-                if (!dtVal) {
-                    // Build a rough local-now string using the current browser time.
-                    var n = new Date();
-                    dtVal = n.getFullYear() + '-' +
-                        pad(n.getMonth() + 1) + '-' +
-                        pad(n.getDate()) + 'T' +
-                        pad(n.getHours()) + ':' +
-                        pad(n.getMinutes());
+                // Preselect the detected zone in the dropdown.
+                var found = false;
+                for (var i = 0; i < tzzoneSelect.options.length; i++) {
+                    if (tzzoneSelect.options[i].value === zone) {
+                        tzzoneSelect.options[i].selected = true;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    // Zone not in list (rare) -- add it.
+                    var newOpt = document.createElement('option');
+                    newOpt.value = zone;
+                    newOpt.textContent = zone + ' (Erkannt)';
+                    newOpt.setAttribute('data-autodetect', '1');
+                    newOpt.selected = true;
+                    tzzoneSelect.appendChild(newOpt);
                 }
 
+                updateMax();
+                updateAbbrev();
+
+                // Build display label.
+                var dtVal = datetimeInput.value.trim() || (function() {
+                    var n = new Date();
+                    return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':00';
+                }());
                 var offsetMin = getOffsetMinutes(zone, dtVal);
                 if (offsetMin === null || isNaN(offsetMin)) {
                     tzdetectEl.textContent = 'Erkannt: ' + zone;
                     return;
                 }
                 offsetMin = Math.round(offsetMin);
-
-                // Preselect or add option in the dropdown.
-                var found = false;
-                for (var i = 0; i < tzoffsetSelect.options.length; i++) {
-                    if (Number(tzoffsetSelect.options[i].value) === offsetMin) {
-                        tzoffsetSelect.options[i].selected = true;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    // Remove any previously auto-added option first.
-                    var prev = tzoffsetSelect.querySelector('option[data-autodetect]');
-                    if (prev) prev.parentNode.removeChild(prev);
-                    var newOpt = document.createElement('option');
-                    newOpt.value = String(offsetMin);
-                    var sign = offsetMin >= 0 ? '+' : '-';
-                    var absMin = Math.abs(offsetMin);
-                    newOpt.textContent = 'UTC' + sign + pad(Math.floor(absMin / 60)) + ':' + pad(absMin % 60) + ' (Erkannt)';
-                    newOpt.setAttribute('data-autodetect', '1');
-                    newOpt.selected = true;
-                    tzoffsetSelect.appendChild(newOpt);
-                }
-
-                // Update max after offset change.
-                updateMax();
-
-                // Build display label: "Erkannt: Europe/Berlin (MESZ, UTC+2)"
-                // Abbreviation is computed at the ENTERED datetime's instant, so the label
-                // reflects the entered date's DST (MESZ in summer, MEZ in winter) — not "now".
                 var dparts = dtVal.split('T');
                 var dymd = dparts[0].split('-');
                 var dhm = (dparts[1] || '00:00').split(':');
                 var enteredInstantMs = Date.UTC(+dymd[0], +dymd[1] - 1, +dymd[2], +dhm[0], +dhm[1]) - offsetMin * 60000;
                 var abbrev = getZoneAbbrev(zone, enteredInstantMs);
-                var sign2 = offsetMin >= 0 ? '+' : '-';
-                var absMin2 = Math.abs(offsetMin);
-                var offsetStr = 'UTC' + sign2 + Math.floor(absMin2 / 60);
-                if (absMin2 % 60 !== 0) offsetStr += ':' + pad(absMin2 % 60);
-
+                var oLabel = offsetLabel(offsetMin);
                 var label = 'Erkannt: ' + zone;
                 if (abbrev) {
-                    label += ' (' + abbrev + ', ' + offsetStr + ')';
+                    label += ' (' + abbrev + ', ' + oLabel + ')';
                 } else {
-                    label += ' (' + offsetStr + ')';
+                    label += ' (' + oLabel + ')';
                 }
                 tzdetectEl.textContent = label;
             }
@@ -879,8 +909,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
             // Auto-detect zone on coordinate or datetime change.
             latInput.addEventListener('input', updateDetectedZone);
             lonInput.addEventListener('input', updateDetectedZone);
-            datetimeInput.addEventListener('change', updateDetectedZone);
-            datetimeInput.addEventListener('input', updateDetectedZone);
+            datetimeInput.addEventListener('change', function() { updateDetectedZone(); updateMax(); updateAbbrev(); });
+            datetimeInput.addEventListener('input', function() { updateDetectedZone(); updateMax(); updateAbbrev(); });
 
             // Smart coordinate paste: "lat, lon" or "lat lon" into either field
             // fills both.
@@ -963,7 +993,9 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 latInput.value = '';
                 lonInput.value = '';
                 datetimeInput.value = '';
+                if (tzdetectEl) tzdetectEl.textContent = '';
                 updateMax();
+                updateAbbrev();
                 hideError();
                 results.classList.remove('active');
                 resultsContent.innerHTML = '';
@@ -977,8 +1009,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                 const lat = latInput.value.trim().replace(',', '.');
                 const lon = lonInput.value.trim().replace(',', '.');
-                const localDatetime = datetimeInput.value.trim(); // YYYY-MM-DDTHH:MM (local time at selected offset)
-                const offsetMin = Number(tzoffsetSelect.value);   // east-of-UTC positive
+                const localDatetime = datetimeInput.value.trim(); // YYYY-MM-DDTHH:MM (local time in selected zone)
+                const zone = tzzoneSelect.value;
 
                 if (!lat || !lon || isNaN(parseFloat(lat)) || isNaN(parseFloat(lon))) {
                     showError('Bitte geben Sie gültige Koordinaten ein.');
@@ -989,15 +1021,16 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     return;
                 }
 
-                // Convert local time to UTC: parse YYYY-MM-DDTHH:MM, treat it as
-                // wall-clock time at the selected offset, then subtract the offset
-                // to get the UTC instant.
-                // local 15:30 + WEST(+60) → UTC = Date.UTC(...) - 60*60000 → 14:30
+                // Convert local time to UTC using the DST-correct offset for the selected zone.
+                // local 15:00 Europe/Berlin (summer) -> offset = +120 min -> UTC = 13:00
                 var parts = localDatetime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
                 if (!parts) {
                     showError('Ungültiges Datumsformat.');
                     return;
                 }
+                var offsetMin = getOffsetMinutes(zone, localDatetime);
+                if (offsetMin === null || isNaN(offsetMin)) offsetMin = 0;
+                offsetMin = Math.round(offsetMin);
                 var utcMs = Date.UTC(
                     Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]),
                     Number(parts[4]), Number(parts[5])

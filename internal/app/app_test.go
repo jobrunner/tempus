@@ -19,7 +19,7 @@ func TestApp_QueryEndToEndWithMemoryCache(t *testing.T) {
 	cfg.Cache.Path = filepath.Join(t.TempDir(), "c.bolt")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	a, err := New(cfg, logger)
+	a, err := New(cfg, logger, "test")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestApp_WithMetricsEnabled(t *testing.T) {
 	cfg.Metrics.Path = "/metrics"
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	a, err := New(cfg, logger)
+	a, err := New(cfg, logger, "test")
 	if err != nil {
 		t.Fatalf("New with metrics enabled: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestApp_WithTracingEnabled(t *testing.T) {
 	cfg.Tracing.SampleRatio = 1.0
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	a, err := New(cfg, logger)
+	a, err := New(cfg, logger, "test")
 	if err != nil {
 		t.Fatalf("New with tracing enabled: %v", err)
 	}
