@@ -30,7 +30,6 @@ var hourlyVars = []struct{ api, prop string }{
 	{"weather_code", "weatherCode"},
 	{"wind_speed_10m", "windSpeed10m"},
 	{"cloud_cover", "cloudCover"},
-	{"is_day", "isDay"},
 }
 
 // Options configures the provider.
@@ -185,6 +184,11 @@ func (p *Provider) toFeature(data apiResponse, req domain.QueryRequest, useArchi
 	}
 	props["units"] = units
 
+	// Compute day/night from the sun's position; Open-Meteo's archive is_day is
+	// always 0 for historical dates and therefore unreliable.
+	props["isDay"] = domain.IsDaylight(data.Latitude, data.Longitude, req.Instant)
+	props["isDaySource"] = domain.SolarPositionSource
+
 	// Enrich with WMO-4677 weather-code description when available.
 	if wcRaw, present := props["weatherCode"]; present {
 		var code int
@@ -220,11 +224,10 @@ func (p *Provider) license(useArchive bool) domain.License {
 	}
 }
 
-// normalize converts is_day (0/1) to bool; weather_code to int; leaves the rest.
+// normalize converts weather_code, relative_humidity_2m and cloud_cover to
+// int; leaves other numeric values as float64.
 func normalize(apiName string, v float64) any {
 	switch apiName {
-	case "is_day":
-		return v != 0
 	case "weather_code", "relative_humidity_2m", "cloud_cover":
 		return int(v)
 	default:
