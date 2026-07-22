@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/jobrunner/tempus/compare/v0.6.0...v0.7.0) (2026-07-22)
+
+
+### Features
+
+* auto-detect timezone from coordinate (offline), keep manual override ([#13](https://github.com/jobrunner/tempus/issues/13)) ([0cacddb](https://github.com/jobrunner/tempus/commit/0cacddbdef91e4d8daaa98c9a2bf706c0d31f96f))
+
 ## [0.6.0](https://github.com/jobrunner/tempus/compare/v0.5.0...v0.6.0) (2026-07-22)
 
 
