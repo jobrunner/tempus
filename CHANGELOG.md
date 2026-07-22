@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/jobrunner/tempus/compare/v0.10.0...v0.10.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* allow typing the year in the datetime field ([#21](https://github.com/jobrunner/tempus/issues/21)) ([3bcc561](https://github.com/jobrunner/tempus/commit/3bcc561865a4907f4d0a41e5ff9c9152f74f17ac))
+
 ## [0.10.0](https://github.com/jobrunner/tempus/compare/v0.9.0...v0.10.0) (2026-07-22)
 
 
