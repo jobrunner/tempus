@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/jobrunner/tempus/compare/v0.5.0...v0.6.0) (2026-07-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* The `timezone` query parameter is no longer accepted by GET /api/v1/query. The `localTime` and `timezone` fields are removed from the QueryEcho response and from feature properties. Callers must now convert local time to UTC before calling the API.
+
+### Features
+
+* local-time entry with offset dropdown; remove API timezone param ([#11](https://github.com/jobrunner/tempus/issues/11)) ([c28c20d](https://github.com/jobrunner/tempus/commit/c28c20d71367c3820c6f079286ba1b19d15eebe6))
+
 ## [0.5.0](https://github.com/jobrunner/tempus/compare/v0.4.0...v0.5.0) (2026-07-22)
 
 
