@@ -17,8 +17,7 @@ type fixedClock struct{ t time.Time }
 func (c fixedClock) Now() time.Time { return c.t }
 
 func req(instant time.Time) domain.QueryRequest {
-	loc, _ := time.LoadLocation("Europe/Berlin")
-	return domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.79, Lon: 9.93}, Instant: instant, Timezone: loc, TimezoneID: "Europe/Berlin"}
+	return domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.79, Lon: 9.93}, Instant: instant}
 }
 
 func newProvider(t *testing.T, handler http.HandlerFunc) (*Provider, func()) {

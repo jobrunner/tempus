@@ -21,7 +21,6 @@ Query registered feature providers for a coordinate and point in time.
 | `lat` | query | yes | number | WGS84 latitude |
 | `lon` | query | yes | number | WGS84 longitude |
 | `datetime` | query | yes | string | RFC 3339 (`2025-07-01T12:00:00Z`) **or** offset-less (`2025-07-01T12:00:00`, treated as UTC). **Must not be in the future.** |
-| `timezone` | query | yes | string | IANA timezone identifier (e.g. `Europe/Berlin`) |
 | `providers` | query | no | string | Comma-separated provider IDs. Omit to query all enabled providers. |
 
 ### Responses
@@ -35,9 +34,7 @@ unavailable. Per-provider errors are encoded in `providers[].status`.
 {
   "query": {
     "coordinate": {"lat": 48.137, "lon": 11.576},
-    "datetime": "2025-07-01T12:00:00Z",
-    "timezone": "Europe/Berlin",
-    "localTime": "2025-07-01T14:00:00+02:00"
+    "datetime": "2025-07-01T12:00:00Z"
   },
   "features": [
     {
@@ -74,8 +71,6 @@ actually queried:
 | `coordinate.lat` | number | Resolved latitude |
 | `coordinate.lon` | number | Resolved longitude |
 | `datetime` | string | UTC datetime used for the query |
-| `timezone` | string | IANA timezone from the request |
-| `localTime` | string | `datetime` expressed in the requested timezone |
 
 **`features[]`** — GeoJSON Features, one per successful provider. Each feature
 **must** contain a `license` block:

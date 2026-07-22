@@ -548,11 +548,6 @@
                     <input type="datetime-local" id="datetime" name="datetime" required>
                 </div>
 
-                <div class="form-group">
-                    <label for="timezone">Zeitzone (für Ortszeit-Anzeige)</label>
-                    <input type="text" id="timezone" name="timezone" placeholder="z.B. Europe/Berlin" required>
-                </div>
-
                 <div class="btn-row">
                     <button type="submit" class="btn" id="submitBtn">Abfragen</button>
                     <button type="button" class="btn btn-secondary" id="locationBtn" title="Aktuellen Standort verwenden" aria-label="Aktuellen Standort verwenden">
@@ -593,7 +588,6 @@
             const latInput = document.getElementById('lat');
             const lonInput = document.getElementById('lon');
             const datetimeInput = document.getElementById('datetime');
-            const timezoneInput = document.getElementById('timezone');
             const submitBtn = document.getElementById('submitBtn');
             const locationBtn = document.getElementById('locationBtn');
             const clearBtn = document.getElementById('clearBtn');
@@ -603,13 +597,6 @@
             const resultsContent = document.getElementById('resultsContent');
 
             // --- Initialise defaults ------------------------------------------------
-
-            // Prefill timezone from browser's own setting.
-            try {
-                timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-            } catch (e) {
-                timezoneInput.value = 'UTC';
-            }
 
             // Set the datetime max to "now" in UTC (YYYY-MM-DDTHH:MM) so the
             // browser's date picker discourages future values (the API 400s on them).
@@ -703,8 +690,6 @@
                 latInput.value = '';
                 lonInput.value = '';
                 datetimeInput.value = '';
-                // Restore timezone to browser default.
-                try { timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch(e) { timezoneInput.value = 'UTC'; }
                 hideError();
                 results.classList.remove('active');
                 resultsContent.innerHTML = '';
@@ -721,7 +706,6 @@
                 // datetime-local value is already YYYY-MM-DDTHH:MM — send as-is;
                 // the API treats offset-less values as UTC.
                 const datetime = datetimeInput.value.trim();
-                const timezone = timezoneInput.value.trim();
 
                 if (!lat || !lon || isNaN(parseFloat(lat)) || isNaN(parseFloat(lon))) {
                     showError('Bitte geben Sie gültige Koordinaten ein.');
@@ -731,16 +715,11 @@
                     showError('Bitte geben Sie Datum und Uhrzeit ein.');
                     return;
                 }
-                if (!timezone) {
-                    showError('Bitte geben Sie eine Zeitzone ein.');
-                    return;
-                }
 
                 const url = '/api/v1/query?' +
                     'lat=' + encodeURIComponent(lat) +
                     '&lon=' + encodeURIComponent(lon) +
-                    '&datetime=' + encodeURIComponent(datetime) +
-                    '&timezone=' + encodeURIComponent(timezone);
+                    '&datetime=' + encodeURIComponent(datetime);
 
                 submitBtn.disabled = true;
                 loading.classList.add('active');
@@ -819,12 +798,6 @@
                     }
                     if (q.datetime) {
                         html += '<div class="query-item"><span class="query-label">Datum/Zeit (UTC):</span><span class="query-value">' + esc(q.datetime) + '</span></div>';
-                    }
-                    if (q.timezone) {
-                        html += '<div class="query-item"><span class="query-label">Zeitzone:</span><span class="query-value">' + esc(q.timezone) + '</span></div>';
-                    }
-                    if (q.localTime) {
-                        html += '<div class="query-item"><span class="query-label">Ortszeit:</span><span class="query-value">' + esc(q.localTime) + '</span></div>';
                     }
                     html += '</div></div>';
                 }
@@ -926,9 +899,6 @@
                 html += '<div class="times-info">';
                 if (props.observedAt) {
                     html += '<span><span style="color:var(--text-muted)">Beobachtet (UTC):</span> ' + esc(props.observedAt) + '</span>';
-                }
-                if (props.localTime) {
-                    html += '<span><span style="color:var(--text-muted)">Ortszeit:</span> ' + esc(props.localTime) + '</span>';
                 }
                 html += '</div>';
 

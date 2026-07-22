@@ -68,8 +68,6 @@ type ProviderStatus struct {
 type QueryEcho struct {
 	Coordinate Coordinate `json:"coordinate"`
 	Datetime   string     `json:"datetime"`
-	Timezone   string     `json:"timezone"`
-	LocalTime  string     `json:"localTime"`
 }
 
 // QueryResult is the assembled response payload.

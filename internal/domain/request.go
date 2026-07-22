@@ -11,8 +11,6 @@ import (
 type QueryRequest struct {
 	Coordinate Coordinate
 	Instant    time.Time
-	Timezone   *time.Location
-	TimezoneID string
 	Providers  []string
 }
 
@@ -30,7 +28,6 @@ func (e ValidationError) Error() string {
 // on Field values never drift from the production strings.
 const (
 	fieldDatetime = "datetime"
-	fieldTimezone = "timezone"
 )
 
 // datetimeLayouts are tried in order. RFC3339 (with offset) first; the
@@ -43,7 +40,7 @@ var datetimeLayouts = []string{
 
 // ParseQueryRequest validates raw string inputs and builds a QueryRequest.
 // now is injected (from the Clock port) so "future" is testable.
-func ParseQueryRequest(lat, lon, datetime, tzID string, providers []string, now time.Time) (QueryRequest, error) {
+func ParseQueryRequest(lat, lon, datetime string, providers []string, now time.Time) (QueryRequest, error) {
 	latF, err := strconv.ParseFloat(lat, 64)
 	if err != nil || latF < -90 || latF > 90 {
 		return QueryRequest{}, ValidationError{"lat", "must be a number in [-90,90]"}
@@ -62,19 +59,9 @@ func ParseQueryRequest(lat, lon, datetime, tzID string, providers []string, now 
 		return QueryRequest{}, ValidationError{fieldDatetime, "must not be in the future"}
 	}
 
-	if tzID == "" {
-		return QueryRequest{}, ValidationError{fieldTimezone, "is required (IANA timezone id)"}
-	}
-	loc, err := time.LoadLocation(tzID)
-	if err != nil {
-		return QueryRequest{}, ValidationError{fieldTimezone, "must be a valid IANA timezone id"}
-	}
-
 	return QueryRequest{
 		Coordinate: Coordinate{Lat: latF, Lon: lonF},
 		Instant:    instant,
-		Timezone:   loc,
-		TimezoneID: tzID,
 		Providers:  providers,
 	}, nil
 }
