@@ -12,12 +12,14 @@ import (
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
-func weatherFeature(temp any, rh any) domain.Feature {
+// weatherFeature builds a minimal weather source feature for testing.
+// temp is fixed at 21.4 °C for all test cases in this file.
+func weatherFeature(rh any) domain.Feature {
 	props := map[string]any{
 		"kind":          "weather",
 		"provider":      "open-meteo",
 		"observedAt":    "2025-06-15T13:00:00Z",
-		"temperature2m": temp,
+		"temperature2m": 21.4,
 	}
 	if rh != nil {
 		props["relativeHumidity2m"] = rh
@@ -43,7 +45,7 @@ func sampleReq() domain.QueryRequest {
 
 func TestDeriver_IntRH(t *testing.T) {
 	d := dewpoint.New()
-	src := weatherFeature(21.4, int(55))
+	src := weatherFeature(int(55))
 	feats, err := d.Derive(context.Background(), sampleReq(), []domain.Feature{src})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -66,7 +68,7 @@ func TestDeriver_IntRH(t *testing.T) {
 
 func TestDeriver_Float64RH(t *testing.T) {
 	d := dewpoint.New()
-	src := weatherFeature(21.4, float64(55))
+	src := weatherFeature(float64(55))
 	feats, err := d.Derive(context.Background(), sampleReq(), []domain.Feature{src})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -98,10 +100,40 @@ func TestDeriver_NoWeatherSource(t *testing.T) {
 	}
 }
 
+func TestDeriver_ComfortEnrichment(t *testing.T) {
+	// T=21.4, RH=55 → dew point ≈ 12°C → "sehr angenehm"/"very comfortable"
+	d := dewpoint.New()
+	src := weatherFeature(float64(55))
+	feats, err := d.Derive(context.Background(), sampleReq(), []domain.Feature{src})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(feats) != 1 {
+		t.Fatalf("want 1 feature, got %d", len(feats))
+	}
+	f := feats[0]
+
+	comfort, ok := f.Properties["comfort"].(map[string]string)
+	if !ok {
+		t.Fatalf("comfort missing or wrong type: %T %v", f.Properties["comfort"], f.Properties["comfort"])
+	}
+	if comfort["de"] != "sehr angenehm" {
+		t.Errorf("comfort.de = %q, want %q", comfort["de"], "sehr angenehm")
+	}
+	if comfort["en"] != "very comfortable" {
+		t.Errorf("comfort.en = %q, want %q", comfort["en"], "very comfortable")
+	}
+
+	comfortSource, ok := f.Properties["comfortSource"].(string)
+	if !ok || comfortSource == "" {
+		t.Errorf("comfortSource missing or empty: %v", f.Properties["comfortSource"])
+	}
+}
+
 func TestDeriver_SourcePresentButMissingRH(t *testing.T) {
 	d := dewpoint.New()
 	// Pass nil for rh so weatherFeature omits relativeHumidity2m.
-	src := weatherFeature(21.4, nil)
+	src := weatherFeature(nil)
 	_, err := d.Derive(context.Background(), sampleReq(), []domain.Feature{src})
 	if err == nil {
 		t.Fatal("expected error for missing rh")

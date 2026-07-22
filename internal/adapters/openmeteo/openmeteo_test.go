@@ -88,3 +88,35 @@ func TestFetch_ServerErrorIsTransient(t *testing.T) {
 		t.Fatalf("want transient, got %v", err)
 	}
 }
+
+func TestFetch_WeatherCodeDescription(t *testing.T) {
+	// archive_ok.json at 13:00 has weather_code=3 → "Bedeckt"/"Overcast"
+	body, _ := os.ReadFile("testdata/archive_ok.json")
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(body)
+	})
+	defer done()
+
+	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	desc, ok := res.Feature.Properties["weatherCodeDescription"].(map[string]string)
+	if !ok {
+		t.Fatalf("weatherCodeDescription missing or wrong type: %T %v",
+			res.Feature.Properties["weatherCodeDescription"],
+			res.Feature.Properties["weatherCodeDescription"])
+	}
+	if desc["de"] != "Bedeckt" {
+		t.Errorf("weatherCodeDescription.de = %q, want %q", desc["de"], "Bedeckt")
+	}
+	if desc["en"] != "Overcast" {
+		t.Errorf("weatherCodeDescription.en = %q, want %q", desc["en"], "Overcast")
+	}
+
+	src, ok := res.Feature.Properties["weatherCodeSource"].(string)
+	if !ok || src == "" {
+		t.Errorf("weatherCodeSource missing or empty: %v", res.Feature.Properties["weatherCodeSource"])
+	}
+}

@@ -61,17 +61,21 @@ func (d *Deriver) Derive(_ context.Context, _ domain.QueryRequest, sources []dom
 		return nil, output.NewPermanentError(errors.New("cannot derive dew point: missing/invalid temperature or humidity"))
 	}
 
+	comfortDE, comfortEN := domain.DewPointComfort(td)
+
 	feat := domain.Feature{
 		Type:     "Feature",
 		Geometry: src.Geometry,
 		Properties: map[string]any{
-			"provider":   deriverID,
-			"kind":       deriverID,
-			"observedAt": src.Properties["observedAt"],
-			"dewPoint2m": math.Round(td*10) / 10,
-			"units":      map[string]string{"dewPoint2m": "°C"},
-			"basedOn":    src.Properties["provider"],
-			"method":     "Magnus-Tetens (a=17.62, b=243.12)",
+			"provider":      deriverID,
+			"kind":          deriverID,
+			"observedAt":    src.Properties["observedAt"],
+			"dewPoint2m":    math.Round(td*10) / 10,
+			"units":         map[string]string{"dewPoint2m": "°C"},
+			"basedOn":       src.Properties["provider"],
+			"method":        "Magnus-Tetens (a=17.62, b=243.12)",
+			"comfort":       map[string]string{"de": comfortDE, "en": comfortEN},
+			"comfortSource": domain.DewPointComfortSource,
 		},
 		License: domain.License{
 			Name:        src.License.Name,

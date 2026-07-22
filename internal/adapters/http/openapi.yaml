@@ -100,13 +100,73 @@ components:
           type: string
         license:
           $ref: "#/components/schemas/License"
+    BilingualLabel:
+      type: object
+      description: A label available in German and English.
+      properties:
+        de:
+          type: string
+          description: German label.
+        en:
+          type: string
+          description: English label.
+    WeatherFeatureProperties:
+      type: object
+      description: >
+        Properties of a weather feature (kind "weather") returned by the
+        Open-Meteo provider. In addition to numeric measurements such as
+        temperature2m, relativeHumidity2m, precipitation, windSpeed10m,
+        cloudCover, isDay, and weatherCode, the feature carries a bilingual
+        human-readable explanation of the WMO weather code and its source
+        citation.
+      properties:
+        weatherCode:
+          type: integer
+          description: >
+            WMO weather-interpretation code (Code Table 4677, Open-Meteo subset).
+        weatherCodeDescription:
+          $ref: "#/components/schemas/BilingualLabel"
+          description: >
+            Bilingual (DE + EN) human-readable description of the WMO weather
+            code; present when the code is a known WMO Code Table 4677 value.
+        weatherCodeSource:
+          type: string
+          description: >
+            Source citation for the weatherCodeDescription, referencing
+            "WMO Code Table 4677 (WW – present weather); weather-interpretation
+            codes as used by Open-Meteo".
+    DewPointFeatureProperties:
+      type: object
+      description: >
+        Properties of a dew-point feature (kind "dewpoint") derived from the
+        weather feature using the Magnus-Tetens formula. Includes the computed
+        dew point, its unit, derivation metadata, and a bilingual comfort
+        classification with source attribution.
+      properties:
+        dewPoint2m:
+          type: number
+          description: Dew point at 2 m height in °C (rounded to 0.1 °C).
+        comfort:
+          $ref: "#/components/schemas/BilingualLabel"
+          description: >
+            Bilingual (DE + EN) human-comfort classification of the dew point
+            (e.g. "sehr angenehm" / "very comfortable"). Based on the standard
+            meteorological dew-point comfort scale.
+        comfortSource:
+          type: string
+          description: >
+            Source citation for the comfort classification, referencing the
+            standard meteorological dew-point comfort scale.
     QueryResult:
       type: object
       description: >
         Feature collection with per-provider status. The features[] array may
-        include a derived feature with kind "dewpoint" containing a dewPoint2m
-        property (°C, Magnus-Tetens formula). The providers[] array may include
-        an entry with id "dewpoint" reflecting the derivation status.
+        include a weather feature (kind "weather") with WMO code descriptions
+        (weatherCodeDescription DE/EN, weatherCodeSource) and a derived feature
+        with kind "dewpoint" containing a dewPoint2m property (°C,
+        Magnus-Tetens formula) plus a comfort classification (comfort DE/EN,
+        comfortSource). The providers[] array may include an entry with id
+        "dewpoint" reflecting the derivation status.
       properties:
         query:
           type: object

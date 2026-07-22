@@ -5,6 +5,34 @@ import (
 	"testing"
 )
 
+func TestDewPointComfort(t *testing.T) {
+	tests := []struct {
+		tdC float64
+		de  string
+		en  string
+	}{
+		{3, "sehr trocken", "very dry"},
+		{8, "trocken", "dry"},
+		{12, "sehr angenehm", "very comfortable"},
+		{15, "angenehm", "comfortable"},
+		{17, "leicht schwül", "slightly humid"},
+		{20, "schwül", "humid"},
+		{23, "sehr schwül", "very humid"},
+		{26, "drückend", "oppressive"},
+	}
+	for _, tc := range tests {
+		t.Run("", func(t *testing.T) {
+			de, en := DewPointComfort(tc.tdC)
+			if de != tc.de {
+				t.Errorf("DewPointComfort(%.0f) DE: got %q, want %q", tc.tdC, de, tc.de)
+			}
+			if en != tc.en {
+				t.Errorf("DewPointComfort(%.0f) EN: got %q, want %q", tc.tdC, en, tc.en)
+			}
+		})
+	}
+}
+
 func TestDewPointCelsius(t *testing.T) {
 	t.Run("RH=100 dew point equals temperature", func(t *testing.T) {
 		temp := 20.0
