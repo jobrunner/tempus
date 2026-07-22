@@ -15,6 +15,14 @@ import (
 	"github.com/jobrunner/tempus/internal/config"
 )
 
+// Version and BuildTime are injected at link time via -X main.Version=... and
+// -X main.BuildTime=... (see .goreleaser.yml and Dockerfile). They default to
+// "dev" / "unknown" for local go run / go build without ldflags.
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+)
+
 func main() {
 	configPath := flag.String("config", "", "path to config file (optional)")
 	flag.Parse()
@@ -27,7 +35,7 @@ func main() {
 	logger := setupLogger(cfg.Logging)
 	slog.SetDefault(logger)
 
-	application, err := app.New(cfg, logger)
+	application, err := app.New(cfg, logger, Version)
 	if err != nil {
 		logger.Error("build app", "error", err)
 		os.Exit(1)
