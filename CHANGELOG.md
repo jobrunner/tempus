@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/jobrunner/tempus/compare/v0.7.0...v0.8.0) (2026-07-22)
+
+
+### Features
+
+* named timezone dropdown, current-hour default, footer version ([#15](https://github.com/jobrunner/tempus/issues/15)) ([83755e4](https://github.com/jobrunner/tempus/commit/83755e481ea72408e9f26374da2b092ef153f60d))
+
 ## [0.7.0](https://github.com/jobrunner/tempus/compare/v0.6.0...v0.7.0) (2026-07-22)
 
 
