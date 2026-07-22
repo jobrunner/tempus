@@ -160,7 +160,6 @@ func (p *Provider) toFeature(data apiResponse, req domain.QueryRequest, useArchi
 		"provider":   providerID,
 		"kind":       providerKind,
 		"observedAt": req.Instant.UTC().Format(time.RFC3339),
-		"localTime":  req.Instant.In(req.Timezone).Format(time.RFC3339),
 	}
 	units := map[string]string{}
 	valueMissing := false

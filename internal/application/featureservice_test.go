@@ -44,11 +44,9 @@ func (p failProvider) Fetch(context.Context, domain.QueryRequest) (domain.Provid
 }
 
 func sampleReq() domain.QueryRequest {
-	loc, _ := time.LoadLocation("Europe/Berlin")
 	return domain.QueryRequest{
 		Coordinate: domain.Coordinate{Lat: 49.79, Lon: 9.93},
 		Instant:    time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC),
-		Timezone:   loc, TimezoneID: "Europe/Berlin",
 	}
 }
 
@@ -77,10 +75,6 @@ func TestFeatureService_PartialFailure(t *testing.T) {
 	}
 	if s := byID["astro"]; s.Status != domain.StatusUnavailable || !s.Retryable || s.RetryAfter == "" {
 		t.Errorf("astro status = %+v, want unavailable+retryable+retryAfter", s)
-	}
-	// localTime echoes the target instant in Berlin (CEST = +02:00).
-	if res.Query.LocalTime != "2025-06-15T15:00:00+02:00" {
-		t.Errorf("localTime = %q", res.Query.LocalTime)
 	}
 }
 

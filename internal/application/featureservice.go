@@ -116,7 +116,5 @@ func (s *FeatureService) echo(req domain.QueryRequest) domain.QueryEcho {
 	return domain.QueryEcho{
 		Coordinate: req.Coordinate,
 		Datetime:   req.Instant.UTC().Format(time.RFC3339),
-		Timezone:   req.TimezoneID,
-		LocalTime:  req.Instant.In(req.Timezone).Format(time.RFC3339),
 	}
 }
