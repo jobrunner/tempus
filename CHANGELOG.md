@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/jobrunner/tempus/compare/v0.9.0...v0.10.0) (2026-07-22)
+
+
+### Features
+
+* WMO-4677 weather-code descriptions and dew-point comfort (DE/EN) with sources ([#19](https://github.com/jobrunner/tempus/issues/19)) ([e0f0622](https://github.com/jobrunner/tempus/commit/e0f06220ba9a7f67e66343297e3a3bbfb6a07997))
+
 ## [0.9.0](https://github.com/jobrunner/tempus/compare/v0.8.0...v0.9.0) (2026-07-22)
 
 
