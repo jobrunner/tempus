@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/jobrunner/tempus/compare/v0.8.0...v0.9.0) (2026-07-22)
+
+
+### Features
+
+* computed dew point (Taupunkt) as its own attributed result + frontend ([#17](https://github.com/jobrunner/tempus/issues/17)) ([cd0fc68](https://github.com/jobrunner/tempus/commit/cd0fc683ecb6304ff738a063860634e786aed751))
+
 ## [0.8.0](https://github.com/jobrunner/tempus/compare/v0.7.0...v0.8.0) (2026-07-22)
 
 
