@@ -42,6 +42,7 @@ nav:
       - Retry semantics: explanation/retry-semantics.md
       - Attribution requirement: explanation/attribution.md
       - Caching model: explanation/caching.md
-      - No future datetimes: explanation/no-future-datetimes.md
+      - Future datetimes: explanation/no-future-datetimes.md
       - Derived features: explanation/derived-features.md
+      - Sun and moon (astronomy): explanation/astronomy.md
       - Day/Night from solar position: explanation/solar-day-night.md

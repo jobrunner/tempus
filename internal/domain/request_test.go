@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-func now() time.Time { return time.Date(2026, 7, 21, 12, 30, 0, 0, time.UTC) }
-
 func TestParseQueryRequest_OK_AssumesUTCAndTruncatesHour(t *testing.T) {
-	req, err := ParseQueryRequest("49.79", "9.93", "2025-06-15T13:45:00", nil, now())
+	req, err := ParseQueryRequest("49.79", "9.93", "2025-06-15T13:45:00", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -18,11 +16,15 @@ func TestParseQueryRequest_OK_AssumesUTCAndTruncatesHour(t *testing.T) {
 	}
 }
 
-func TestParseQueryRequest_FutureRejected(t *testing.T) {
-	_, err := ParseQueryRequest("0", "0", "2026-07-21T13:00:00Z", nil, now())
-	var ve ValidationError
-	if !errors.As(err, &ve) || ve.Field != "datetime" {
-		t.Fatalf("want ValidationError on datetime (future), got %v", err)
+// Future instants are now accepted by the parser: astronomy providers serve any
+// date, and weather rejects the future itself (reported in the envelope).
+func TestParseQueryRequest_FutureAccepted(t *testing.T) {
+	req, err := ParseQueryRequest("0", "0", "2099-01-01T13:00:00Z", nil)
+	if err != nil {
+		t.Fatalf("future instant should parse, got error: %v", err)
+	}
+	if !req.Instant.Equal(time.Date(2099, 1, 1, 13, 0, 0, 0, time.UTC)) {
+		t.Errorf("Instant = %v, want 2099-01-01T13:00:00Z", req.Instant)
 	}
 }
 
@@ -34,7 +36,7 @@ func TestParseQueryRequest_BadInputs(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := ParseQueryRequest(c.lat, c.lon, c.dt, nil, now())
+			_, err := ParseQueryRequest(c.lat, c.lon, c.dt, nil)
 			var ve ValidationError
 			if !errors.As(err, &ve) || ve.Field != c.field {
 				t.Fatalf("want ValidationError on %q, got %v", c.field, err)

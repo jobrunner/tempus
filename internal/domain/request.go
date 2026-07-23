@@ -39,8 +39,10 @@ var datetimeLayouts = []string{
 }
 
 // ParseQueryRequest validates raw string inputs and builds a QueryRequest.
-// now is injected (from the Clock port) so "future" is testable.
-func ParseQueryRequest(lat, lon, datetime string, providers []string, now time.Time) (QueryRequest, error) {
+// Future instants are allowed here: astronomy providers (sun/moon) compute for
+// any date. Providers that cannot serve the future (e.g. weather) reject it
+// themselves and report it in the response envelope.
+func ParseQueryRequest(lat, lon, datetime string, providers []string) (QueryRequest, error) {
 	latF, err := strconv.ParseFloat(lat, 64)
 	if err != nil || latF < -90 || latF > 90 {
 		return QueryRequest{}, ValidationError{"lat", "must be a number in [-90,90]"}
@@ -55,9 +57,6 @@ func ParseQueryRequest(lat, lon, datetime string, providers []string, now time.T
 		return QueryRequest{}, ValidationError{fieldDatetime, "must be RFC3339 or YYYY-MM-DDTHH:MM[:SS] (UTC assumed)"}
 	}
 	instant = instant.UTC().Truncate(time.Hour)
-	if instant.After(now.UTC()) {
-		return QueryRequest{}, ValidationError{fieldDatetime, "must not be in the future"}
-	}
 
 	return QueryRequest{
 		Coordinate: Coordinate{Lat: latF, Lon: lonF},

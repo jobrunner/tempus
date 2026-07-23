@@ -9,6 +9,7 @@ internal/config                                       86
 internal/adapters/cache/memory                        92
 internal/adapters/cache/bolt                          81
 internal/adapters/openmeteo                           81
+internal/adapters/astronomy                           95
 internal/adapters/http                                59
 internal/adapters/metrics                             66
 internal/adapters/telemetry                           71
