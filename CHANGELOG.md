@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/jobrunner/tempus/compare/v0.10.2...v0.11.0) (2026-07-23)
+
+
+### Features
+
+* add sun and moon astronomy features ([#25](https://github.com/jobrunner/tempus/issues/25)) ([7b798f2](https://github.com/jobrunner/tempus/commit/7b798f22ee13ada66962a954f27f231e768afcb9))
+
 ## [0.10.2](https://github.com/jobrunner/tempus/compare/v0.10.1...v0.10.2) (2026-07-22)
 
 
