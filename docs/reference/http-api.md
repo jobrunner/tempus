@@ -20,7 +20,7 @@ Query registered feature providers for a coordinate and point in time.
 |---|---|---|---|---|
 | `lat` | query | yes | number | WGS84 latitude |
 | `lon` | query | yes | number | WGS84 longitude |
-| `datetime` | query | yes | string | RFC 3339 (`2025-07-01T12:00:00Z`) **or** offset-less (`2025-07-01T12:00:00`, treated as UTC). **Must not be in the future.** |
+| `datetime` | query | yes | string | RFC 3339 (`2025-07-01T12:00:00Z`) **or** offset-less (`2025-07-01T12:00:00`, treated as UTC). Future instants are allowed — see [Future datetimes](../explanation/no-future-datetimes.md). |
 | `providers` | query | no | string | Comma-separated provider IDs. Omit to query all enabled providers. |
 
 ### Responses
@@ -84,6 +84,11 @@ actually queried:
 | `license.url` | string | **Required.** URL to the provider's terms / site |
 | `license.attribution` | string | **Required.** Attribution string to display to end-users |
 
+The `properties.kind` discriminates the feature type: `weather` (Open-Meteo),
+`dewpoint` (derived — see [Derived features](../explanation/derived-features.md)),
+and `sun` / `moon` (computed — see [Sun and moon](../explanation/astronomy.md)).
+The `sun` and `moon` features are available for any date, including the future.
+
 **`providers[]`** — one entry per queried provider, regardless of outcome:
 
 | Field | Type | Description |
@@ -98,11 +103,16 @@ actually queried:
 
 #### `400 Bad Request` — `Error`
 
-Returned for missing/invalid parameters or a future datetime:
+Returned for missing/invalid parameters (e.g. an out-of-range coordinate or an
+unparseable datetime):
 
 ```json
-{"error": "invalid_request", "message": "datetime must not be in the future"}
+{"error": "invalid_request", "message": "invalid lat: must be a number in [-90,90]"}
 ```
+
+A future datetime is **not** a client error: the request returns `200 OK`, the
+weather provider reports a non-retryable `error` status, and the `sun`/`moon`
+features are still computed.
 
 ---
 

@@ -4,6 +4,7 @@ package openmeteo
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,9 @@ import (
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
+
+// errFuture is returned when a weather query targets a future hour.
+var errFuture = errors.New("no weather available for future dates")
 
 const (
 	providerID   = "open-meteo"
@@ -83,6 +87,12 @@ type apiResponse struct {
 
 // Fetch retrieves the weather for the request's hour.
 func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.ProviderResult, error) {
+	// No weather for the future: this provider only serves past/present hours.
+	// Reported as a permanent (non-retryable) provider status in the envelope.
+	if req.Instant.After(p.clock.Now().UTC()) {
+		return domain.ProviderResult{}, output.NewPermanentError(errFuture)
+	}
+
 	useArchive := p.clock.Now().UTC().Sub(req.Instant) >= p.archiveDelay
 	endpoint := p.forecastBaseURL
 	if useArchive {

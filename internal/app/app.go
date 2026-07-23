@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jobrunner/tempus/internal/adapters/astronomy"
 	boltcache "github.com/jobrunner/tempus/internal/adapters/cache/bolt"
 	memcache "github.com/jobrunner/tempus/internal/adapters/cache/memory"
 	"github.com/jobrunner/tempus/internal/adapters/clock"
@@ -67,6 +68,11 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 		})
 		registry.Register(cached)
 	}
+
+	// Sun and moon are pure computations: no external call, no cache, and they
+	// work for any date (past or future).
+	registry.Register(astronomy.NewSun())
+	registry.Register(astronomy.NewMoon())
 
 	// Wire tracing. When disabled the NoOpTracer is used so downstream code
 	// never has to nil-check the tracer.

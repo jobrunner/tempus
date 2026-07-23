@@ -57,12 +57,14 @@ func TestHandleQuery_OK(t *testing.T) {
 	}
 }
 
-func TestHandleQuery_FutureIs400(t *testing.T) {
+// Future datetimes are accepted (200): astronomy providers serve any date, and
+// weather rejects the future itself via its provider status in the envelope.
+func TestHandleQuery_FutureAccepted(t *testing.T) {
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=0&lon=0&datetime=2026-07-21T13:00:00Z", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=0&lon=0&datetime=2099-01-01T13:00:00Z", nil)
 	testServer().Router().ServeHTTP(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", rr.Code)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
 	}
 }
 

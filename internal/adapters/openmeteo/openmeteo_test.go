@@ -123,3 +123,18 @@ func TestFetch_WeatherCodeDescription(t *testing.T) {
 		t.Errorf("weatherCodeSource missing or empty: %v", res.Feature.Properties["weatherCodeSource"])
 	}
 }
+
+func TestFetch_FutureRejected(t *testing.T) {
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("provider must not contact the network for future dates")
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	defer done()
+
+	// fixedClock is 2026-07-21T12:00Z; ask for a later hour.
+	_, err := p.Fetch(context.Background(), req(time.Date(2026, 7, 21, 13, 0, 0, 0, time.UTC)))
+	pe, ok := output.AsProviderError(err)
+	if !ok || pe.Retryable {
+		t.Fatalf("want non-retryable ProviderError for future date, got %v", err)
+	}
+}

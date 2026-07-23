@@ -783,20 +783,13 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 return s;
             }
 
-            // Compute the datetime-local max for the selected zone (prevents future-UTC).
+            // Future dates are allowed: sun/moon are computed for any date, and
+            // weather reports its own "no future" status. So no max cap is set.
             function updateMax() {
-                var zone = tzzoneSelect.value;
-                var dtVal = datetimeInput.value.trim() || (function() {
-                    var n = new Date();
-                    return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':00';
-                }());
-                var offsetMin = getOffsetMinutes(zone, dtVal);
-                if (offsetMin === null || isNaN(offsetMin)) offsetMin = 0;
-                datetimeInput.max = formatUTC(new Date(Date.now() + offsetMin * 60000));
+                datetimeInput.removeAttribute('max');
             }
             updateMax();
             tzzoneSelect.addEventListener('change', function() {
-                updateMax();
                 updateAbbrev();
             });
 
@@ -1188,6 +1181,10 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                 if (kind === 'dewpoint') {
                     return renderDewpointFeature(f);
+                } else if (kind === 'sun') {
+                    return renderSunFeature(f);
+                } else if (kind === 'moon') {
+                    return renderMoonFeature(f);
                 } else if (kind === 'weather' || kind === '') {
                     return renderWeatherFeature(f);
                 } else {
@@ -1348,6 +1345,145 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                 html += '</div>'; // .weather-body
                 html += '</div>'; // .card.weather-panel
+                return html;
+            }
+
+            // Renders the shared "Quelle / Attribution" block for a feature license.
+            function attributionBlock(license) {
+                if (!license) return '';
+                var html = '<div class="attribution-block">';
+                html += '<div class="attribution-title">Quelle / Attribution</div>';
+                html += '<div class="attribution-license">';
+                var safeUrl = /^https?:\/\//i.test(license.url || '') ? license.url : '';
+                if (safeUrl) {
+                    html += '<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(license.name || 'Lizenz') + '</a>';
+                } else {
+                    html += esc(license.name || '-');
+                }
+                html += '</div>';
+                if (license.attribution) {
+                    html += '<div class="attribution-text">' + esc(license.attribution) + '</div>';
+                }
+                html += '</div>';
+                return html;
+            }
+
+            // Formats a UTC RFC3339 instant into the selected zone as "DD.MM., HH:MM".
+            // Returns "—" for null (event does not occur, e.g. polar day/night).
+            function fmtZonedTime(isoUtc) {
+                if (!isoUtc) return '&mdash;';
+                var d = new Date(isoUtc);
+                if (isNaN(d.getTime())) return '&mdash;';
+                var zone = tzzoneSelect.value;
+                try {
+                    var fmt = new Intl.DateTimeFormat('de-DE', {
+                        timeZone: zone, day: '2-digit', month: '2-digit',
+                        hour: '2-digit', minute: '2-digit', hour12: false
+                    });
+                    var p = {};
+                    fmt.formatToParts(d).forEach(function(x) { if (x.type !== 'literal') p[x.type] = x.value; });
+                    return esc(p.day + '.' + p.month + '., ' + p.hour + ':' + p.minute);
+                } catch (_) {
+                    return esc(isoUtc);
+                }
+            }
+
+            // Picks a moon emoji for the English phase name.
+            function moonEmoji(phaseEn) {
+                var map = {
+                    'New Moon': '🌑', 'Waxing Crescent': '🌒',
+                    'First Quarter': '🌓', 'Waxing Gibbous': '🌔',
+                    'Full Moon': '🌕', 'Waning Gibbous': '🌖',
+                    'Last Quarter': '🌗', 'Waning Crescent': '🌘'
+                };
+                return map[phaseEn] || '🌙';
+            }
+
+            function renderSunFeature(f) {
+                const props = (f.properties) || {};
+                const license = f.license || null;
+                const zone = tzzoneSelect.value;
+                const instantMs = props.observedAt ? new Date(props.observedAt).getTime() : Date.now();
+                const abbrev = getZoneAbbrev(zone, instantMs);
+                const tzLabel = zone + (abbrev ? ' (' + abbrev + ')' : '');
+                const phase = (props.lightPhase && props.lightPhase.de) || '';
+
+                let html = '<div class="card weather-panel">';
+                html += '<div class="weather-header">';
+                html += '<div class="weather-icon">&#x2600;&#xFE0F;</div>';
+                html += '<div class="weather-header-info">';
+                if (props.elevationDeg !== undefined && props.elevationDeg !== null) {
+                    html += '<div class="weather-temp">' + esc(props.elevationDeg) + '&#x202F;&deg;</div>';
+                }
+                html += '<div class="weather-desc">Sonnenstand' + (phase ? ' &middot; ' + esc(phase) : '') + '</div>';
+                html += '</div></div>'; // header-info, weather-header
+
+                html += '<div class="weather-body">';
+                html += '<div class="weather-grid">';
+                html += weatherStat('Höhe (Elevation)', esc(props.elevationDeg) + '&#x202F;&deg;');
+                html += weatherStat('Azimut', esc(props.azimuthDeg) + '&#x202F;&deg;');
+                if (props.zenithDeg !== undefined) html += weatherStat('Zenitwinkel', esc(props.zenithDeg) + '&#x202F;&deg;');
+                html += weatherStat('Sonnenaufgang', fmtZonedTime(props.sunrise));
+                html += weatherStat('Sonnenuntergang', fmtZonedTime(props.sunset));
+                if (props.solarNoon) {
+                    var noonV = fmtZonedTime(props.solarNoon);
+                    if (props.solarNoonElevationDeg !== undefined) noonV += ' (' + esc(props.solarNoonElevationDeg) + '&#x202F;&deg;)';
+                    html += weatherStat('Sonnenhöchststand', noonV);
+                }
+                if (props.dayLengthMinutes) {
+                    var mins = Math.round(props.dayLengthMinutes);
+                    html += weatherStat('Tageslänge', esc(Math.floor(mins / 60)) + '&#x202F;h ' + esc(mins % 60) + '&#x202F;min');
+                }
+                var tw = props.twilight || {};
+                if (tw.civil) html += weatherStat('Bürgerl. Dämmerung', fmtZonedTime(tw.civil.dawn) + ' / ' + fmtZonedTime(tw.civil.dusk));
+                if (tw.nautical) html += weatherStat('Naut. Dämmerung', fmtZonedTime(tw.nautical.dawn) + ' / ' + fmtZonedTime(tw.nautical.dusk));
+                if (tw.astronomical) html += weatherStat('Astron. Dämmerung', fmtZonedTime(tw.astronomical.dawn) + ' / ' + fmtZonedTime(tw.astronomical.dusk));
+                html += '</div>'; // weather-grid
+
+                html += '<div class="provider-hint" style="margin-top:0.5rem;">Zeiten in ' + esc(tzLabel) + '. Azimut von Nord im Uhrzeigersinn.</div>';
+                html += attributionBlock(license);
+                html += '</div>'; // weather-body
+                html += '</div>'; // card
+                return html;
+            }
+
+            function renderMoonFeature(f) {
+                const props = (f.properties) || {};
+                const license = f.license || null;
+                const zone = tzzoneSelect.value;
+                const instantMs = props.observedAt ? new Date(props.observedAt).getTime() : Date.now();
+                const abbrev = getZoneAbbrev(zone, instantMs);
+                const tzLabel = zone + (abbrev ? ' (' + abbrev + ')' : '');
+                const phaseDe = (props.phase && props.phase.de) || '';
+                const phaseEn = (props.phase && props.phase.en) || '';
+
+                let html = '<div class="card weather-panel">';
+                html += '<div class="weather-header">';
+                html += '<div class="weather-icon">' + moonEmoji(phaseEn) + '</div>';
+                html += '<div class="weather-header-info">';
+                if (props.illuminationPct !== undefined && props.illuminationPct !== null) {
+                    html += '<div class="weather-temp">' + esc(props.illuminationPct) + '&#x202F;%</div>';
+                }
+                html += '<div class="weather-desc">Mond' + (phaseDe ? ' &middot; ' + esc(phaseDe) : '') + '</div>';
+                html += '</div></div>';
+
+                html += '<div class="weather-body">';
+                html += '<div class="weather-grid">';
+                html += weatherStat('Beleuchtung', esc(props.illuminationPct) + '&#x202F;%');
+                if (phaseDe) html += weatherStat('Phase', esc(phaseDe));
+                if (props.ageDays !== undefined) html += weatherStat('Mondalter', esc(props.ageDays) + '&#x202F;d');
+                html += weatherStat('Höhe (Elevation)', esc(props.elevationDeg) + '&#x202F;&deg;');
+                html += weatherStat('Azimut', esc(props.azimuthDeg) + '&#x202F;&deg;');
+                if (props.phaseAngleDeg !== undefined) html += weatherStat('Phasenwinkel', esc(props.phaseAngleDeg) + '&#x202F;&deg;');
+                if (props.distanceKm !== undefined) html += weatherStat('Distanz', esc(Math.round(props.distanceKm).toLocaleString('de-DE')) + '&#x202F;km');
+                html += weatherStat('Mondaufgang', fmtZonedTime(props.moonrise));
+                html += weatherStat('Monduntergang', fmtZonedTime(props.moonset));
+                html += '</div>'; // weather-grid
+
+                html += '<div class="provider-hint" style="margin-top:0.5rem;">Zeiten in ' + esc(tzLabel) + '. Geozentrische Näherung.</div>';
+                html += attributionBlock(license);
+                html += '</div>'; // weather-body
+                html += '</div>'; // card
                 return html;
             }
 

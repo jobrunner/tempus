@@ -12,7 +12,7 @@ paths:
       parameters:
         - {name: lat, in: query, required: true, schema: {type: number}}
         - {name: lon, in: query, required: true, schema: {type: number}}
-        - {name: datetime, in: query, required: true, schema: {type: string}, description: "RFC3339 or YYYY-MM-DDTHH:MM[:SS]; no offset => UTC; must not be in the future"}
+        - {name: datetime, in: query, required: true, schema: {type: string}, description: "RFC3339 or YYYY-MM-DDTHH:MM[:SS]; no offset => UTC. Future instants are allowed: astronomy providers (sun/moon) compute for any date, while providers that cannot serve the future (weather) report a non-retryable error status in the envelope."}
         - {name: providers, in: query, required: false, schema: {type: string}, description: comma-separated provider ids}
       responses:
         "200":
@@ -172,6 +172,95 @@ components:
           description: >
             Source citation for the comfort classification, referencing the
             standard meteorological dew-point comfort scale.
+    SunFeatureProperties:
+      type: object
+      description: >
+        Properties of a sun feature (kind "sun"), computed from the coordinate
+        and instant via the NOAA solar approximation. Available for any date
+        (past or future). All angles are in degrees; azimuth is measured
+        clockwise from true north. Event times are RFC3339 UTC, or null when the
+        event does not occur that day (polar day/night at the given threshold).
+      properties:
+        elevationDeg:
+          type: number
+          description: Sun elevation above the horizon (degrees).
+        azimuthDeg:
+          type: number
+          description: Sun azimuth, degrees clockwise from true north.
+        zenithDeg:
+          type: number
+          description: Solar zenith angle (90 − elevation), degrees.
+        lightPhase:
+          $ref: "#/components/schemas/BilingualLabel"
+          description: >
+            Bilingual light-regime label: day, civil / nautical / astronomical
+            twilight, or night.
+        sunrise:
+          type: string
+          nullable: true
+          description: Sunrise (RFC3339 UTC) for the day, or null (polar day/night).
+        sunset:
+          type: string
+          nullable: true
+          description: Sunset (RFC3339 UTC) for the day, or null (polar day/night).
+        solarNoon:
+          type: string
+          nullable: true
+          description: Solar noon (RFC3339 UTC).
+        solarNoonElevationDeg:
+          type: number
+          description: Sun elevation at solar noon (degrees).
+        dayLengthMinutes:
+          type: number
+          description: Length of daylight (minutes) between sunrise and sunset.
+        twilight:
+          type: object
+          description: >
+            Civil (−6°), nautical (−12°) and astronomical (−18°) twilight, each
+            with a dawn and dusk time (RFC3339 UTC or null).
+          properties:
+            civil: {type: object}
+            nautical: {type: object}
+            astronomical: {type: object}
+    MoonFeatureProperties:
+      type: object
+      description: >
+        Properties of a moon feature (kind "moon"), computed from the coordinate
+        and instant via Meeus's lunar theory (geocentric approximation).
+        Available for any date. Angles in degrees, azimuth clockwise from true
+        north. Rise/set times are RFC3339 UTC, or null when no crossing occurs.
+      properties:
+        elevationDeg:
+          type: number
+          description: Moon elevation above the horizon (degrees, geocentric).
+        azimuthDeg:
+          type: number
+          description: Moon azimuth, degrees clockwise from true north.
+        distanceKm:
+          type: number
+          description: Earth–moon centre distance (km).
+        illuminationPct:
+          type: number
+          description: Illuminated fraction of the moon's disc (percent).
+        phaseAngleDeg:
+          type: number
+          description: Phase angle (degrees; 0 = full, 180 = new).
+        ageDays:
+          type: number
+          description: Moon age since the last new moon (days).
+        phase:
+          $ref: "#/components/schemas/BilingualLabel"
+          description: >
+            Bilingual phase name (Neumond … abnehmende Sichel / New Moon …
+            Waning Crescent).
+        moonrise:
+          type: string
+          nullable: true
+          description: Moonrise (RFC3339 UTC), or null when the moon does not rise that day.
+        moonset:
+          type: string
+          nullable: true
+          description: Moonset (RFC3339 UTC), or null when the moon does not set that day.
     QueryResult:
       type: object
       description: >
@@ -180,8 +269,12 @@ components:
         (weatherCodeDescription DE/EN, weatherCodeSource) and a derived feature
         with kind "dewpoint" containing a dewPoint2m property (°C,
         Magnus-Tetens formula) plus a comfort classification (comfort DE/EN,
-        comfortSource). The providers[] array may include an entry with id
-        "dewpoint" reflecting the derivation status.
+        comfortSource). It also includes a sun feature (kind "sun") and a moon
+        feature (kind "moon"), computed for any date; see SunFeatureProperties
+        and MoonFeatureProperties. The providers[] array may include entries
+        with ids "sun", "moon" and "dewpoint" reflecting their status; for
+        future instants the "open-meteo" weather provider reports a
+        non-retryable error while sun and moon remain "ok".
       properties:
         query:
           type: object
