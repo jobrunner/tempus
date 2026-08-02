@@ -142,6 +142,7 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
+	req.RefPeriod = q.Get("refPeriod")
 	result, err := s.features.Query(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {

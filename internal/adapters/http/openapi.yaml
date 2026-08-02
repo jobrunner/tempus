@@ -15,6 +15,7 @@ paths:
         - {name: datetime, in: query, required: true, schema: {type: string}, description: "RFC3339 or YYYY-MM-DDTHH:MM[:SS]; no offset => UTC. Future instants are allowed: astronomy providers (sun/moon) compute for any date, while providers that cannot serve the future (weather) report a non-retryable error status in the envelope."}
         - {name: providers, in: query, required: false, schema: {type: string}, description: comma-separated provider ids}
         - {name: gddBase, in: query, required: false, schema: {type: number}, description: "Optional base temperature (°C, [-50,50]) for the aggregate provider's growing-degree-day accumulation. Omit to use the server default (10 °C)."}
+        - {name: refPeriod, in: query, required: false, schema: {type: string}, description: "Optional reference period 'YYYY-YYYY' (start ≥ 1940) for the bioclim provider. Omit to auto-select the contemporaneous 30-year WMO normal (the period containing the datetime's year, or 1991-2020 for later years)."}
       responses:
         "200":
           description: Feature collection with per-provider status
@@ -297,6 +298,33 @@ components:
             since: {type: string, description: "Accumulation start date (YYYY-MM-DD): 1 Jan (northern) or 1 Jul (southern hemisphere)."}
             days: {type: integer, description: Number of days summed.}
             method: {type: string, description: GDD computation method.}
+    BioclimFeatureProperties:
+      type: object
+      description: >
+        Properties of a bioclim feature (kind "bioclim"): the 19 WorldClim
+        bioclimatic variables and the Köppen-Geiger class, computed by tempus
+        from ERA5 monthly climate normals. Values are time-independent for a
+        location and reference period; the period is chosen contemporaneously to
+        the datetime's year (or via refPeriod), so historical records get
+        period-appropriate values. Cached per coordinate + period.
+      properties:
+        referencePeriod:
+          type: string
+          description: "Reference period used, 'YYYY-YYYY' (e.g. '1991-2020')."
+        bio:
+          type: object
+          description: >
+            The 19 bioclimatic variables bio1…bio19 (WorldClim definitions).
+            Temperatures °C, precipitation mm; bio3 isothermality (%), bio4
+            temperature seasonality (std×100), bio15 precipitation seasonality
+            (coefficient of variation, %).
+        koppen:
+          type: object
+          description: Köppen-Geiger classification (Beck et al. 2018).
+          properties:
+            code: {type: string, description: "Köppen-Geiger code, e.g. Cfb."}
+            de: {type: string, description: German description.}
+            en: {type: string, description: English description.}
     QueryResult:
       type: object
       description: >
@@ -309,9 +337,11 @@ components:
         feature (kind "moon"), computed for any date; see SunFeatureProperties
         and MoonFeatureProperties. It also includes a weather-aggregate feature
         (kind "aggregate"; see AggregateFeatureProperties) with antecedent
-        precipitation, day temperature extrema and growing-degree-days. The
-        providers[] array may include entries with ids "sun", "moon",
-        "dewpoint" and "aggregate" reflecting their status; for future instants
+        precipitation, day temperature extrema and growing-degree-days, and a
+        bioclim feature (kind "bioclim"; see BioclimFeatureProperties) with the
+        19 WorldClim variables and the Köppen-Geiger class. The providers[]
+        array may include entries with ids "sun", "moon", "dewpoint",
+        "aggregate" and "bioclim" reflecting their status; for future instants
         the "open-meteo" weather and "aggregate" providers report a
         non-retryable error while sun and moon remain "ok".
       properties:

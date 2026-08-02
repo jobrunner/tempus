@@ -10,6 +10,7 @@ import (
 
 	"github.com/jobrunner/tempus/internal/adapters/aggregate"
 	"github.com/jobrunner/tempus/internal/adapters/astronomy"
+	"github.com/jobrunner/tempus/internal/adapters/bioclim"
 	boltcache "github.com/jobrunner/tempus/internal/adapters/cache/bolt"
 	memcache "github.com/jobrunner/tempus/internal/adapters/cache/memory"
 	"github.com/jobrunner/tempus/internal/adapters/clock"
@@ -87,6 +88,19 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
 			DefaultGDDBase:  cfg.Providers.Aggregate.GDDBaseCelsius,
 			Clock:           clk,
+		}))
+	}
+
+	// Bioclim (19 BIO variables + Köppen-Geiger) from ERA5 monthly normals.
+	// Time-independent for a location+period, so it caches per coordinate itself
+	// (its own cache key includes the reference period, ignoring the instant).
+	if cfg.Providers.Bioclim.Enabled && cfg.Providers.OpenMeteo.Enabled {
+		registry.Register(bioclim.New(bioclim.Options{
+			ArchiveBaseURL: cfg.Providers.OpenMeteo.ArchiveBaseURL,
+			// The 30-year daily fetch is large; allow more time than a single-hour
+			// call. The query timeout still governs overall via context.
+			Timeout: 60 * time.Second,
+			Cache:   cache,
 		}))
 	}
 

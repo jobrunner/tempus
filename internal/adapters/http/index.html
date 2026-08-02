@@ -1187,6 +1187,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     return renderMoonFeature(f);
                 } else if (kind === 'aggregate') {
                     return renderAggregateFeature(f);
+                } else if (kind === 'bioclim') {
+                    return renderBioclimFeature(f);
                 } else if (kind === 'weather' || kind === '') {
                     return renderWeatherFeature(f);
                 } else {
@@ -1528,6 +1530,67 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                         '&#x202F;&deg;C, akkumuliert seit ' + fmtIsoDate(gdd.since) + ' (' + esc(gdd.days) + '&#x202F;Tage).</div>';
                 }
                 html += '<div class="provider-hint">Niederschlag als Summe der Stunden bis zum Zeitpunkt; Tageswerte auf UTC-Tag.</div>';
+                html += attributionBlock(license);
+                html += '</div>'; // weather-body
+                html += '</div>'; // card
+                return html;
+            }
+
+            // Short labels + units for the 19 BIO variables.
+            var BIO_LABELS = [
+                ['bio1', 'Jahresmitteltemperatur', '°C'],
+                ['bio2', 'Mittlere Tagesschwankung', '°C'],
+                ['bio3', 'Isothermalität', '%'],
+                ['bio4', 'Temperatur-Saisonalität', 'Std×100'],
+                ['bio5', 'Max. Temp. wärmster Monat', '°C'],
+                ['bio6', 'Min. Temp. kältester Monat', '°C'],
+                ['bio7', 'Jahres-Temperaturamplitude', '°C'],
+                ['bio8', 'Mitteltemp. feuchtestes Quartal', '°C'],
+                ['bio9', 'Mitteltemp. trockenstes Quartal', '°C'],
+                ['bio10', 'Mitteltemp. wärmstes Quartal', '°C'],
+                ['bio11', 'Mitteltemp. kältestes Quartal', '°C'],
+                ['bio12', 'Jahresniederschlag', 'mm'],
+                ['bio13', 'Niederschlag feuchtester Monat', 'mm'],
+                ['bio14', 'Niederschlag trockenster Monat', 'mm'],
+                ['bio15', 'Niederschlags-Saisonalität', 'CV %'],
+                ['bio16', 'Niederschlag feuchtestes Quartal', 'mm'],
+                ['bio17', 'Niederschlag trockenstes Quartal', 'mm'],
+                ['bio18', 'Niederschlag wärmstes Quartal', 'mm'],
+                ['bio19', 'Niederschlag kältestes Quartal', 'mm']
+            ];
+
+            function renderBioclimFeature(f) {
+                const props = (f.properties) || {};
+                const license = f.license || null;
+                const bio = props.bio || {};
+                const kop = props.koppen || {};
+                const period = props.referencePeriod || '';
+
+                let html = '<div class="card weather-panel">';
+                html += '<div class="weather-header">';
+                html += '<div class="weather-icon">&#x1F30D;</div>';
+                html += '<div class="weather-header-info">';
+                if (kop.code) {
+                    html += '<div class="weather-temp">' + esc(kop.code) + '</div>';
+                }
+                html += '<div class="weather-desc">Klima (BIO)' + (kop.de ? ' &middot; ' + esc(kop.de) : '') + '</div>';
+                html += '</div></div>';
+
+                html += '<div class="weather-body">';
+                if (kop.code) {
+                    html += '<div class="provider-hint" style="margin-bottom:0.5rem;">Köppen-Geiger: <strong>' + esc(kop.code) + '</strong>' +
+                        (kop.en ? ' (' + esc(kop.en) + ')' : '') + (period ? ' &middot; Referenzperiode ' + esc(period) : '') + '</div>';
+                }
+                html += '<div class="weather-grid">';
+                for (var i = 0; i < BIO_LABELS.length; i++) {
+                    var key = BIO_LABELS[i][0], label = BIO_LABELS[i][1], unit = BIO_LABELS[i][2];
+                    var v = bio[key];
+                    if (v === undefined || v === null) continue;
+                    html += weatherStat(label, esc(v) + '&#x202F;' + esc(unit));
+                }
+                html += '</div>'; // weather-grid
+
+                html += '<div class="provider-hint" style="margin-top:0.5rem;">WorldClim-Definitionen, berechnet aus ERA5 ' + esc(period) + '. Periode automatisch zum Funddatum gewählt (Override via <code>refPeriod</code>).</div>';
                 html += attributionBlock(license);
                 html += '</div>'; // weather-body
                 html += '</div>'; // card
