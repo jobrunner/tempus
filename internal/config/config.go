@@ -118,7 +118,6 @@ func Defaults() {
 	viper.SetDefault("providers.openmeteo.timeout", 10*time.Second)
 	viper.SetDefault("providers.openmeteo.archive_delay", 5*24*time.Hour)
 	viper.SetDefault("providers.aggregate.enabled", true)
-	viper.SetDefault("providers.aggregate.gdd_base_celsius", 10.0)
 	viper.SetDefault("providers.bioclim.enabled", true)
 }
 

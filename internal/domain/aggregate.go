@@ -31,9 +31,16 @@ const (
 // w(T) = exp[(E/k)·(1/Tref − 1/T)] with temperatures in Kelvin.
 func arrheniusRate(tC float64) float64 {
 	const eOverK = ArrheniusActivationEnergyEv / boltzmannEvPerK
-	refK := ArrheniusReferenceTempC + 273.15
 	tK := tC + 273.15
-	return math.Exp(eOverK * (1/refK - 1/tK))
+	if tK <= 0 { // at/below absolute zero (only bad data) the rate is zero
+		return 0
+	}
+	refK := ArrheniusReferenceTempC + 273.15
+	r := math.Exp(eOverK * (1/refK - 1/tK))
+	if math.IsInf(r, 0) || math.IsNaN(r) { // guard non-finite so JSON encoding never breaks
+		return 0
+	}
+	return r
 }
 
 // ArrheniusThermalTime accumulates a species-agnostic, base-free thermal-time

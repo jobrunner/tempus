@@ -142,7 +142,9 @@
             min-width: 0;
             border: none;
             background: transparent;
-            padding: 0.625rem 0;
+            /* right room so the (left-aligned) value never runs under the icon;
+               the wrapper's overflow:hidden still keeps the box aligned on iOS. */
+            padding: 0.625rem 1.6rem 0.625rem 0;
             font-size: 1rem;
             color: var(--text);
         }
