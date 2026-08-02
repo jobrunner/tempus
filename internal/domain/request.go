@@ -15,6 +15,9 @@ type QueryRequest struct {
 	Instant        time.Time
 	Providers      []string
 	GDDBaseCelsius *float64
+	// RefPeriod optionally overrides the bioclim reference period ("YYYY-YYYY";
+	// empty ⇒ auto-selected contemporaneous normal).
+	RefPeriod string
 }
 
 // ValidationError is a client input error → HTTP 400, not retryable.

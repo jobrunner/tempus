@@ -65,6 +65,13 @@ type QueryConfig struct {
 type ProvidersConfig struct {
 	OpenMeteo OpenMeteoConfig `mapstructure:"openmeteo"`
 	Aggregate AggregateConfig `mapstructure:"aggregate"`
+	Bioclim   BioclimConfig   `mapstructure:"bioclim"`
+}
+
+// BioclimConfig configures the bioclim provider (BIO variables + Köppen-Geiger,
+// computed from ERA5 monthly normals). It reuses the Open-Meteo archive URL.
+type BioclimConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 type OpenMeteoConfig struct {
@@ -112,6 +119,7 @@ func Defaults() {
 	viper.SetDefault("providers.openmeteo.archive_delay", 5*24*time.Hour)
 	viper.SetDefault("providers.aggregate.enabled", true)
 	viper.SetDefault("providers.aggregate.gdd_base_celsius", 10.0)
+	viper.SetDefault("providers.bioclim.enabled", true)
 }
 
 // Load merges defaults, an optional config file, and environment variables.

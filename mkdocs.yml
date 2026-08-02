@@ -45,5 +45,6 @@ nav:
       - Future datetimes: explanation/no-future-datetimes.md
       - Derived features: explanation/derived-features.md
       - Weather aggregates: explanation/aggregates.md
+      - Bioclimatic variables & Köppen: explanation/bioclim.md
       - Sun and moon (astronomy): explanation/astronomy.md
       - Day/Night from solar position: explanation/solar-day-night.md
