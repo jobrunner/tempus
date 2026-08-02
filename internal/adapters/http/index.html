@@ -114,6 +114,37 @@
             color: var(--text-muted);
         }
 
+        /* datetime-local: add a calendar icon (iOS Safari shows none) and keep
+           the value from drifting to the right edge on iOS. */
+        input[type="datetime-local"] {
+            position: relative;
+            padding-right: 2.5rem;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.85rem center;
+            background-size: 1.15rem 1.15rem;
+        }
+
+        /* iOS Safari: centre the value and drop its default margin so it does
+           not run past the right edge. */
+        input[type="datetime-local"]::-webkit-date-and-time-value {
+            text-align: center;
+            margin: 0;
+        }
+
+        /* Desktop Chrome: turn the native indicator into an invisible click
+           target over our icon, so there is exactly one icon on every browser. */
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 2.6rem;
+            height: 100%;
+            margin: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
         .coord-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1516,13 +1547,13 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                 html += '<div class="weather-body">';
                 html += '<div class="weather-grid">';
-                if (precip.last24h !== undefined) html += weatherStat('Niederschlag 24&#x202F;h', esc(precip.last24h) + '&#x202F;mm');
-                if (precip.last72h !== undefined) html += weatherStat('Niederschlag 72&#x202F;h', esc(precip.last72h) + '&#x202F;mm');
-                if (precip.last120h !== undefined) html += weatherStat('Niederschlag 5&#x202F;d', esc(precip.last120h) + '&#x202F;mm');
+                if (precip.last24h !== undefined) html += weatherStat('Niederschlag 24 h', esc(precip.last24h) + '&#x202F;mm');
+                if (precip.last72h !== undefined) html += weatherStat('Niederschlag 72 h', esc(precip.last72h) + '&#x202F;mm');
+                if (precip.last120h !== undefined) html += weatherStat('Niederschlag 5 d', esc(precip.last120h) + '&#x202F;mm');
                 if (day.min !== undefined) html += weatherStat('Tagestemperatur min', esc(day.min) + '&#x202F;&deg;C');
                 if (day.max !== undefined) html += weatherStat('Tagestemperatur max', esc(day.max) + '&#x202F;&deg;C');
-                if (day.mean !== undefined) html += weatherStat('Tagestemperatur &Oslash;', esc(day.mean) + '&#x202F;&deg;C');
-                if (gdd) html += weatherStat('W&auml;rmesumme (GDD)', esc(gdd.value) + '&#x202F;&deg;C&middot;d');
+                if (day.mean !== undefined) html += weatherStat('Tagestemperatur Ø', esc(day.mean) + '&#x202F;&deg;C');
+                if (gdd) html += weatherStat('Wärmesumme (GDD)', esc(gdd.value) + '&#x202F;&deg;C&middot;d');
                 html += '</div>'; // weather-grid
 
                 if (gdd) {
@@ -1597,7 +1628,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     if (ind.matC !== undefined) html += weatherStat('Jahresmitteltemperatur', esc(ind.matC) + '&#x202F;&deg;C');
                     if (ind.biotemperatureC !== undefined) html += weatherStat('Biotemperatur (Holdridge)', esc(ind.biotemperatureC) + '&#x202F;&deg;C');
                     html += '</div>';
-                    html += '<div class="provider-hint" style="margin:0.35rem 0 0.75rem;">Klimatische Höhenstufe (klassische Namen, isotherm-definiert, europaweit vergleichbar) — zum Abgleich mit FHL-Stufenangaben.</div>';
+                    html += '<div class="provider-hint" style="margin:0.35rem 0 0.75rem;">Klimatische Höhenstufe (klassische Namen, isotherm-definiert, europaweit vergleichbar, Abgleich mit Angaben aus der mitteleuropäischen Literatur möglich)</div>';
                 }
 
                 if (kop.code) {
