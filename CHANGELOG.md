@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/jobrunner/tempus/compare/v0.12.0...v0.13.0) (2026-08-02)
+
+
+### Features
+
+* add bioclim provider (19 WorldClim BIO variables + Köppen-Geiger) ([#29](https://github.com/jobrunner/tempus/issues/29)) ([dad2587](https://github.com/jobrunner/tempus/commit/dad258708f87d00668b343ed0fdf777030eee1c0))
+
 ## [0.12.0](https://github.com/jobrunner/tempus/compare/v0.11.0...v0.12.0) (2026-08-02)
 
 
