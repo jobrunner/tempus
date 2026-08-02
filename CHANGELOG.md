@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/jobrunner/tempus/compare/v0.14.1...v0.14.2) (2026-08-02)
+
+
+### Bug Fixes
+
+* **frontend:** mobile horizontal overflow (cut-off stat boxes + datetime) ([#35](https://github.com/jobrunner/tempus/issues/35)) ([1634b4f](https://github.com/jobrunner/tempus/commit/1634b4fe7f027c9311313ba93fdb5851b857c996))
+
 ## [0.14.1](https://github.com/jobrunner/tempus/compare/v0.14.0...v0.14.1) (2026-08-02)
 
 
