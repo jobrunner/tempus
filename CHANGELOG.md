@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/jobrunner/tempus/compare/v0.11.0...v0.12.0) (2026-08-02)
+
+
+### Features
+
+* add weather-aggregate provider (antecedent precip, day extrema, GDD) ([#27](https://github.com/jobrunner/tempus/issues/27)) ([509b99d](https://github.com/jobrunner/tempus/commit/509b99dc08849bad2e7a8fc4c3e0ac9d3861c4d4))
+
 ## [0.11.0](https://github.com/jobrunner/tempus/compare/v0.10.2...v0.11.0) (2026-07-23)
 
 
