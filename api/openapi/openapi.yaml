@@ -15,7 +15,7 @@ paths:
         - {name: datetime, in: query, required: true, schema: {type: string}, description: "RFC3339 or YYYY-MM-DDTHH:MM[:SS]; no offset => UTC. Future instants are allowed: astronomy providers (sun/moon) compute for any date, while providers that cannot serve the future (weather) report a non-retryable error status in the envelope."}
         - {name: providers, in: query, required: false, schema: {type: string}, description: comma-separated provider ids}
         - {name: gddBase, in: query, required: false, schema: {type: number}, description: "Optional base temperature (°C, [-50,50]) for the aggregate provider's growing-degree-day accumulation. Omit to use the server default (10 °C)."}
-        - {name: refPeriod, in: query, required: false, schema: {type: string}, description: "Optional reference period 'YYYY-YYYY' (start ≥ 1940) for the bioclim provider. Omit to auto-select the contemporaneous 30-year WMO normal containing the datetime's year."}
+        - {name: refPeriod, in: query, required: false, schema: {type: string}, description: "Optional reference period 'YYYY-YYYY' (start ≥ 1940) for the bioclim provider. Omit to auto-select the contemporaneous 30-year WMO normal (the period containing the datetime's year, or 1991-2020 for later years)."}
       responses:
         "200":
           description: Feature collection with per-provider status

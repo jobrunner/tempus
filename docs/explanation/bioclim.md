@@ -33,7 +33,8 @@ BIO variables are 30-year climate normals. A find in 1954 should be described by
 a normal contemporaneous with the find, not by today's climate. So the period is
 **auto-selected from the datetime's year**:
 
-- Find ≥ 1991 → 1991–2020; 1961–1990 → that period; ~1954 → 1941–1970, etc.
+- Find ≥ 1991 → 1991–2020; 1961–1990 → that period; ~1954 → 1940–1969 (the
+  1931–1960 normal clamped to the ERA5 floor), etc.
 - Clamped to the **ERA5 floor of 1940** (earliest available), so pre-1940 finds
   use 1940–1969, reported transparently in `referencePeriod`.
 - Override with `?refPeriod=YYYY-YYYY` (e.g. `1970-2000` for a direct WorldClim

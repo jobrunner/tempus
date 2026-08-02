@@ -92,8 +92,12 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		}
 	}
 
+	u, err := p.buildURL(req.Coordinate, startY, endY)
+	if err != nil {
+		return domain.ProviderResult{}, output.NewPermanentError(err)
+	}
 	var data dailyResponse
-	if err := p.getJSON(ctx, p.url(req.Coordinate, startY, endY), &data); err != nil {
+	if err := p.getJSON(ctx, u, &data); err != nil {
 		return domain.ProviderResult{}, err
 	}
 
@@ -102,7 +106,7 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, output.NewNotYetAvailableError(24 * time.Hour)
 	}
 
-	feat := p.buildFeature(data, clim, req.Coordinate, startY, endY)
+	feat := p.buildFeature(data, clim, startY, endY)
 	if p.cache != nil {
 		if raw, err := json.Marshal(feat); err == nil {
 			_ = p.cache.Set(ctx, key, raw, cacheTTL)
@@ -112,7 +116,7 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 }
 
 func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
-	coord domain.Coordinate, startY, endY int,
+	startY, endY int,
 ) domain.Feature {
 	b := domain.BioclimVariables(clim)
 	code, kde, ken := domain.KoppenGeiger(clim, data.Latitude)
@@ -136,11 +140,17 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 			"bio3": "%", "bio4": "°C×100 (Std.abw.)", "bio15": "% (Variationskoeffizient)",
 		},
 	}
-	return domain.NewPointFeature(coord, props, p.license(period))
+	// Geometry uses the provider-resolved coordinate (Open-Meteo grid cell),
+	// consistent with the other providers.
+	resolved := domain.Coordinate{Lat: data.Latitude, Lon: data.Longitude}
+	return domain.NewPointFeature(resolved, props, p.license(period))
 }
 
-func (p *Provider) url(coord domain.Coordinate, startY, endY int) string {
-	u, _ := url.Parse(p.archiveBaseURL)
+func (p *Provider) buildURL(coord domain.Coordinate, startY, endY int) (string, error) {
+	u, err := url.Parse(p.archiveBaseURL)
+	if err != nil {
+		return "", err
+	}
 	q := u.Query()
 	q.Set("latitude", fmt.Sprintf("%.5f", coord.Lat))
 	q.Set("longitude", fmt.Sprintf("%.5f", coord.Lon))
@@ -149,7 +159,7 @@ func (p *Provider) url(coord domain.Coordinate, startY, endY int) string {
 	q.Set("start_date", fmt.Sprintf("%d-01-01", startY))
 	q.Set("end_date", fmt.Sprintf("%d-12-31", endY))
 	u.RawQuery = q.Encode()
-	return u.String()
+	return u.String(), nil
 }
 
 func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
@@ -197,16 +207,18 @@ func monthlyNormals(data dailyResponse, years int) (domain.MonthlyClimate, bool)
 		tmin := valueAt(data.Daily.TMin, i)
 		tmax := valueAt(data.Daily.TMax, i)
 		tmean := valueAt(data.Daily.TMean, i)
-		if tmin == nil || tmax == nil || tmean == nil {
+		pr := valueAt(data.Daily.Precip, i)
+		// Require all fields (incl. precipitation): counting a day with missing
+		// precip would bias the monthly total — and thus BIO12–19 and Köppen —
+		// toward drier values.
+		if tmin == nil || tmax == nil || tmean == nil || pr == nil {
 			continue
 		}
 		sumMin[m] += *tmin
 		sumMax[m] += *tmax
 		sumMean[m] += *tmean
+		sumPrecip[m] += *pr
 		days[m]++
-		if pr := valueAt(data.Daily.Precip, i); pr != nil {
-			sumPrecip[m] += *pr
-		}
 	}
 
 	var clim domain.MonthlyClimate
@@ -242,8 +254,12 @@ func valueAt(s []*float64, i int) *float64 {
 	return nil
 }
 
+// cacheKey rounds the coordinate to ~10 m (4 decimals). This is far finer than
+// ERA5's native grid (~0.1–0.25°), so two coordinates that share a key resolve
+// to the same ERA5 cell and thus the same climate — no incorrect collisions —
+// while co-located records (same georeference) still share a cache entry.
 func cacheKey(coord domain.Coordinate, startY, endY int) string {
-	return fmt.Sprintf("%s|%s|%.2f|%.2f|%d-%d", providerID, cacheVersion, coord.Lat, coord.Lon, startY, endY)
+	return fmt.Sprintf("%s|%s|%.4f|%.4f|%d-%d", providerID, cacheVersion, coord.Lat, coord.Lon, startY, endY)
 }
 
 func r1(v float64) float64  { return math.Round(v*10) / 10 }

@@ -20,8 +20,10 @@ const normalWidth = 30
 
 // NormalPeriod returns the [startYear, endYear] climate-normal reference period.
 // If override is non-empty it must be "YYYY-YYYY"; otherwise the contemporaneous
-// 30-year WMO standard normal containing the instant's year is used (1931-1960,
-// 1961-1990, 1991-2020, …), clamped so the start is not before ERA5 (1940).
+// 30-year WMO standard normal is used: the period containing the instant's year
+// (1931-1960, 1961-1990, 1991-2020), or — for years after 2020 — the most recent
+// complete normal (1991-2020). The start is clamped to no earlier than ERA5
+// availability (1940), so pre-1940 years yield 1940-1969.
 func NormalPeriod(instant time.Time, override string) (startYear, endYear int, err error) {
 	if strings.TrimSpace(override) != "" {
 		return parseRefPeriod(override)
