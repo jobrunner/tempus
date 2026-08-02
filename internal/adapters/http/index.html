@@ -1577,6 +1577,29 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 html += '</div></div>';
 
                 html += '<div class="weather-body">';
+
+                // Höhenstufe (climate-derived altitudinal belt) — the source of truth.
+                var ab = props.altitudinalBelt || null;
+                if (ab && ab.belt) {
+                    var beltName = esc(ab.belt.de || '');
+                    if (ab.borderline && ab.adjacentBelt && ab.adjacentBelt.de) {
+                        beltName += ' <span style="font-weight:400;">(grenznah: ' + esc(ab.adjacentBelt.de) + ')</span>';
+                    }
+                    html += '<div class="weather-stat" style="margin-bottom:0.5rem;">';
+                    html += '<div class="weather-stat-label">Höhenstufe</div>';
+                    html += '<div class="weather-stat-value" style="font-size:1.15rem;">' + beltName + '</div>';
+                    html += '</div>';
+                    var ind = ab.indicators || {};
+                    var tt = ab.thermotype || {};
+                    html += '<div class="weather-grid">';
+                    if (tt.code) html += weatherStat('Thermotyp (Rivas-Martínez)', esc(tt.code));
+                    if (ind.warmestQuarterC !== undefined) html += weatherStat('Wärmstes Quartal (Ø)', esc(ind.warmestQuarterC) + '&#x202F;&deg;C');
+                    if (ind.matC !== undefined) html += weatherStat('Jahresmitteltemperatur', esc(ind.matC) + '&#x202F;&deg;C');
+                    if (ind.biotemperatureC !== undefined) html += weatherStat('Biotemperatur (Holdridge)', esc(ind.biotemperatureC) + '&#x202F;&deg;C');
+                    html += '</div>';
+                    html += '<div class="provider-hint" style="margin:0.35rem 0 0.75rem;">Klimatische Höhenstufe (klassische Namen, isotherm-definiert, europaweit vergleichbar) — zum Abgleich mit FHL-Stufenangaben.</div>';
+                }
+
                 if (kop.code) {
                     html += '<div class="provider-hint" style="margin-bottom:0.5rem;">Köppen-Geiger: <strong>' + esc(kop.code) + '</strong>' +
                         (kop.en ? ' (' + esc(kop.en) + ')' : '') + (period ? ' &middot; Referenzperiode ' + esc(period) : '') + '</div>';

@@ -46,5 +46,6 @@ nav:
       - Derived features: explanation/derived-features.md
       - Weather aggregates: explanation/aggregates.md
       - Bioclimatic variables & Köppen: explanation/bioclim.md
+      - Altitudinal belts (Höhenstufen): explanation/altitudinal-belts.md
       - Sun and moon (astronomy): explanation/astronomy.md
       - Day/Night from solar position: explanation/solar-day-night.md

@@ -325,6 +325,48 @@ components:
             code: {type: string, description: "Köppen-Geiger code, e.g. Cfb."}
             de: {type: string, description: German description.}
             en: {type: string, description: English description.}
+        altitudinalBelt:
+          type: object
+          description: >
+            Climate-derived altitudinal belt (Höhenstufe) with the classic names
+            (kollin … alpin … nival), isotherm-defined (treeline 6.4 °C, Paulsen
+            & Körner 2014) and Central-Europe-calibrated so the names are directly
+            comparable to FHL/Hegi belt statements — valid across all of Europe
+            and globally. No elevation input; temperature encodes altitude.
+          properties:
+            belt:
+              type: object
+              description: Bilingual classic belt name.
+              properties:
+                de: {type: string}
+                en: {type: string}
+            basis: {type: string, description: "Method, e.g. 'thermoclimatic isotherm, Central-Europe-calibrated'."}
+            borderline: {type: boolean, description: "True when within 0.5 °C of a belt boundary."}
+            adjacentBelt:
+              type: object
+              description: Nearer neighbouring belt (present only when borderline).
+              properties:
+                de: {type: string}
+                en: {type: string}
+            indicators:
+              type: object
+              description: Deciding indicators (°C) — auditable basis for the belt.
+              properties:
+                warmestMonthC: {type: number}
+                warmestQuarterC: {type: number}
+                matC: {type: number, description: Annual mean temperature.}
+                biotemperatureC: {type: number, description: "Holdridge biotemperature (mean of monthly means clamped to [0,30])."}
+            thermotype:
+              type: object
+              description: >
+                Rivas-Martínez thermotype (formal, cross-Europe): horizon from
+                positive temperature Tp × macrobioclimate suffix, e.g.
+                orotemperate vs oromediterranean.
+              properties:
+                code: {type: string}
+                de: {type: string}
+                en: {type: string}
+            source: {type: string, description: "Citation for the belt/thermotype computation."}
     QueryResult:
       type: object
       description: >
@@ -339,7 +381,8 @@ components:
         (kind "aggregate"; see AggregateFeatureProperties) with antecedent
         precipitation, day temperature extrema and growing-degree-days, and a
         bioclim feature (kind "bioclim"; see BioclimFeatureProperties) with the
-        19 WorldClim variables and the Köppen-Geiger class. The providers[]
+        19 WorldClim variables, the Köppen-Geiger class and the climate-derived
+        altitudinal belt (Höhenstufe) + Rivas-Martínez thermotype. The providers[]
         array may include entries with ids "sun", "moon", "dewpoint",
         "aggregate" and "bioclim" reflecting their status; for future instants
         the "open-meteo" weather and "aggregate" providers report a

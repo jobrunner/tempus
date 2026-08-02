@@ -134,7 +134,8 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 			"bio15": r1(b.Bio15), "bio16": rmm(b.Bio16), "bio17": rmm(b.Bio17),
 			"bio18": rmm(b.Bio18), "bio19": rmm(b.Bio19),
 		},
-		"koppen": map[string]any{"code": code, "de": kde, "en": ken},
+		"koppen":          map[string]any{"code": code, "de": kde, "en": ken},
+		"altitudinalBelt": altitudinalBeltProps(clim, data.Latitude),
 		"units": map[string]string{
 			"temperature": "°C", "precipitation": "mm",
 			"bio3": "%", "bio4": "°C×100 (Std.abw.)", "bio15": "% (Variationskoeffizient)",
@@ -264,3 +265,29 @@ func cacheKey(coord domain.Coordinate, startY, endY int) string {
 
 func r1(v float64) float64  { return math.Round(v*10) / 10 }
 func rmm(v float64) float64 { return math.Round(v) }
+
+// altitudinalBeltProps builds the climate-derived altitudinal belt object: the
+// classic belt name (source of truth for FHL comparison), the deciding
+// indicators, a borderline flag, and the Rivas-Martínez thermotype.
+func altitudinalBeltProps(clim domain.MonthlyClimate, latDeg float64) map[string]any {
+	belt := domain.AltitudinalBelt(clim)
+	tCode, tDe, tEn := domain.RivasMartinezThermotype(clim, latDeg)
+
+	out := map[string]any{
+		"belt":       map[string]any{"de": belt.De, "en": belt.En},
+		"basis":      "thermoclimatic isotherm, Central-Europe-calibrated",
+		"borderline": belt.Borderline,
+		"indicators": map[string]any{
+			"warmestMonthC":   r1(belt.WarmestMonthC),
+			"warmestQuarterC": r1(belt.WarmestQuarterC),
+			"matC":            r1(belt.MATC),
+			"biotemperatureC": r1(belt.BiotemperatureC),
+		},
+		"thermotype": map[string]any{"code": tCode, "de": tDe, "en": tEn},
+		"source":     domain.BeltSource,
+	}
+	if belt.Borderline {
+		out["adjacentBelt"] = map[string]any{"de": belt.AdjDe, "en": belt.AdjEn}
+	}
+	return out
+}
