@@ -1041,6 +1041,10 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 hideError();
+                // Consume the auto-run flag once, so a failed request cannot make
+                // a later manual submit scroll unexpectedly.
+                var autoRan = window.__autoRan;
+                window.__autoRan = false;
 
                 const lat = latInput.value.trim().replace(',', '.');
                 const lon = lonInput.value.trim().replace(',', '.');
@@ -1104,9 +1108,9 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                     try {
                         renderResults(data);
-                        if (window.__autoRan) {
-                            window.__autoRan = false;
-                            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        if (autoRan) {
+                            var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                            results.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
                         }
                     } catch (_) {
                         showError('Die Wetterdaten konnten nicht dargestellt werden.');
