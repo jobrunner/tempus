@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/jobrunner/tempus/compare/v0.15.0...v0.16.0) (2026-08-02)
+
+
+### Features
+
+* **aggregate:** GDD base 5+10 always + Arrhenius thermal-time index; fix(frontend): datetime width on iOS ([#39](https://github.com/jobrunner/tempus/issues/39)) ([50fa0e4](https://github.com/jobrunner/tempus/commit/50fa0e4cd28340e681fdc17b87cf8893a5905288))
+
 ## [0.15.0](https://github.com/jobrunner/tempus/compare/v0.14.2...v0.15.0) (2026-08-02)
 
 
