@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jobrunner/tempus/internal/adapters/aggregate"
 	"github.com/jobrunner/tempus/internal/adapters/astronomy"
 	boltcache "github.com/jobrunner/tempus/internal/adapters/cache/bolt"
 	memcache "github.com/jobrunner/tempus/internal/adapters/cache/memory"
@@ -73,6 +74,21 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 	// work for any date (past or future).
 	registry.Register(astronomy.NewSun())
 	registry.Register(astronomy.NewMoon())
+
+	// Weather aggregates (antecedent precipitation, day extrema, GDD). Fetches a
+	// time range from Open-Meteo; registered without the caching decorator
+	// because its output also depends on the per-request gddBase override, which
+	// the cache key does not capture.
+	if cfg.Providers.Aggregate.Enabled && cfg.Providers.OpenMeteo.Enabled {
+		registry.Register(aggregate.New(aggregate.Options{
+			ArchiveBaseURL:  cfg.Providers.OpenMeteo.ArchiveBaseURL,
+			ForecastBaseURL: cfg.Providers.OpenMeteo.ForecastBaseURL,
+			Timeout:         cfg.Providers.OpenMeteo.Timeout,
+			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
+			DefaultGDDBase:  cfg.Providers.Aggregate.GDDBaseCelsius,
+			Clock:           clk,
+		}))
+	}
 
 	// Wire tracing. When disabled the NoOpTracer is used so downstream code
 	// never has to nil-check the tracer.

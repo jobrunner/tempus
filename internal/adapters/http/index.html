@@ -1185,6 +1185,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     return renderSunFeature(f);
                 } else if (kind === 'moon') {
                     return renderMoonFeature(f);
+                } else if (kind === 'aggregate') {
+                    return renderAggregateFeature(f);
                 } else if (kind === 'weather' || kind === '') {
                     return renderWeatherFeature(f);
                 } else {
@@ -1481,6 +1483,51 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 html += '</div>'; // weather-grid
 
                 html += '<div class="provider-hint" style="margin-top:0.5rem;">Zeiten in ' + esc(tzLabel) + '. Geozentrische Näherung.</div>';
+                html += attributionBlock(license);
+                html += '</div>'; // weather-body
+                html += '</div>'; // card
+                return html;
+            }
+
+            // Formats "YYYY-MM-DD" as "DD.MM.YYYY"; returns the input on mismatch.
+            function fmtIsoDate(s) {
+                var m = (s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                return m ? (m[3] + '.' + m[2] + '.' + m[1]) : (s || '—');
+            }
+
+            function renderAggregateFeature(f) {
+                const props = (f.properties) || {};
+                const license = f.license || null;
+                const precip = props.precipitation || {};
+                const day = props.temperatureDay || {};
+                const gdd = props.growingDegreeDays || null;
+
+                let html = '<div class="card weather-panel">';
+                html += '<div class="weather-header">';
+                html += '<div class="weather-icon">&#x1F4CA;</div>';
+                html += '<div class="weather-header-info">';
+                if (gdd && gdd.value !== undefined && gdd.value !== null) {
+                    html += '<div class="weather-temp">' + esc(gdd.value) + '&#x202F;&deg;C&middot;d</div>';
+                }
+                html += '<div class="weather-desc">Zeitfenster-Aggregate' + (gdd ? ' &middot; W&auml;rmesumme' : '') + '</div>';
+                html += '</div></div>';
+
+                html += '<div class="weather-body">';
+                html += '<div class="weather-grid">';
+                if (precip.last24h !== undefined) html += weatherStat('Niederschlag 24&#x202F;h', esc(precip.last24h) + '&#x202F;mm');
+                if (precip.last72h !== undefined) html += weatherStat('Niederschlag 72&#x202F;h', esc(precip.last72h) + '&#x202F;mm');
+                if (precip.last120h !== undefined) html += weatherStat('Niederschlag 5&#x202F;d', esc(precip.last120h) + '&#x202F;mm');
+                if (day.min !== undefined) html += weatherStat('Tagestemperatur min', esc(day.min) + '&#x202F;&deg;C');
+                if (day.max !== undefined) html += weatherStat('Tagestemperatur max', esc(day.max) + '&#x202F;&deg;C');
+                if (day.mean !== undefined) html += weatherStat('Tagestemperatur &Oslash;', esc(day.mean) + '&#x202F;&deg;C');
+                if (gdd) html += weatherStat('W&auml;rmesumme (GDD)', esc(gdd.value) + '&#x202F;&deg;C&middot;d');
+                html += '</div>'; // weather-grid
+
+                if (gdd) {
+                    html += '<div class="provider-hint" style="margin-top:0.5rem;">GDD-Basis ' + esc(gdd.baseCelsius) +
+                        '&#x202F;&deg;C, akkumuliert seit ' + fmtIsoDate(gdd.since) + ' (' + esc(gdd.days) + '&#x202F;Tage).</div>';
+                }
+                html += '<div class="provider-hint">Niederschlag als Summe der Stunden bis zum Zeitpunkt; Tageswerte auf UTC-Tag.</div>';
                 html += attributionBlock(license);
                 html += '</div>'; // weather-body
                 html += '</div>'; // card

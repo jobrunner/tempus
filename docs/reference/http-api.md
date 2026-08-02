@@ -22,6 +22,7 @@ Query registered feature providers for a coordinate and point in time.
 | `lon` | query | yes | number | WGS84 longitude |
 | `datetime` | query | yes | string | RFC 3339 (`2025-07-01T12:00:00Z`) **or** offset-less (`2025-07-01T12:00:00`, treated as UTC). Future instants are allowed — see [Future datetimes](../explanation/no-future-datetimes.md). |
 | `providers` | query | no | string | Comma-separated provider IDs. Omit to query all enabled providers. |
+| `gddBase` | query | no | number | Base temperature (°C, [-50,50]) for the aggregate provider's growing-degree-days. Omit for the server default (10 °C). See [Weather aggregates](../explanation/aggregates.md). |
 
 ### Responses
 
@@ -86,8 +87,11 @@ actually queried:
 
 The `properties.kind` discriminates the feature type: `weather` (Open-Meteo),
 `dewpoint` (derived — see [Derived features](../explanation/derived-features.md)),
-and `sun` / `moon` (computed — see [Sun and moon](../explanation/astronomy.md)).
-The `sun` and `moon` features are available for any date, including the future.
+`sun` / `moon` (computed — see [Sun and moon](../explanation/astronomy.md)), and
+`aggregate` (antecedent precipitation, day extrema, growing-degree-days — see
+[Weather aggregates](../explanation/aggregates.md)). The `sun` and `moon`
+features are available for any date, including the future; `weather` and
+`aggregate` need past data.
 
 **`providers[]`** — one entry per queried provider, regardless of outcome:
 

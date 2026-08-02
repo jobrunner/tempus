@@ -8,10 +8,13 @@ import (
 
 // QueryRequest is a validated feature-query request. Instant is UTC, truncated
 // to the hour. Providers is an optional filter (empty ⇒ all registered).
+// GDDBaseCelsius optionally overrides the growing-degree-day base temperature
+// used by the aggregate provider (nil ⇒ provider default).
 type QueryRequest struct {
-	Coordinate Coordinate
-	Instant    time.Time
-	Providers  []string
+	Coordinate     Coordinate
+	Instant        time.Time
+	Providers      []string
+	GDDBaseCelsius *float64
 }
 
 // ValidationError is a client input error → HTTP 400, not retryable.
@@ -28,6 +31,7 @@ func (e ValidationError) Error() string {
 // on Field values never drift from the production strings.
 const (
 	fieldDatetime = "datetime"
+	fieldGDDBase  = "gddBase"
 )
 
 // datetimeLayouts are tried in order. RFC3339 (with offset) first; the
@@ -42,7 +46,7 @@ var datetimeLayouts = []string{
 // Future instants are allowed here: astronomy providers (sun/moon) compute for
 // any date. Providers that cannot serve the future (e.g. weather) reject it
 // themselves and report it in the response envelope.
-func ParseQueryRequest(lat, lon, datetime string, providers []string) (QueryRequest, error) {
+func ParseQueryRequest(lat, lon, datetime, gddBase string, providers []string) (QueryRequest, error) {
 	latF, err := strconv.ParseFloat(lat, 64)
 	if err != nil || latF < -90 || latF > 90 {
 		return QueryRequest{}, ValidationError{"lat", "must be a number in [-90,90]"}
@@ -58,11 +62,29 @@ func ParseQueryRequest(lat, lon, datetime string, providers []string) (QueryRequ
 	}
 	instant = instant.UTC().Truncate(time.Hour)
 
+	gdd, err := parseGDDBase(gddBase)
+	if err != nil {
+		return QueryRequest{}, err
+	}
+
 	return QueryRequest{
-		Coordinate: Coordinate{Lat: latF, Lon: lonF},
-		Instant:    instant,
-		Providers:  providers,
+		Coordinate:     Coordinate{Lat: latF, Lon: lonF},
+		Instant:        instant,
+		Providers:      providers,
+		GDDBaseCelsius: gdd,
 	}, nil
+}
+
+// parseGDDBase parses the optional gddBase override. Empty ⇒ nil (use default).
+func parseGDDBase(s string) (*float64, error) {
+	if s == "" {
+		return nil, nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || v < -50 || v > 50 {
+		return nil, ValidationError{fieldGDDBase, "must be a number in [-50,50] °C"}
+	}
+	return &v, nil
 }
 
 func parseInstant(s string) (time.Time, bool) {
