@@ -25,7 +25,7 @@ const hourlyJSON = `{"hourly":{
   "time":["2025-06-15T10:00","2025-06-15T11:00","2025-06-15T12:00","2025-06-15T13:00"],
   "precipitation":[1.0,2.0,0.0,3.0]}}`
 
-func newProvider(t *testing.T, base float64) (*Provider, func()) {
+func newProvider(t *testing.T) (*Provider, func()) {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("daily") != "" {
@@ -39,7 +39,6 @@ func newProvider(t *testing.T, base float64) (*Provider, func()) {
 		ForecastBaseURL: srv.URL,
 		Timeout:         2 * time.Second,
 		ArchiveDelay:    5 * 24 * time.Hour,
-		DefaultGDDBase:  base,
 		Clock:           fixedClock{time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)},
 	})
 	return p, srv.Close
@@ -54,7 +53,7 @@ func req(instant time.Time, base *float64) domain.QueryRequest {
 }
 
 func TestFetch_ComputesAggregates(t *testing.T) {
-	p, done := newProvider(t, 10)
+	p, done := newProvider(t)
 	defer done()
 
 	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), nil))
@@ -86,12 +85,12 @@ func TestFetch_ComputesAggregates(t *testing.T) {
 	if !ok {
 		t.Fatalf("growingDegreeDays missing")
 	}
-	// base 10: (5)+(7)+(9) = 21 over 3 days, since 2025-01-01 (northern).
-	if gdd["value"] != 21.0 {
-		t.Errorf("gdd value = %v, want 21", gdd["value"])
+	// base 10: (5)+(7)+(9) = 21; base 5: (10)+(12)+(14) = 36. Both always present.
+	if gdd["base10"] != 21.0 {
+		t.Errorf("gdd base10 = %v, want 21", gdd["base10"])
 	}
-	if gdd["baseCelsius"] != 10.0 {
-		t.Errorf("baseCelsius = %v, want 10", gdd["baseCelsius"])
+	if gdd["base5"] != 36.0 {
+		t.Errorf("gdd base5 = %v, want 36", gdd["base5"])
 	}
 	if gdd["since"] != "2025-01-01" {
 		t.Errorf("since = %v, want 2025-01-01", gdd["since"])
@@ -99,32 +98,52 @@ func TestFetch_ComputesAggregates(t *testing.T) {
 	if gdd["days"] != 3 {
 		t.Errorf("days = %v, want 3", gdd["days"])
 	}
+	if _, hasCustom := gdd["custom"]; hasCustom {
+		t.Errorf("custom present without a gddBase override: %v", gdd["custom"])
+	}
+
+	att, ok := props["arrheniusThermalTime"].(map[string]any)
+	if !ok {
+		t.Fatalf("arrheniusThermalTime missing")
+	}
+	if att["referenceTempC"] != 20.0 || att["activationEnergyEv"] != 0.65 || att["days"] != 3 {
+		t.Errorf("arrhenius meta = %v, want Tref 20 / E 0.65 / days 3", att)
+	}
+	if v, ok := att["value"].(float64); !ok || v <= 0 {
+		t.Errorf("arrhenius value = %v, want > 0", att["value"])
+	}
+
 	if res.Feature.License.Attribution == "" {
 		t.Error("attribution empty")
 	}
 }
 
 func TestFetch_GDDBaseOverride(t *testing.T) {
-	p, done := newProvider(t, 10)
+	p, done := newProvider(t)
 	defer done()
 
-	base := 5.0
+	base := 7.0 // distinct from the fixed 5 and 10
 	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), &base))
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	gdd := res.Feature.Properties["growingDegreeDays"].(map[string]any)
-	// base 5: (10)+(12)+(14) = 36.
-	if gdd["value"] != 36.0 {
-		t.Errorf("gdd value = %v, want 36", gdd["value"])
+	// base5/base10 remain; the override is added under "custom".
+	if gdd["base5"] != 36.0 || gdd["base10"] != 21.0 {
+		t.Errorf("gdd base5/base10 = %v/%v, want 36/21", gdd["base5"], gdd["base10"])
 	}
-	if gdd["baseCelsius"] != 5.0 {
-		t.Errorf("baseCelsius = %v, want 5", gdd["baseCelsius"])
+	custom, ok := gdd["custom"].(map[string]any)
+	if !ok {
+		t.Fatalf("custom missing for gddBase=7")
+	}
+	// base 7: (15-7)+(17-7)+(19-7) = 8+10+12 = 30.
+	if custom["baseCelsius"] != 7.0 || custom["value"] != 30.0 {
+		t.Errorf("custom = %v, want baseCelsius 7 / value 30", custom)
 	}
 }
 
 func TestFetch_FutureRejected(t *testing.T) {
-	p, done := newProvider(t, 10)
+	p, done := newProvider(t)
 	defer done()
 
 	_, err := p.Fetch(context.Background(), req(time.Date(2026, 7, 21, 13, 0, 0, 0, time.UTC), nil))

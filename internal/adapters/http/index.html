@@ -114,36 +114,60 @@
             color: var(--text-muted);
         }
 
-        /* datetime-local: iOS shows no calendar icon, so we overlay our own as a
-           separate element (a background-image on the input gets clipped by iOS).
-           The overlay is decorative; the field itself opens the native picker. */
+        /* datetime-local: iOS renders this native control WIDER than its CSS
+           width (it ignores width/max-width), so the input's own border spilled
+           past the form on the right. Fix: the visible box (border, radius,
+           background) lives on the WRAPPER, which is a normal block that respects
+           width:100%; the input is borderless/transparent and clipped to the
+           wrapper via overflow:hidden. iOS also shows no calendar glyph, so we
+           overlay our own icon. */
         .dt-field {
             position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--card);
+            padding: 0 0.75rem;
+            overflow: hidden;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .dt-field:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
         .dt-field input[type="datetime-local"] {
-            width: 100%;
-            min-width: 0;              /* let width:100% constrain iOS intrinsic sizing */
-            padding-right: 2.5rem;     /* room for the overlay icon */
+            flex: 1 1 auto;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            /* right room so the (left-aligned) value never runs under the icon;
+               the wrapper's overflow:hidden still keeps the box aligned on iOS. */
+            padding: 0.625rem 1.6rem 0.625rem 0;
+            font-size: 1rem;
+            color: var(--text);
+        }
+        .dt-field input[type="datetime-local"]:focus {
+            outline: none;
+            box-shadow: none;
         }
         .dt-field input[type="datetime-local"]::-webkit-date-and-time-value {
-            margin: 0;                 /* drop iOS's default margin (right-edge drift) */
+            margin: 0;
             text-align: left;
         }
-        /* Desktop Chrome: keep the native indicator clickable but invisible, so
-           our overlay icon is the single visible affordance. iOS has no such
-           pseudo-element, so this is a no-op there. */
         .dt-field input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             opacity: 0;
         }
         .dt-field .dt-icon {
             position: absolute;
-            right: 0.85rem;
+            right: 0.75rem;
             top: 50%;
             transform: translateY(-50%);
             width: 1.15rem;
             height: 1.15rem;
             color: var(--text-muted);
-            pointer-events: none;      /* taps fall through to the input */
+            pointer-events: none;
         }
         .dt-field .dt-icon svg {
             display: block;
@@ -1578,15 +1602,16 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 const precip = props.precipitation || {};
                 const day = props.temperatureDay || {};
                 const gdd = props.growingDegreeDays || null;
+                const arr = props.arrheniusThermalTime || null;
 
                 let html = '<div class="card weather-panel">';
                 html += '<div class="weather-header">';
                 html += '<div class="weather-icon">&#x1F4CA;</div>';
                 html += '<div class="weather-header-info">';
-                if (gdd && gdd.value !== undefined && gdd.value !== null) {
-                    html += '<div class="weather-temp">' + esc(gdd.value) + '&#x202F;&deg;C&middot;d</div>';
+                if (gdd && gdd.base10 !== undefined && gdd.base10 !== null) {
+                    html += '<div class="weather-temp">' + esc(gdd.base10) + '&#x202F;&deg;C&middot;d</div>';
                 }
-                html += '<div class="weather-desc">Zeitfenster-Aggregate' + (gdd ? ' &middot; W&auml;rmesumme' : '') + '</div>';
+                html += '<div class="weather-desc">Zeitfenster-Aggregate' + (gdd ? ' &middot; W&auml;rmesumme (Basis 10)' : '') + '</div>';
                 html += '</div></div>';
 
                 html += '<div class="weather-body">';
@@ -1597,12 +1622,20 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 if (day.min !== undefined) html += weatherStat('Tagestemperatur min', esc(day.min) + '&#x202F;&deg;C');
                 if (day.max !== undefined) html += weatherStat('Tagestemperatur max', esc(day.max) + '&#x202F;&deg;C');
                 if (day.mean !== undefined) html += weatherStat('Tagestemperatur Ø', esc(day.mean) + '&#x202F;&deg;C');
-                if (gdd) html += weatherStat('Wärmesumme (GDD)', esc(gdd.value) + '&#x202F;&deg;C&middot;d');
+                if (gdd && gdd.base5 !== undefined) html += weatherStat('GDD Basis 5', esc(gdd.base5) + '&#x202F;&deg;C&middot;d');
+                if (gdd && gdd.base10 !== undefined) html += weatherStat('GDD Basis 10', esc(gdd.base10) + '&#x202F;&deg;C&middot;d');
+                if (gdd && gdd.custom) html += weatherStat('GDD Basis ' + esc(gdd.custom.baseCelsius), esc(gdd.custom.value) + '&#x202F;&deg;C&middot;d');
+                if (arr && arr.value !== undefined) html += weatherStat('Arrhenius-Zeit', esc(arr.value) + '&#x202F;d');
                 html += '</div>'; // weather-grid
 
                 if (gdd) {
-                    html += '<div class="provider-hint" style="margin-top:0.5rem;">GDD-Basis ' + esc(gdd.baseCelsius) +
-                        '&#x202F;&deg;C, akkumuliert seit ' + fmtIsoDate(gdd.since) + ' (' + esc(gdd.days) + '&#x202F;Tage).</div>';
+                    html += '<div class="provider-hint" style="margin-top:0.5rem;">GDD (Basis 5 & 10 immer, ' +
+                        (gdd.custom ? 'zusätzlich Basis ' + esc(gdd.custom.baseCelsius) + ', ' : '') +
+                        'akkumuliert seit ' + fmtIsoDate(gdd.since) + ', ' + esc(gdd.days) + '&#x202F;Tage).</div>';
+                }
+                if (arr) {
+                    html += '<div class="provider-hint">Arrhenius-Zeit: artagnostischer, basisfreier Standortindex in ' +
+                        esc(arr.referenceTempC) + '&#x202F;&deg;C-Äquivalenttagen (Boltzmann-Arrhenius, E = ' + esc(arr.activationEnergyEv) + '&#x202F;eV).</div>';
                 }
                 html += '<div class="provider-hint">Niederschlag als Summe der Stunden bis zum Zeitpunkt; Tageswerte auf UTC-Tag.</div>';
                 html += attributionBlock(license);

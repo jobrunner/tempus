@@ -29,6 +29,28 @@ func TestGrowingDegreeDays_MismatchedLengthUsesShorter(t *testing.T) {
 	}
 }
 
+func TestArrheniusThermalTime(t *testing.T) {
+	// A day at the reference temperature contributes exactly 1.0.
+	if v, days := ArrheniusThermalTime([]float64{20}, []float64{20}); math.Abs(v-1) > 1e-9 || days != 1 {
+		t.Errorf("day at Tref = (%.4f, %d), want (1, 1)", v, days)
+	}
+	// Two reference days accumulate to 2.0.
+	if v, _ := ArrheniusThermalTime([]float64{20, 20}, []float64{20, 20}); math.Abs(v-2) > 1e-9 {
+		t.Errorf("two Tref days = %.4f, want 2", v)
+	}
+	// A 10/30 °C day: mean of the (normalised) Boltzmann rates at 10 and 30 °C
+	// (rate(30) ≈ 2.3366, rate(10) ≈ 0.4031 → mean ≈ 1.3699).
+	if v, _ := ArrheniusThermalTime([]float64{10}, []float64{30}); math.Abs(v-1.3699) > 1e-3 {
+		t.Errorf("10/30 day = %.4f, want ≈ 1.3699", v)
+	}
+	// The warm extreme dominates (exponential): a 10/30 day exceeds a 20/20 day.
+	warm, _ := ArrheniusThermalTime([]float64{10}, []float64{30})
+	flat, _ := ArrheniusThermalTime([]float64{20}, []float64{20})
+	if warm <= flat {
+		t.Errorf("expected 10/30 (%.3f) > 20/20 (%.3f) by Jensen's inequality", warm, flat)
+	}
+}
+
 func TestGDDStartDate(t *testing.T) {
 	cases := []struct {
 		name    string

@@ -39,7 +39,6 @@ type Options struct {
 	ForecastBaseURL string
 	Timeout         time.Duration
 	ArchiveDelay    time.Duration
-	DefaultGDDBase  float64
 	Clock           output.Clock
 	HTTPClient      *http.Client
 }
@@ -49,7 +48,6 @@ type Provider struct {
 	archiveBaseURL  string
 	forecastBaseURL string
 	archiveDelay    time.Duration
-	defaultGDDBase  float64
 	clock           output.Clock
 	client          *http.Client
 }
@@ -60,15 +58,10 @@ func New(opts Options) *Provider {
 	if client == nil {
 		client = &http.Client{Timeout: opts.Timeout}
 	}
-	base := opts.DefaultGDDBase
-	if base == 0 {
-		base = domain.DefaultGDDBaseCelsius
-	}
 	return &Provider{
 		archiveBaseURL:  opts.ArchiveBaseURL,
 		forecastBaseURL: opts.ForecastBaseURL,
 		archiveDelay:    opts.ArchiveDelay,
-		defaultGDDBase:  base,
 		clock:           opts.Clock,
 		client:          client,
 	}
@@ -107,10 +100,6 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, output.NewPermanentError(errFuture)
 	}
 
-	base := p.defaultGDDBase
-	if req.GDDBaseCelsius != nil {
-		base = *req.GDDBaseCelsius
-	}
 	start := domain.GDDStartDate(req.Instant, req.Coordinate.Lat)
 
 	// Daily range (GDD + fund-day extrema) — always from the archive.
@@ -126,7 +115,7 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, err
 	}
 
-	props, ok := p.buildProps(req, start, base, daily, hourly)
+	props, ok := p.buildProps(req, start, daily, hourly)
 	if !ok {
 		return domain.ProviderResult{}, output.NewNotYetAvailableError(6 * time.Hour)
 	}
@@ -141,18 +130,18 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 
 // buildProps assembles the feature properties; ok is false when the archive has
 // no usable data for the range yet (retryable).
-func (p *Provider) buildProps(req domain.QueryRequest, start time.Time, base float64,
+func (p *Provider) buildProps(req domain.QueryRequest, start time.Time,
 	daily dailyResponse, hourly hourlyResponse,
 ) (map[string]any, bool) {
 	tmin, tmax := pairedDailyTemps(daily)
-	gdd, days := domain.GrowingDegreeDays(tmin, tmax, base)
 
 	props := map[string]any{
 		"provider":   providerID,
 		"kind":       providerKind,
 		"observedAt": req.Instant.UTC().Format(time.RFC3339),
 		"units": map[string]string{
-			"precipitation": "mm", "temperature": "°C", "growingDegreeDays": "°C·d",
+			"precipitation": "mm", "temperature": "°C",
+			"growingDegreeDays": "°C·d", "arrheniusThermalTime": "d (20 °C-Äquivalent)",
 		},
 	}
 
@@ -169,13 +158,33 @@ func (p *Provider) buildProps(req domain.QueryRequest, start time.Time, base flo
 		}
 	}
 
+	gdd5, days := domain.GrowingDegreeDays(tmin, tmax, domain.GDDBase5Celsius)
 	if days > 0 {
-		props["growingDegreeDays"] = map[string]any{
-			"value":       round1(gdd),
-			"baseCelsius": base,
-			"since":       start.Format("2006-01-02"),
-			"days":        days,
-			"method":      gddMethod,
+		gdd10, _ := domain.GrowingDegreeDays(tmin, tmax, domain.GDDBase10Celsius)
+		// Base 5 and 10 are always computed so a client can never introduce
+		// inconsistency by silently changing the base over time.
+		g := map[string]any{
+			"since":  start.Format("2006-01-02"),
+			"days":   days,
+			"method": gddMethod,
+			"base5":  round1(gdd5),
+			"base10": round1(gdd10),
+		}
+		// The per-request gddBase (if any) is computed in addition.
+		if req.GDDBaseCelsius != nil {
+			gc, _ := domain.GrowingDegreeDays(tmin, tmax, *req.GDDBaseCelsius)
+			g["custom"] = map[string]any{"baseCelsius": *req.GDDBaseCelsius, "value": round1(gc)}
+		}
+		props["growingDegreeDays"] = g
+
+		// Arrhenius thermal time: species-agnostic, base-free site index.
+		att, _ := domain.ArrheniusThermalTime(tmin, tmax)
+		props["arrheniusThermalTime"] = map[string]any{
+			"value":              round1(att),
+			"referenceTempC":     domain.ArrheniusReferenceTempC,
+			"activationEnergyEv": domain.ArrheniusActivationEnergyEv,
+			"days":               days,
+			"method":             "Boltzmann-Arrhenius 2-Punkt-Rate (Tmin/Tmax), normiert auf 20 °C (artagnostisch, basisfrei)",
 		}
 	}
 

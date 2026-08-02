@@ -268,9 +268,10 @@ components:
       description: >
         Properties of a weather-aggregate feature (kind "aggregate"), computed
         by tempus from an Open-Meteo archive range: antecedent precipitation
-        sums, the fund day's temperature extrema, and growing-degree-days
-        accumulated up to the instant. Needs past data — a future instant makes
-        the provider report a non-retryable error.
+        sums, the fund day's temperature extrema, growing-degree-days, and an
+        Arrhenius thermal-time site index accumulated up to the instant. Needs
+        past data — a future instant makes the provider report a non-retryable
+        error.
       properties:
         precipitation:
           type: object
@@ -289,15 +290,38 @@ components:
         growingDegreeDays:
           type: object
           description: >
-            Growing-degree-days accumulated from the start of the growing year
-            to the instant, using the average method (max(0, (Tmax+Tmin)/2 −
-            base)) with no upper cutoff.
+            Growing-degree-days accumulated from the start of the growing year to
+            the instant (average method, floor 0, no upper cutoff). base5 and
+            base10 are ALWAYS computed so a client cannot introduce inconsistency
+            by silently changing the base over time; a per-request gddBase is
+            added under custom.
           properties:
-            value: {type: number, description: Accumulated GDD (°C·d).}
-            baseCelsius: {type: number, description: Base temperature used (°C).}
+            base5: {type: number, description: "GDD at base 5 °C (°C·d)."}
+            base10: {type: number, description: "GDD at base 10 °C (°C·d)."}
+            custom:
+              type: object
+              description: GDD at the per-request gddBase (present only when gddBase is given).
+              properties:
+                baseCelsius: {type: number}
+                value: {type: number}
             since: {type: string, description: "Accumulation start date (YYYY-MM-DD): 1 Jan (northern) or 1 Jul (southern hemisphere)."}
             days: {type: integer, description: Number of days summed.}
             method: {type: string, description: GDD computation method.}
+        arrheniusThermalTime:
+          type: object
+          description: >
+            Species-agnostic, base-free site index: Boltzmann-Arrhenius thermal
+            time accumulated to the instant, in reference-temperature-equivalent
+            days (a day at referenceTempC contributes 1.0). Each day uses the
+            2-point rate mean of Tmin and Tmax. Unlike a GDD base, referenceTempC
+            is only a normalising constant, so values at different references are
+            interconvertible.
+          properties:
+            value: {type: number, description: "Accumulated index (referenceTempC-equivalent days)."}
+            referenceTempC: {type: number, description: "Normalisation reference temperature (°C), fixed at 20."}
+            activationEnergyEv: {type: number, description: "Activation energy (eV), MTE value 0.65."}
+            days: {type: integer, description: Number of days summed.}
+            method: {type: string}
     BioclimFeatureProperties:
       type: object
       description: >
