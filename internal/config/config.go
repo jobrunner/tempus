@@ -64,6 +64,7 @@ type QueryConfig struct {
 
 type ProvidersConfig struct {
 	OpenMeteo OpenMeteoConfig `mapstructure:"openmeteo"`
+	Aggregate AggregateConfig `mapstructure:"aggregate"`
 }
 
 type OpenMeteoConfig struct {
@@ -72,6 +73,14 @@ type OpenMeteoConfig struct {
 	ForecastBaseURL string        `mapstructure:"forecast_base_url"`
 	Timeout         time.Duration `mapstructure:"timeout"`
 	ArchiveDelay    time.Duration `mapstructure:"archive_delay"`
+}
+
+// AggregateConfig configures the weather-aggregate provider (antecedent
+// precipitation, daily temperature extrema, growing-degree-days). It reuses the
+// Open-Meteo endpoints; GDDBaseCelsius is the default base temperature.
+type AggregateConfig struct {
+	Enabled        bool    `mapstructure:"enabled"`
+	GDDBaseCelsius float64 `mapstructure:"gdd_base_celsius"`
 }
 
 // Defaults registers every default. Call before Load (and from cmd initConfig).
@@ -101,6 +110,8 @@ func Defaults() {
 	viper.SetDefault("providers.openmeteo.forecast_base_url", "https://api.open-meteo.com/v1/forecast")
 	viper.SetDefault("providers.openmeteo.timeout", 10*time.Second)
 	viper.SetDefault("providers.openmeteo.archive_delay", 5*24*time.Hour)
+	viper.SetDefault("providers.aggregate.enabled", true)
+	viper.SetDefault("providers.aggregate.gdd_base_celsius", 10.0)
 }
 
 // Load merges defaults, an optional config file, and environment variables.

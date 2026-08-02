@@ -14,6 +14,7 @@ paths:
         - {name: lon, in: query, required: true, schema: {type: number}}
         - {name: datetime, in: query, required: true, schema: {type: string}, description: "RFC3339 or YYYY-MM-DDTHH:MM[:SS]; no offset => UTC. Future instants are allowed: astronomy providers (sun/moon) compute for any date, while providers that cannot serve the future (weather) report a non-retryable error status in the envelope."}
         - {name: providers, in: query, required: false, schema: {type: string}, description: comma-separated provider ids}
+        - {name: gddBase, in: query, required: false, schema: {type: number}, description: "Optional base temperature (°C, [-50,50]) for the aggregate provider's growing-degree-day accumulation. Omit to use the server default (10 °C)."}
       responses:
         "200":
           description: Feature collection with per-provider status
@@ -261,6 +262,41 @@ components:
           type: string
           nullable: true
           description: Moonset (RFC3339 UTC), or null when the moon does not set that day.
+    AggregateFeatureProperties:
+      type: object
+      description: >
+        Properties of a weather-aggregate feature (kind "aggregate"), computed
+        by tempus from an Open-Meteo archive range: antecedent precipitation
+        sums, the fund day's temperature extrema, and growing-degree-days
+        accumulated up to the instant. Needs past data — a future instant makes
+        the provider report a non-retryable error.
+      properties:
+        precipitation:
+          type: object
+          description: Precipitation sums (mm) ending at the instant.
+          properties:
+            last24h: {type: number, description: Sum over the preceding 24 h (mm).}
+            last72h: {type: number, description: Sum over the preceding 72 h (mm).}
+            last120h: {type: number, description: Sum over the preceding 5 days (mm).}
+        temperatureDay:
+          type: object
+          description: The fund day's (UTC-day) temperature extrema in °C.
+          properties:
+            min: {type: number}
+            max: {type: number}
+            mean: {type: number}
+        growingDegreeDays:
+          type: object
+          description: >
+            Growing-degree-days accumulated from the start of the growing year
+            to the instant, using the average method (max(0, (Tmax+Tmin)/2 −
+            base)) with no upper cutoff.
+          properties:
+            value: {type: number, description: Accumulated GDD (°C·d).}
+            baseCelsius: {type: number, description: Base temperature used (°C).}
+            since: {type: string, description: "Accumulation start date (YYYY-MM-DD): 1 Jan (northern) or 1 Jul (southern hemisphere)."}
+            days: {type: integer, description: Number of days summed.}
+            method: {type: string, description: GDD computation method.}
     QueryResult:
       type: object
       description: >
@@ -271,9 +307,12 @@ components:
         Magnus-Tetens formula) plus a comfort classification (comfort DE/EN,
         comfortSource). It also includes a sun feature (kind "sun") and a moon
         feature (kind "moon"), computed for any date; see SunFeatureProperties
-        and MoonFeatureProperties. The providers[] array may include entries
-        with ids "sun", "moon" and "dewpoint" reflecting their status; for
-        future instants the "open-meteo" weather provider reports a
+        and MoonFeatureProperties. It also includes a weather-aggregate feature
+        (kind "aggregate"; see AggregateFeatureProperties) with antecedent
+        precipitation, day temperature extrema and growing-degree-days. The
+        providers[] array may include entries with ids "sun", "moon",
+        "dewpoint" and "aggregate" reflecting their status; for future instants
+        the "open-meteo" weather and "aggregate" providers report a
         non-retryable error while sun and moon remain "ok".
       properties:
         query:

@@ -131,7 +131,7 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		providerFilter = strings.Split(p, ",")
 	}
 	req, err := domain.ParseQueryRequest(
-		q.Get("lat"), q.Get("lon"), q.Get("datetime"), providerFilter,
+		q.Get("lat"), q.Get("lon"), q.Get("datetime"), q.Get("gddBase"), providerFilter,
 	)
 	if err != nil {
 		var ve domain.ValidationError
