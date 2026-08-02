@@ -51,7 +51,8 @@ func thermotypeHorizon(tp float64) string {
 }
 
 // macrobioclimateSuffix derives the Rivas-Martínez macrobioclimate name suffix
-// from the Köppen class (reusing our classifier) and hemisphere.
+// from the Köppen class (via KoppenGeiger, which already accounts for the
+// hemisphere when defining the summer/winter half-years).
 func macrobioclimateSuffix(c MonthlyClimate, latDeg float64) (de, en string) {
 	code, _, _ := KoppenGeiger(c, latDeg)
 	switch {

@@ -58,7 +58,9 @@ Coldest month `c = argmin(Tmean)`:
 - Thermicity index `It = (MAT + M + m) × 10`, `M = Tmax[c]`, `m = Tmin[c]`.
 - Positive annual temperature `Tp = 10 × Σ Tmean[m]` over months with `Tmean[m] > 0`.
 
-Macrobioclimate from the already-computed Köppen main class (A→Tropical, C/D→Temperate/Boreal, E→Polar; B via Köppen aridity) + hemisphere. Within it, the thermotype horizon maps from `Tp`/`It` via the Rivas-Martínez (2004) table (implemented as data, **validated against published stations from "Bioclimate of Italy"** — Mediterranean + temperate ground truth). Output `{code, de, en}` (e.g. `orotemperate`, `oromediterranean`). This complements the classic belt: it distinguishes e.g. an Alpine "alpin" (orotemperate) from a Sierra-Nevada "alpin" (oromediterranean).
+Macrobioclimate from the already-computed Köppen main class (A→Tropical, C/D→Temperate/Boreal, E→Polar; Köppen dry-summer `s`→Mediterranean). Output `{code, de, en}` (e.g. `orotemperate`, `oromediterranean`). This complements the classic belt: it distinguishes e.g. an Alpine "alpin" (orotemperate) from a Sierra-Nevada "alpin" (oromediterranean).
+
+> **As built (v1):** the horizon uses a **Tp-only** ladder (thermo > 2000, meso 1400–2000, supra 800–1400, oro 380–800, cryoro ≤ 380; Rivas-Martínez 2011 / *Bioclimate of Italy*). `It` (thermicity index) is computed and available but not used for horizon selection; no per-hemisphere horizon branching and no station-table calibration beyond the unit tests. Refining to the full `Tp`/`It` per-macrobioclimate tables + station validation is deferred.
 
 ## Output shape (added to the bioclim feature `properties`)
 

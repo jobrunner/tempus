@@ -366,6 +366,7 @@ components:
                 code: {type: string}
                 de: {type: string}
                 en: {type: string}
+            source: {type: string, description: "Citation for the belt/thermotype computation."}
     QueryResult:
       type: object
       description: >

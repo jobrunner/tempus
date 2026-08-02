@@ -104,7 +104,7 @@ func AltitudinalBelt(c MonthlyClimate) Belt {
 			continue
 		}
 		val := indicatorValue(beltBoundaries[k].ind, twarm, twq, mat)
-		if d := math.Abs(val - beltBoundaries[k].threshold); d < beltBorderlineMargin && d < best {
+		if d := math.Abs(val - beltBoundaries[k].threshold); d <= beltBorderlineMargin && d < best {
 			best = d
 			neighbour := k // boundary k borders belt k and k+1; the neighbour is the other one
 			if k == idx {

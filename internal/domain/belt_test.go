@@ -45,6 +45,13 @@ func TestAltitudinalBelt_Borderline(t *testing.T) {
 		t.Errorf("borderline=%v adj=%q, want true / submontan-kollin", b.Borderline, b.AdjDe)
 	}
 
+	// Exactly 0.5 °C from the montane|colline boundary (MAT = 6.5) → borderline
+	// (the contract is "within 0.5 °C", inclusive).
+	eb := AltitudinalBelt(beltClimate([12]float64{2, 2, 4, 6, 9, 12, 13, 12, 9, 6, 3, 0}))
+	if math.Abs(eb.MATC-6.5) > 1e-9 || !eb.Borderline {
+		t.Errorf("MAT=%.2f borderline=%v, want 6.5 / true (boundary inclusive)", eb.MATC, eb.Borderline)
+	}
+
 	// Comfortably inside colline (MAT ≈ 9.7) → not borderline.
 	nb := AltitudinalBelt(beltClimate([12]float64{0, 2, 5, 9, 14, 18, 20, 19, 15, 9, 4, 1}))
 	if nb.Borderline {
