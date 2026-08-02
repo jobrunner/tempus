@@ -27,6 +27,25 @@ same locality) are served from cache.
     are close to — not bit-identical with — WorldClim (interpolated station data)
     or CHELSA. Attribution states this explicitly.
 
+## Köppen-Geiger boundary flag
+
+The Köppen main-class boundaries are knife-edge isotherms — the C/D
+(temperate/cold) boundary is the **mean temperature of the coldest month = 0 °C**.
+Near such a boundary, ERA5 and a high-resolution station/downscaled Köppen raster
+(what a GeoTIFF map is built from) routinely differ by ~1–1.5 °C in winter, which
+is enough to flip the **main class** (e.g. Cfb ↔ Dfb). This is the usual reason a
+raster map and tempus disagree at one point even for the same period — neither is
+wrong; they are different data at a boundary.
+
+So the `koppen` object also returns:
+
+- **`coldestMonthMeanC`** — the value that decides the C/D boundary, so you can
+  see how close to 0 °C the point is.
+- **`borderline`** + **`adjacent`** — set when the point is within ~1.5 °C of a
+  main-class temperature boundary, naming the class a slightly colder/warmer
+  dataset would give. A location reading `Cfb` with `borderline: true` and
+  `adjacent.code: Dfb` explains a Dfb tile in a station-based raster.
+
 ## Reference period (and historical records)
 
 BIO variables are 30-year climate normals. A find in 1954 should be described by

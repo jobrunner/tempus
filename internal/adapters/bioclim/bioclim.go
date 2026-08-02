@@ -21,6 +21,8 @@ import (
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
+const keyCode = "code"
+
 const (
 	providerID   = "bioclim"
 	providerKind = "bioclim"
@@ -122,6 +124,18 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 	code, kde, ken := domain.KoppenGeiger(clim, data.Latitude)
 	period := fmt.Sprintf("%d-%d", startY, endY)
 
+	koppen := map[string]any{
+		keyCode: code, "de": kde, "en": ken,
+		// The coldest-month mean is the value that decides the C/D boundary (0 °C);
+		// borderline flags that a slightly different dataset (e.g. a station-based
+		// Köppen raster vs. ERA5) could change the main class — see the adjacent code.
+		"coldestMonthMeanC": r1(domain.ColdestMonthMeanC(clim)),
+	}
+	if bl, adjCode, adjDe, adjEn := domain.KoppenBorderline(clim, data.Latitude); bl {
+		koppen["borderline"] = true
+		koppen["adjacent"] = map[string]any{keyCode: adjCode, "de": adjDe, "en": adjEn}
+	}
+
 	props := map[string]any{
 		"provider":        providerID,
 		"kind":            providerKind,
@@ -134,7 +148,7 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 			"bio15": r1(b.Bio15), "bio16": rmm(b.Bio16), "bio17": rmm(b.Bio17),
 			"bio18": rmm(b.Bio18), "bio19": rmm(b.Bio19),
 		},
-		"koppen":          map[string]any{"code": code, "de": kde, "en": ken},
+		"koppen":          koppen,
 		"altitudinalBelt": altitudinalBeltProps(clim, data.Latitude),
 		"units": map[string]string{
 			"temperature": "°C", "precipitation": "mm",
@@ -283,7 +297,7 @@ func altitudinalBeltProps(clim domain.MonthlyClimate, latDeg float64) map[string
 			"matC":            r1(belt.MATC),
 			"biotemperatureC": r1(belt.BiotemperatureC),
 		},
-		"thermotype": map[string]any{"code": tCode, "de": tDe, "en": tEn},
+		"thermotype": map[string]any{keyCode: tCode, "de": tDe, "en": tEn},
 		"source":     domain.BeltSource,
 	}
 	if belt.Borderline {

@@ -1,5 +1,39 @@
 package domain
 
+// KoppenBorderlineMarginC is how close (°C) a temperature-driven Köppen main
+// class boundary must be before the classification is flagged borderline. It is
+// deliberately generous (~1.5 °C) because reanalysis (ERA5) and high-resolution
+// station/downscaled rasters routinely differ by that much near the 0 °C
+// coldest-month isotherm, which is exactly where a Cfb/Dfb flip happens.
+const KoppenBorderlineMarginC = 1.5
+
+// ColdestMonthMeanC returns the mean temperature of the coldest month — the
+// value that decides the Köppen C/D (temperate/cold) boundary at 0 °C.
+func ColdestMonthMeanC(c MonthlyClimate) float64 { return min12(c.Tmean) }
+
+// KoppenBorderline reports whether the location sits within
+// KoppenBorderlineMarginC of a temperature-driven Köppen main-class boundary
+// (so a slightly different dataset could change the main class), and if so the
+// adjacent code and its bilingual description. It shifts every monthly
+// temperature by ±margin and re-classifies; a change of the main class letter
+// (A/B/C/D/E) means the point is borderline.
+func KoppenBorderline(c MonthlyClimate, latDeg float64) (borderline bool, adjCode, adjDe, adjEn string) {
+	base, _, _ := KoppenGeiger(c, latDeg)
+	for _, d := range []float64{-KoppenBorderlineMarginC, KoppenBorderlineMarginC} {
+		shifted := c
+		for i := 0; i < 12; i++ {
+			shifted.Tmean[i] += d
+			shifted.Tmin[i] += d
+			shifted.Tmax[i] += d
+		}
+		code, de, en := KoppenGeiger(shifted, latDeg)
+		if code[:1] != base[:1] {
+			return true, code, de, en
+		}
+	}
+	return false, "", "", ""
+}
+
 // KoppenGeiger classifies the Köppen-Geiger climate from the monthly climate
 // normals and latitude, following the criteria of Beck et al. (2018). It
 // returns the code (e.g. "Cfb") and a bilingual description.

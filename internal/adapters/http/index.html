@@ -114,38 +114,41 @@
             color: var(--text-muted);
         }
 
-        /* datetime-local: add a calendar icon (iOS Safari shows none) and keep
-           the value from drifting to the right edge on iOS. */
-        input[type="datetime-local"] {
+        /* datetime-local: iOS shows no calendar icon, so we overlay our own as a
+           separate element (a background-image on the input gets clipped by iOS).
+           The overlay is decorative; the field itself opens the native picker. */
+        .dt-field {
             position: relative;
-            /* iOS sizes datetime-local to its content, which can exceed the
-               container; min-width:0 lets width:100% actually constrain it. */
-            min-width: 0;
-            padding-right: 2.5rem;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 0.85rem center;
-            background-size: 1.15rem 1.15rem;
         }
-
-        /* iOS Safari: centre the value and drop its default margin so it does
-           not run past the right edge. */
-        input[type="datetime-local"]::-webkit-date-and-time-value {
-            text-align: center;
-            margin: 0;
+        .dt-field input[type="datetime-local"] {
+            width: 100%;
+            min-width: 0;              /* let width:100% constrain iOS intrinsic sizing */
+            padding-right: 2.5rem;     /* room for the overlay icon */
         }
-
-        /* Desktop Chrome: turn the native indicator into an invisible click
-           target over our icon, so there is exactly one icon on every browser. */
-        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 2.6rem;
-            height: 100%;
-            margin: 0;
+        .dt-field input[type="datetime-local"]::-webkit-date-and-time-value {
+            margin: 0;                 /* drop iOS's default margin (right-edge drift) */
+            text-align: left;
+        }
+        /* Desktop Chrome: keep the native indicator clickable but invisible, so
+           our overlay icon is the single visible affordance. iOS has no such
+           pseudo-element, so this is a no-op there. */
+        .dt-field input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             opacity: 0;
-            cursor: pointer;
+        }
+        .dt-field .dt-icon {
+            position: absolute;
+            right: 0.85rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1.15rem;
+            height: 1.15rem;
+            color: var(--text-muted);
+            pointer-events: none;      /* taps fall through to the input */
+        }
+        .dt-field .dt-icon svg {
+            display: block;
+            width: 100%;
+            height: 100%;
         }
 
         .coord-grid {
@@ -591,7 +594,12 @@
 
                 <div class="form-group">
                     <label for="datetime">Datum &amp; Uhrzeit (Ortszeit)</label>
-                    <input type="datetime-local" id="datetime" name="datetime" required>
+                    <div class="dt-field">
+                        <input type="datetime-local" id="datetime" name="datetime" required>
+                        <span class="dt-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        </span>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -1668,8 +1676,15 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 }
 
                 if (kop.code) {
-                    html += '<div class="provider-hint" style="margin-bottom:0.5rem;">Köppen-Geiger: <strong>' + esc(kop.code) + '</strong>' +
-                        (kop.en ? ' (' + esc(kop.en) + ')' : '') + (period ? ' &middot; Referenzperiode ' + esc(period) : '') + '</div>';
+                    var koppenLine = 'Köppen-Geiger: <strong>' + esc(kop.code) + '</strong>' +
+                        (kop.en ? ' (' + esc(kop.en) + ')' : '') + (period ? ' &middot; Referenzperiode ' + esc(period) : '');
+                    if (kop.borderline && kop.adjacent && kop.adjacent.code) {
+                        var cmm = (kop.coldestMonthMeanC !== undefined && kop.coldestMonthMeanC !== null)
+                            ? ', kältester Monat ' + esc(kop.coldestMonthMeanC) + '&#x202F;&deg;C' : '';
+                        koppenLine += '<br><span style="color:var(--warning,#b45309);">Grenzlage: nahe ' + esc(kop.adjacent.code) +
+                            ' — andere Datenquellen/Perioden können hier die Hauptklasse ändern' + cmm + '.</span>';
+                    }
+                    html += '<div class="provider-hint" style="margin-bottom:0.5rem;">' + koppenLine + '</div>';
                 }
                 html += '<div class="weather-grid">';
                 for (var i = 0; i < BIO_LABELS.length; i++) {
