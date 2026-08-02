@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/jobrunner/tempus/compare/v0.13.0...v0.14.0) (2026-08-02)
+
+
+### Features
+
+* climate-derived altitudinal belt (Höhenstufe) + Rivas-Martínez thermotype ([#31](https://github.com/jobrunner/tempus/issues/31)) ([1514009](https://github.com/jobrunner/tempus/commit/1514009e2db96dc9d9c3801a4d6d95f18ea0cd5c))
+
 ## [0.13.0](https://github.com/jobrunner/tempus/compare/v0.12.0...v0.13.0) (2026-08-02)
 
 
