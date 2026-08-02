@@ -97,8 +97,18 @@ func TestFetch_ComputesBioAndKoppen(t *testing.T) {
 		t.Errorf("referencePeriod = %v, want 1991-1992", props["referencePeriod"])
 	}
 	kop, ok := props["koppen"].(map[string]any)
-	if !ok || kop["code"] != "Cfb" {
+	if !ok || kop[keyCode] != "Cfb" {
 		t.Errorf("koppen = %v, want code Cfb", props["koppen"])
+	}
+	// Berlin pattern: coldest month ≈ +1 °C → C/D borderline flagged with a D* adjacent.
+	if kop["coldestMonthMeanC"] == nil {
+		t.Error("koppen.coldestMonthMeanC missing")
+	}
+	if kop["borderline"] != true {
+		t.Errorf("koppen.borderline = %v, want true (coldest month ≈ +1 °C)", kop["borderline"])
+	}
+	if adj, ok := kop["adjacent"].(map[string]any); !ok || adj[keyCode] == nil {
+		t.Errorf("koppen.adjacent = %v, want a code", kop["adjacent"])
 	}
 	bio, ok := props["bio"].(map[string]any)
 	if !ok {
@@ -123,7 +133,7 @@ func TestFetch_ComputesBioAndKoppen(t *testing.T) {
 	if belt, ok := ab["belt"].(map[string]any); !ok || belt["de"] == "" || belt["de"] == nil {
 		t.Errorf("altitudinalBelt.belt = %v, want bilingual name", ab["belt"])
 	}
-	if tt, ok := ab["thermotype"].(map[string]any); !ok || tt["code"] == "" || tt["code"] == nil {
+	if tt, ok := ab["thermotype"].(map[string]any); !ok || tt[keyCode] == "" || tt[keyCode] == nil {
 		t.Errorf("altitudinalBelt.thermotype = %v, want a code", ab["thermotype"])
 	}
 	if ind, ok := ab["indicators"].(map[string]any); !ok || ind["matC"] == nil {

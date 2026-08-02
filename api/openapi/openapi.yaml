@@ -320,11 +320,26 @@ components:
             (coefficient of variation, %).
         koppen:
           type: object
-          description: Köppen-Geiger classification (Beck et al. 2018).
+          description: >
+            Köppen-Geiger classification (Beck et al. 2018), computed from ERA5.
+            coldestMonthMeanC is the value that decides the C/D boundary (0 °C).
+            borderline flags that the point is within ~1.5 °C of a main-class
+            temperature boundary, so a different dataset (e.g. a station-based
+            Köppen raster) could yield the adjacent class — the classic reason a
+            Cfb here can read as Dfb elsewhere.
           properties:
             code: {type: string, description: "Köppen-Geiger code, e.g. Cfb."}
             de: {type: string, description: German description.}
             en: {type: string, description: English description.}
+            coldestMonthMeanC: {type: number, description: "Mean temperature of the coldest month (°C)."}
+            borderline: {type: boolean, description: "True when within ~1.5 °C of a Köppen main-class boundary."}
+            adjacent:
+              type: object
+              description: The neighbouring main class (present only when borderline).
+              properties:
+                code: {type: string}
+                de: {type: string}
+                en: {type: string}
         altitudinalBelt:
           type: object
           description: >
