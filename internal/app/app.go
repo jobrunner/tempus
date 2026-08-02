@@ -86,7 +86,6 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 			ForecastBaseURL: cfg.Providers.OpenMeteo.ForecastBaseURL,
 			Timeout:         cfg.Providers.OpenMeteo.Timeout,
 			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
-			DefaultGDDBase:  cfg.Providers.Aggregate.GDDBaseCelsius,
 			Clock:           clk,
 		}))
 	}

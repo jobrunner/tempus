@@ -1,13 +1,58 @@
 package domain
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
-// DefaultGDDBaseCelsius is the default base temperature for growing-degree-day
-// accumulation (a common all-purpose value for insects and warm-season crops).
-const DefaultGDDBaseCelsius = 10.0
+// GDDBase5Celsius and GDDBase10Celsius are the two base temperatures always
+// computed for growing-degree-days: 5 °C (cool-temperate plants/insects) and
+// 10 °C (warm-season, general insect development).
+const (
+	GDDBase5Celsius  = 5.0
+	GDDBase10Celsius = 10.0
+)
 
 // AggregateSource is the attribution for the weather-aggregate feature.
-const AggregateSource = "Zeitfenster-Aggregate (Niederschlag, Tages-Extrema, GDD) berechnet von tempus"
+const AggregateSource = "Zeitfenster-Aggregate (Niederschlag, Tages-Extrema, GDD, Arrhenius-Zeit) berechnet von tempus"
+
+// Arrhenius thermal-time constants. The activation energy is the Metabolic
+// Theory of Ecology value (Brown et al. 2004; Gillooly et al. 2001); the
+// reference temperature only rescales the whole index by a constant, so values
+// at different references are interconvertible.
+const (
+	ArrheniusActivationEnergyEv = 0.65
+	ArrheniusReferenceTempC     = 20.0
+	boltzmannEvPerK             = 8.617333262e-5
+)
+
+// arrheniusRate is the Boltzmann-Arrhenius rate exp(−E/(k·T)) at temperature tC
+// (°C), normalised to 1.0 at ArrheniusReferenceTempC:
+// w(T) = exp[(E/k)·(1/Tref − 1/T)] with temperatures in Kelvin.
+func arrheniusRate(tC float64) float64 {
+	const eOverK = ArrheniusActivationEnergyEv / boltzmannEvPerK
+	refK := ArrheniusReferenceTempC + 273.15
+	tK := tC + 273.15
+	return math.Exp(eOverK * (1/refK - 1/tK))
+}
+
+// ArrheniusThermalTime accumulates a species-agnostic, base-free thermal-time
+// index over the paired daily minimum/maximum temperatures. Each day
+// contributes the mean of the Boltzmann-Arrhenius rate at Tmin and Tmax (a
+// 2-point average that captures the exponential non-linearity better than the
+// daily mean). The result is in reference-temperature-equivalent days: a day at
+// ArrheniusReferenceTempC contributes 1.0. Unlike a GDD base, the reference is
+// only a normalising constant and never changes what is counted.
+func ArrheniusThermalTime(dailyTmin, dailyTmax []float64) (value float64, days int) {
+	n := len(dailyTmin)
+	if len(dailyTmax) < n {
+		n = len(dailyTmax)
+	}
+	for i := 0; i < n; i++ {
+		value += (arrheniusRate(dailyTmin[i]) + arrheniusRate(dailyTmax[i])) / 2
+	}
+	return value, n
+}
 
 // GrowingDegreeDays accumulates growing-degree-days over the paired daily
 // minimum/maximum temperatures using the simple average method with a lower

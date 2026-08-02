@@ -83,11 +83,11 @@ type OpenMeteoConfig struct {
 }
 
 // AggregateConfig configures the weather-aggregate provider (antecedent
-// precipitation, daily temperature extrema, growing-degree-days). It reuses the
-// Open-Meteo endpoints; GDDBaseCelsius is the default base temperature.
+// precipitation, daily temperature extrema, growing-degree-days at fixed bases
+// 5 and 10 °C, and the Arrhenius thermal-time index). It reuses the Open-Meteo
+// endpoints.
 type AggregateConfig struct {
-	Enabled        bool    `mapstructure:"enabled"`
-	GDDBaseCelsius float64 `mapstructure:"gdd_base_celsius"`
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // Defaults registers every default. Call before Load (and from cmd initConfig).
