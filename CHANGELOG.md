@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/jobrunner/tempus/compare/v0.14.2...v0.15.0) (2026-08-02)
+
+
+### Features
+
+* **bioclim:** Köppen boundary flag; fix(frontend): datetime icon on iOS ([#37](https://github.com/jobrunner/tempus/issues/37)) ([cfcc038](https://github.com/jobrunner/tempus/commit/cfcc038c21fac7ed64f5614b4bd5d1f9f02c2cb8))
+
 ## [0.14.2](https://github.com/jobrunner/tempus/compare/v0.14.1...v0.14.2) (2026-08-02)
 
 
