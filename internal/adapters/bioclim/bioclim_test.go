@@ -115,6 +115,20 @@ func TestFetch_ComputesBioAndKoppen(t *testing.T) {
 	if res.Feature.License.Attribution == "" {
 		t.Error("attribution empty")
 	}
+
+	ab, ok := props["altitudinalBelt"].(map[string]any)
+	if !ok {
+		t.Fatalf("altitudinalBelt missing")
+	}
+	if belt, ok := ab["belt"].(map[string]any); !ok || belt["de"] == "" || belt["de"] == nil {
+		t.Errorf("altitudinalBelt.belt = %v, want bilingual name", ab["belt"])
+	}
+	if tt, ok := ab["thermotype"].(map[string]any); !ok || tt["code"] == "" || tt["code"] == nil {
+		t.Errorf("altitudinalBelt.thermotype = %v, want a code", ab["thermotype"])
+	}
+	if ind, ok := ab["indicators"].(map[string]any); !ok || ind["matC"] == nil {
+		t.Errorf("altitudinalBelt.indicators = %v, want matC", ab["indicators"])
+	}
 }
 
 func TestFetch_CachesPerCoordinatePeriod(t *testing.T) {
