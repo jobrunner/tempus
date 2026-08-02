@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/jobrunner/tempus/compare/v0.14.0...v0.14.1) (2026-08-02)
+
+
+### Bug Fixes
+
+* **frontend:** datetime icon on iOS + double-escaped umlauts in aggregate labels ([#33](https://github.com/jobrunner/tempus/issues/33)) ([d74c591](https://github.com/jobrunner/tempus/commit/d74c5914476f041e5fd1872bebac1436efddcf33))
+
 ## [0.14.0](https://github.com/jobrunner/tempus/compare/v0.13.0...v0.14.0) (2026-08-02)
 
 
