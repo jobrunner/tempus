@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/jobrunner/tempus/compare/v0.17.0...v0.18.0) (2026-08-20)
+
+
+### Features
+
+* **api:** wire the OpenAPI feature schemas and expose source URLs ([#43](https://github.com/jobrunner/tempus/issues/43)) ([442c38b](https://github.com/jobrunner/tempus/commit/442c38b1ca9184052898a661a88b8b3e94a9159e))
+
 ## [0.17.0](https://github.com/jobrunner/tempus/compare/v0.16.0...v0.17.0) (2026-08-20)
 
 
