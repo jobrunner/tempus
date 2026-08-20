@@ -77,6 +77,101 @@ func TestRoutesMatchOpenAPISpec(t *testing.T) {
 	}
 }
 
+// TestFeaturePropertiesSchemasAreWired guards the defect class that let six
+// *FeatureProperties schemas sit in the spec unreferenced: a schema that
+// documents a feature kind must be reachable from Feature.properties (via the
+// oneOf) and resolvable by the discriminator, and its kind enum must agree
+// with the mapping key that points at it. Without this, adding a provider kind
+// or a property schema silently produces prose no tooling can validate.
+func TestFeaturePropertiesSchemasAreWired(t *testing.T) {
+	specJSON, err := getOpenAPIJSON()
+	if err != nil {
+		t.Fatalf("getOpenAPIJSON: %v", err)
+	}
+	var spec struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties struct {
+					Properties struct {
+						OneOf []struct {
+							Ref string `json:"$ref"`
+						} `json:"oneOf"`
+						Discriminator struct {
+							PropertyName string            `json:"propertyName"`
+							Mapping      map[string]string `json:"mapping"`
+						} `json:"discriminator"`
+					} `json:"properties"`
+				} `json:"properties"`
+				AllOf []struct {
+					Properties struct {
+						Kind struct {
+							Enum []string `json:"enum"`
+						} `json:"kind"`
+					} `json:"properties"`
+				} `json:"allOf"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(specJSON, &spec); err != nil {
+		t.Fatalf("unmarshal spec: %v", err)
+	}
+
+	feature, ok := spec.Components.Schemas["Feature"]
+	if !ok {
+		t.Fatal("spec has no Feature schema")
+	}
+	props := feature.Properties.Properties
+	if props.Discriminator.PropertyName != "kind" {
+		t.Errorf("Feature.properties discriminator.propertyName = %q, want %q",
+			props.Discriminator.PropertyName, "kind")
+	}
+
+	inOneOf := map[string]bool{}
+	for _, r := range props.OneOf {
+		inOneOf[strings.TrimPrefix(r.Ref, "#/components/schemas/")] = true
+	}
+	mappedBy := map[string]string{} // schema name → discriminator key
+	for key, ref := range props.Discriminator.Mapping {
+		mappedBy[strings.TrimPrefix(ref, "#/components/schemas/")] = key
+	}
+
+	var documented int
+	for name, schema := range spec.Components.Schemas {
+		if !strings.HasSuffix(name, "FeatureProperties") {
+			continue
+		}
+		documented++
+		if !inOneOf[name] {
+			t.Errorf("schema %q is not reachable from Feature.properties.oneOf", name)
+		}
+		key, mapped := mappedBy[name]
+		if !mapped {
+			t.Errorf("schema %q is not in Feature.properties.discriminator.mapping", name)
+			continue
+		}
+		// The kind enum lives in the second allOf member (the first is the base).
+		var kinds []string
+		for _, member := range schema.AllOf {
+			kinds = append(kinds, member.Properties.Kind.Enum...)
+		}
+		if len(kinds) != 1 {
+			t.Errorf("schema %q: want exactly one kind enum value, got %v", name, kinds)
+			continue
+		}
+		if kinds[0] != key {
+			t.Errorf("schema %q: kind enum is %q but the discriminator maps it under %q",
+				name, kinds[0], key)
+		}
+	}
+	if documented == 0 {
+		t.Fatal("found no *FeatureProperties schemas — the assertions above proved nothing")
+	}
+	if len(inOneOf) != documented {
+		t.Errorf("Feature.properties.oneOf has %d members but the spec defines %d *FeatureProperties schemas",
+			len(inOneOf), documented)
+	}
+}
+
 // newContractTestServer builds a Server wired with fakes — enough to register
 // every route. The stubs from server_test.go in the same package are reused.
 func newContractTestServer(t *testing.T) *Server {

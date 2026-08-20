@@ -70,8 +70,31 @@ components:
           type: string
         geometry:
           type: object
+          description: >
+            GeoJSON geometry of the feature; always a Point for the current
+            providers, carrying the coordinate the provider resolved the query
+            to (which may differ from the requested one, e.g. a grid cell).
         properties:
-          type: object
+          description: >
+            The feature's properties. Which schema applies is decided by the
+            kind property: the discriminator below maps each kind to the
+            schema that documents it.
+          oneOf:
+            - $ref: "#/components/schemas/WeatherFeatureProperties"
+            - $ref: "#/components/schemas/DewPointFeatureProperties"
+            - $ref: "#/components/schemas/SunFeatureProperties"
+            - $ref: "#/components/schemas/MoonFeatureProperties"
+            - $ref: "#/components/schemas/AggregateFeatureProperties"
+            - $ref: "#/components/schemas/BioclimFeatureProperties"
+          discriminator:
+            propertyName: kind
+            mapping:
+              weather: "#/components/schemas/WeatherFeatureProperties"
+              dewpoint: "#/components/schemas/DewPointFeatureProperties"
+              sun: "#/components/schemas/SunFeatureProperties"
+              moon: "#/components/schemas/MoonFeatureProperties"
+              aggregate: "#/components/schemas/AggregateFeatureProperties"
+              bioclim: "#/components/schemas/BioclimFeatureProperties"
         license:
           $ref: "#/components/schemas/License"
     ProviderStatus:
@@ -112,8 +135,38 @@ components:
         en:
           type: string
           description: English label.
-    WeatherFeatureProperties:
+    FeaturePropertiesBase:
       type: object
+      required: [kind]
+      description: >
+        Properties every feature carries, whatever its kind. The concrete
+        schema is selected by kind (see Feature.properties).
+      properties:
+        kind:
+          type: string
+          description: >
+            The feature's kind; the discriminator that selects the concrete
+            property schema.
+        provider:
+          type: string
+          description: >
+            Identifier of the provider or deriver that produced the feature
+            (e.g. "open-meteo", "dewpoint", "sun").
+        observedAt:
+          type: string
+          format: date-time
+          description: >
+            The instant the feature describes (RFC3339, UTC). Absent on the
+            bioclim feature, which describes a climate normal period and
+            reports referencePeriod instead.
+        units:
+          type: object
+          additionalProperties:
+            type: string
+          description: >
+            Unit per numeric property of this feature, keyed by property name
+            (e.g. {"temperature2m": "°C", "windSpeed10m": "km/h"}).
+    WeatherFeatureProperties:
       description: >
         Properties of a weather feature (kind "weather") returned by the
         Open-Meteo provider. In addition to numeric measurements such as
@@ -125,172 +178,195 @@ components:
         bilingual human-readable explanation of the WMO weather code and its
         source citation, plus the Beaufort wind force derived from
         windSpeed10m.
-      properties:
-        windBeaufort:
-          type: integer
-          minimum: 0
-          maximum: 12
-          description: >
-            Beaufort wind force (0–12) derived from windSpeed10m using the
-            published km/h class bounds (0: <1, 1: 1–5, 2: 6–11, 3: 12–19,
-            4: 20–28, 5: 29–38, 6: 39–49, 7: 50–61, 8: 62–74, 9: 75–88,
-            10: 89–102, 11: 103–117, 12: ≥118). Absent when windSpeed10m is
-            missing, not finite, or reported without a unit or in an
-            unrecognised one.
-        windBeaufortDescription:
-          # allOf, not a bare $ref: in OpenAPI 3.0.x a description sibling to
-          # $ref is ignored by most tooling.
-          allOf:
-            - $ref: "#/components/schemas/BilingualLabel"
-          description: >
-            Bilingual (DE + EN) name of the Beaufort force (e.g.
-            "frische Brise" / "Fresh breeze"); present whenever
-            windBeaufort is present.
-        windBeaufortSource:
-          type: string
-          description: >
-            Source citation for windBeaufort, referencing "Beaufort-Skala
-            (WMO), abgeleitet aus der Windgeschwindigkeit in 10 m, tempus".
-        isDay:
-          type: boolean
-          description: >
-            Whether it is daytime at the queried location and instant.
-            Computed from the sun's elevation angle (NOAA Spencer approximation);
-            true when the sun is above −0.833° (refraction + solar radius
-            threshold). Not sourced from the weather provider.
-        isDaySource:
-          type: string
-          description: >
-            Citation for the isDay computation: "Tag/Nacht aus Sonnenstand
-            berechnet (NOAA-Näherung), tempus".
-        weatherCode:
-          type: integer
-          description: >
-            WMO weather-interpretation code (Code Table 4677, Open-Meteo subset).
-        weatherCodeDescription:
-          $ref: "#/components/schemas/BilingualLabel"
-          description: >
-            Bilingual (DE + EN) human-readable description of the WMO weather
-            code; present when the code is a known WMO Code Table 4677 value.
-        weatherCodeSource:
-          type: string
-          description: >
-            Source citation for the weatherCodeDescription, referencing
-            "WMO Code Table 4677 (WW – present weather); weather-interpretation
-            codes as used by Open-Meteo".
+      allOf:
+        - $ref: "#/components/schemas/FeaturePropertiesBase"
+        - type: object
+          required: [kind]
+          properties:
+            kind:
+              type: string
+              enum: [weather]
+            windBeaufort:
+              type: integer
+              minimum: 0
+              maximum: 12
+              description: >
+                Beaufort wind force (0–12) derived from windSpeed10m using the
+                published km/h class bounds (0: <1, 1: 1–5, 2: 6–11, 3: 12–19,
+                4: 20–28, 5: 29–38, 6: 39–49, 7: 50–61, 8: 62–74, 9: 75–88,
+                10: 89–102, 11: 103–117, 12: ≥118). Absent when windSpeed10m is
+                missing, not finite, or reported without a unit or in an
+                unrecognised one.
+            windBeaufortDescription:
+              # allOf, not a bare $ref: in OpenAPI 3.0.x a description sibling to
+              # $ref is ignored by most tooling.
+              allOf:
+                - $ref: "#/components/schemas/BilingualLabel"
+              description: >
+                Bilingual (DE + EN) name of the Beaufort force (e.g.
+                "frische Brise" / "Fresh breeze"); present whenever
+                windBeaufort is present.
+            windBeaufortSource:
+              type: string
+              description: >
+                Source citation for windBeaufort, referencing "Beaufort-Skala
+                (WMO), abgeleitet aus der Windgeschwindigkeit in 10 m, tempus".
+            isDay:
+              type: boolean
+              description: >
+                Whether it is daytime at the queried location and instant.
+                Computed from the sun's elevation angle (NOAA Spencer approximation);
+                true when the sun is above −0.833° (refraction + solar radius
+                threshold). Not sourced from the weather provider.
+            isDaySource:
+              type: string
+              description: >
+                Citation for the isDay computation: "Tag/Nacht aus Sonnenstand
+                berechnet (NOAA-Näherung), tempus".
+            weatherCode:
+              type: integer
+              description: >
+                WMO weather-interpretation code (Code Table 4677, Open-Meteo subset).
+            weatherCodeDescription:
+              $ref: "#/components/schemas/BilingualLabel"
+              description: >
+                Bilingual (DE + EN) human-readable description of the WMO weather
+                code; present when the code is a known WMO Code Table 4677 value.
+            weatherCodeSource:
+              type: string
+              description: >
+                Source citation for the weatherCodeDescription, referencing
+                "WMO Code Table 4677 (WW – present weather); weather-interpretation
+                codes as used by Open-Meteo".
     DewPointFeatureProperties:
-      type: object
       description: >
         Properties of a dew-point feature (kind "dewpoint") derived from the
         weather feature using the Magnus-Tetens formula. Includes the computed
         dew point, its unit, derivation metadata, and a bilingual comfort
         classification with source attribution.
-      properties:
-        dewPoint2m:
-          type: number
-          description: Dew point at 2 m height in °C (rounded to 0.1 °C).
-        comfort:
-          $ref: "#/components/schemas/BilingualLabel"
-          description: >
-            Bilingual (DE + EN) human-comfort classification of the dew point
-            (e.g. "sehr angenehm" / "very comfortable"). Based on the standard
-            meteorological dew-point comfort scale.
-        comfortSource:
-          type: string
-          description: >
-            Source citation for the comfort classification, referencing the
-            standard meteorological dew-point comfort scale.
+      allOf:
+        - $ref: "#/components/schemas/FeaturePropertiesBase"
+        - type: object
+          required: [kind]
+          properties:
+            kind:
+              type: string
+              enum: [dewpoint]
+            dewPoint2m:
+              type: number
+              description: Dew point at 2 m height in °C (rounded to 0.1 °C).
+            comfort:
+              $ref: "#/components/schemas/BilingualLabel"
+              description: >
+                Bilingual (DE + EN) human-comfort classification of the dew point
+                (e.g. "sehr angenehm" / "very comfortable"). Based on the standard
+                meteorological dew-point comfort scale.
+            comfortSource:
+              type: string
+              description: >
+                Source citation for the comfort classification, referencing the
+                standard meteorological dew-point comfort scale.
     SunFeatureProperties:
-      type: object
       description: >
         Properties of a sun feature (kind "sun"), computed from the coordinate
         and instant via the NOAA solar approximation. Available for any date
         (past or future). All angles are in degrees; azimuth is measured
         clockwise from true north. Event times are RFC3339 UTC, or null when the
         event does not occur that day (polar day/night at the given threshold).
-      properties:
-        elevationDeg:
-          type: number
-          description: Sun elevation above the horizon (degrees).
-        azimuthDeg:
-          type: number
-          description: Sun azimuth, degrees clockwise from true north.
-        zenithDeg:
-          type: number
-          description: Solar zenith angle (90 − elevation), degrees.
-        lightPhase:
-          $ref: "#/components/schemas/BilingualLabel"
-          description: >
-            Bilingual light-regime label: day, civil / nautical / astronomical
-            twilight, or night.
-        sunrise:
-          type: string
-          nullable: true
-          description: Sunrise (RFC3339 UTC) for the day, or null (polar day/night).
-        sunset:
-          type: string
-          nullable: true
-          description: Sunset (RFC3339 UTC) for the day, or null (polar day/night).
-        solarNoon:
-          type: string
-          nullable: true
-          description: Solar noon (RFC3339 UTC).
-        solarNoonElevationDeg:
-          type: number
-          description: Sun elevation at solar noon (degrees).
-        dayLengthMinutes:
-          type: number
-          description: Length of daylight (minutes) between sunrise and sunset.
-        twilight:
-          type: object
-          description: >
-            Civil (−6°), nautical (−12°) and astronomical (−18°) twilight, each
-            with a dawn and dusk time (RFC3339 UTC or null).
+      allOf:
+        - $ref: "#/components/schemas/FeaturePropertiesBase"
+        - type: object
+          required: [kind]
           properties:
-            civil: {type: object}
-            nautical: {type: object}
-            astronomical: {type: object}
+            kind:
+              type: string
+              enum: [sun]
+            elevationDeg:
+              type: number
+              description: Sun elevation above the horizon (degrees).
+            azimuthDeg:
+              type: number
+              description: Sun azimuth, degrees clockwise from true north.
+            zenithDeg:
+              type: number
+              description: Solar zenith angle (90 − elevation), degrees.
+            lightPhase:
+              $ref: "#/components/schemas/BilingualLabel"
+              description: >
+                Bilingual light-regime label: day, civil / nautical / astronomical
+                twilight, or night.
+            sunrise:
+              type: string
+              nullable: true
+              description: Sunrise (RFC3339 UTC) for the day, or null (polar day/night).
+            sunset:
+              type: string
+              nullable: true
+              description: Sunset (RFC3339 UTC) for the day, or null (polar day/night).
+            solarNoon:
+              type: string
+              nullable: true
+              description: Solar noon (RFC3339 UTC).
+            solarNoonElevationDeg:
+              type: number
+              description: Sun elevation at solar noon (degrees).
+            dayLengthMinutes:
+              type: number
+              description: Length of daylight (minutes) between sunrise and sunset.
+            twilight:
+              description: >
+                Civil (−6°), nautical (−12°) and astronomical (−18°) twilight, each
+                with a dawn and dusk time (RFC3339 UTC or null).
+              properties:
+                civil: {type: object}
+                nautical: {type: object}
+                astronomical: {type: object}
     MoonFeatureProperties:
-      type: object
       description: >
         Properties of a moon feature (kind "moon"), computed from the coordinate
         and instant via Meeus's lunar theory (geocentric approximation).
         Available for any date. Angles in degrees, azimuth clockwise from true
         north. Rise/set times are RFC3339 UTC, or null when no crossing occurs.
-      properties:
-        elevationDeg:
-          type: number
-          description: Moon elevation above the horizon (degrees, geocentric).
-        azimuthDeg:
-          type: number
-          description: Moon azimuth, degrees clockwise from true north.
-        distanceKm:
-          type: number
-          description: Earth–moon centre distance (km).
-        illuminationPct:
-          type: number
-          description: Illuminated fraction of the moon's disc (percent).
-        phaseAngleDeg:
-          type: number
-          description: Phase angle (degrees; 0 = full, 180 = new).
-        ageDays:
-          type: number
-          description: Moon age since the last new moon (days).
-        phase:
-          $ref: "#/components/schemas/BilingualLabel"
-          description: >
-            Bilingual phase name (Neumond … abnehmende Sichel / New Moon …
-            Waning Crescent).
-        moonrise:
-          type: string
-          nullable: true
-          description: Moonrise (RFC3339 UTC), or null when the moon does not rise that day.
-        moonset:
-          type: string
-          nullable: true
-          description: Moonset (RFC3339 UTC), or null when the moon does not set that day.
+      allOf:
+        - $ref: "#/components/schemas/FeaturePropertiesBase"
+        - type: object
+          required: [kind]
+          properties:
+            kind:
+              type: string
+              enum: [moon]
+            elevationDeg:
+              type: number
+              description: Moon elevation above the horizon (degrees, geocentric).
+            azimuthDeg:
+              type: number
+              description: Moon azimuth, degrees clockwise from true north.
+            distanceKm:
+              type: number
+              description: Earth–moon centre distance (km).
+            illuminationPct:
+              type: number
+              description: Illuminated fraction of the moon's disc (percent).
+            phaseAngleDeg:
+              type: number
+              description: Phase angle (degrees; 0 = full, 180 = new).
+            ageDays:
+              type: number
+              description: Moon age since the last new moon (days).
+            phase:
+              $ref: "#/components/schemas/BilingualLabel"
+              description: >
+                Bilingual phase name (Neumond … abnehmende Sichel / New Moon …
+                Waning Crescent).
+            moonrise:
+              type: string
+              nullable: true
+              description: Moonrise (RFC3339 UTC), or null when the moon does not rise that day.
+            moonset:
+              type: string
+              nullable: true
+              description: Moonset (RFC3339 UTC), or null when the moon does not set that day.
     AggregateFeatureProperties:
-      type: object
       description: >
         Properties of a weather-aggregate feature (kind "aggregate"), computed
         by tempus from an Open-Meteo archive range: antecedent precipitation
@@ -298,58 +374,59 @@ components:
         Arrhenius thermal-time site index accumulated up to the instant. Needs
         past data — a future instant makes the provider report a non-retryable
         error.
-      properties:
-        precipitation:
-          type: object
-          description: Precipitation sums (mm) ending at the instant.
+      allOf:
+        - $ref: "#/components/schemas/FeaturePropertiesBase"
+        - type: object
+          required: [kind]
           properties:
-            last24h: {type: number, description: Sum over the preceding 24 h (mm).}
-            last72h: {type: number, description: Sum over the preceding 72 h (mm).}
-            last120h: {type: number, description: Sum over the preceding 5 days (mm).}
-        temperatureDay:
-          type: object
-          description: The fund day's (UTC-day) temperature extrema in °C.
-          properties:
-            min: {type: number}
-            max: {type: number}
-            mean: {type: number}
-        growingDegreeDays:
-          type: object
-          description: >
-            Growing-degree-days accumulated from the start of the growing year to
-            the instant (average method, floor 0, no upper cutoff). base5 and
-            base10 are ALWAYS computed so a client cannot introduce inconsistency
-            by silently changing the base over time; a per-request gddBase is
-            added under custom.
-          properties:
-            base5: {type: number, description: "GDD at base 5 °C (°C·d)."}
-            base10: {type: number, description: "GDD at base 10 °C (°C·d)."}
-            custom:
-              type: object
-              description: GDD at the per-request gddBase (present only when gddBase is given).
+            kind:
+              type: string
+              enum: [aggregate]
+            precipitation:
+              description: Precipitation sums (mm) ending at the instant.
               properties:
-                baseCelsius: {type: number}
-                value: {type: number}
-            since: {type: string, description: "Accumulation start date (YYYY-MM-DD): 1 Jan (northern) or 1 Jul (southern hemisphere)."}
-            days: {type: integer, description: Number of days summed.}
-            method: {type: string, description: GDD computation method.}
-        arrheniusThermalTime:
-          type: object
-          description: >
-            Species-agnostic, base-free site index: Boltzmann-Arrhenius thermal
-            time accumulated to the instant, in reference-temperature-equivalent
-            days (a day at referenceTempC contributes 1.0). Each day uses the
-            2-point rate mean of Tmin and Tmax. Unlike a GDD base, referenceTempC
-            is only a normalising constant, so values at different references are
-            interconvertible.
-          properties:
-            value: {type: number, description: "Accumulated index (referenceTempC-equivalent days)."}
-            referenceTempC: {type: number, description: "Normalisation reference temperature (°C), fixed at 20."}
-            activationEnergyEv: {type: number, description: "Activation energy (eV), MTE value 0.65."}
-            days: {type: integer, description: Number of days summed.}
-            method: {type: string}
+                last24h: {type: number, description: Sum over the preceding 24 h (mm).}
+                last72h: {type: number, description: Sum over the preceding 72 h (mm).}
+                last120h: {type: number, description: Sum over the preceding 5 days (mm).}
+            temperatureDay:
+              description: The fund day's (UTC-day) temperature extrema in °C.
+              properties:
+                min: {type: number}
+                max: {type: number}
+                mean: {type: number}
+            growingDegreeDays:
+              description: >
+                Growing-degree-days accumulated from the start of the growing year to
+                the instant (average method, floor 0, no upper cutoff). base5 and
+                base10 are ALWAYS computed so a client cannot introduce inconsistency
+                by silently changing the base over time; a per-request gddBase is
+                added under custom.
+              properties:
+                base5: {type: number, description: "GDD at base 5 °C (°C·d)."}
+                base10: {type: number, description: "GDD at base 10 °C (°C·d)."}
+                custom:
+                  description: GDD at the per-request gddBase (present only when gddBase is given).
+                  properties:
+                    baseCelsius: {type: number}
+                    value: {type: number}
+                since: {type: string, description: "Accumulation start date (YYYY-MM-DD): 1 Jan (northern) or 1 Jul (southern hemisphere)."}
+                days: {type: integer, description: Number of days summed.}
+                method: {type: string, description: GDD computation method.}
+            arrheniusThermalTime:
+              description: >
+                Species-agnostic, base-free site index: Boltzmann-Arrhenius thermal
+                time accumulated to the instant, in reference-temperature-equivalent
+                days (a day at referenceTempC contributes 1.0). Each day uses the
+                2-point rate mean of Tmin and Tmax. Unlike a GDD base, referenceTempC
+                is only a normalising constant, so values at different references are
+                interconvertible.
+              properties:
+                value: {type: number, description: "Accumulated index (referenceTempC-equivalent days)."}
+                referenceTempC: {type: number, description: "Normalisation reference temperature (°C), fixed at 20."}
+                activationEnergyEv: {type: number, description: "Activation energy (eV), MTE value 0.65."}
+                days: {type: integer, description: Number of days summed.}
+                method: {type: string}
     BioclimFeatureProperties:
-      type: object
       description: >
         Properties of a bioclim feature (kind "bioclim"): the 19 WorldClim
         bioclimatic variables and the Köppen-Geiger class, computed by tempus
@@ -357,81 +434,80 @@ components:
         location and reference period; the period is chosen contemporaneously to
         the datetime's year (or via refPeriod), so historical records get
         period-appropriate values. Cached per coordinate + period.
-      properties:
-        referencePeriod:
-          type: string
-          description: "Reference period used, 'YYYY-YYYY' (e.g. '1991-2020')."
-        bio:
-          type: object
-          description: >
-            The 19 bioclimatic variables bio1…bio19 (WorldClim definitions).
-            Temperatures °C, precipitation mm; bio3 isothermality (%), bio4
-            temperature seasonality (std×100), bio15 precipitation seasonality
-            (coefficient of variation, %).
-        koppen:
-          type: object
-          description: >
-            Köppen-Geiger classification (Beck et al. 2018), computed from ERA5.
-            coldestMonthMeanC is the value that decides the C/D boundary (0 °C).
-            borderline flags that the point is within ~1.5 °C of a main-class
-            temperature boundary, so a different dataset (e.g. a station-based
-            Köppen raster) could yield the adjacent class — the classic reason a
-            Cfb here can read as Dfb elsewhere.
+      allOf:
+        - $ref: "#/components/schemas/FeaturePropertiesBase"
+        - type: object
+          required: [kind]
           properties:
-            code: {type: string, description: "Köppen-Geiger code, e.g. Cfb."}
-            de: {type: string, description: German description.}
-            en: {type: string, description: English description.}
-            coldestMonthMeanC: {type: number, description: "Mean temperature of the coldest month (°C)."}
-            borderline: {type: boolean, description: "True when within ~1.5 °C of a Köppen main-class boundary."}
-            adjacent:
-              type: object
-              description: The neighbouring main class (present only when borderline).
-              properties:
-                code: {type: string}
-                de: {type: string}
-                en: {type: string}
-        altitudinalBelt:
-          type: object
-          description: >
-            Climate-derived altitudinal belt (Höhenstufe) with the classic names
-            (kollin … alpin … nival), isotherm-defined (treeline 6.4 °C, Paulsen
-            & Körner 2014) and Central-Europe-calibrated so the names are directly
-            comparable to FHL/Hegi belt statements — valid across all of Europe
-            and globally. No elevation input; temperature encodes altitude.
-          properties:
-            belt:
-              type: object
-              description: Bilingual classic belt name.
-              properties:
-                de: {type: string}
-                en: {type: string}
-            basis: {type: string, description: "Method, e.g. 'thermoclimatic isotherm, Central-Europe-calibrated'."}
-            borderline: {type: boolean, description: "True when within 0.5 °C of a belt boundary."}
-            adjacentBelt:
-              type: object
-              description: Nearer neighbouring belt (present only when borderline).
-              properties:
-                de: {type: string}
-                en: {type: string}
-            indicators:
-              type: object
-              description: Deciding indicators (°C) — auditable basis for the belt.
-              properties:
-                warmestMonthC: {type: number}
-                warmestQuarterC: {type: number}
-                matC: {type: number, description: Annual mean temperature.}
-                biotemperatureC: {type: number, description: "Holdridge biotemperature (mean of monthly means clamped to [0,30])."}
-            thermotype:
-              type: object
+            kind:
+              type: string
+              enum: [bioclim]
+            referencePeriod:
+              type: string
+              description: "Reference period used, 'YYYY-YYYY' (e.g. '1991-2020')."
+            bio:
               description: >
-                Rivas-Martínez thermotype (formal, cross-Europe): horizon from
-                positive temperature Tp × macrobioclimate suffix, e.g.
-                orotemperate vs oromediterranean.
+                The 19 bioclimatic variables bio1…bio19 (WorldClim definitions).
+                Temperatures °C, precipitation mm; bio3 isothermality (%), bio4
+                temperature seasonality (std×100), bio15 precipitation seasonality
+                (coefficient of variation, %).
+            koppen:
+              description: >
+                Köppen-Geiger classification (Beck et al. 2018), computed from ERA5.
+                coldestMonthMeanC is the value that decides the C/D boundary (0 °C).
+                borderline flags that the point is within ~1.5 °C of a main-class
+                temperature boundary, so a different dataset (e.g. a station-based
+                Köppen raster) could yield the adjacent class — the classic reason a
+                Cfb here can read as Dfb elsewhere.
               properties:
-                code: {type: string}
-                de: {type: string}
-                en: {type: string}
-            source: {type: string, description: "Citation for the belt/thermotype computation."}
+                code: {type: string, description: "Köppen-Geiger code, e.g. Cfb."}
+                de: {type: string, description: German description.}
+                en: {type: string, description: English description.}
+                coldestMonthMeanC: {type: number, description: "Mean temperature of the coldest month (°C)."}
+                borderline: {type: boolean, description: "True when within ~1.5 °C of a Köppen main-class boundary."}
+                adjacent:
+                  description: The neighbouring main class (present only when borderline).
+                  properties:
+                    code: {type: string}
+                    de: {type: string}
+                    en: {type: string}
+            altitudinalBelt:
+              description: >
+                Climate-derived altitudinal belt (Höhenstufe) with the classic names
+                (kollin … alpin … nival), isotherm-defined (treeline 6.4 °C, Paulsen
+                & Körner 2014) and Central-Europe-calibrated so the names are directly
+                comparable to FHL/Hegi belt statements — valid across all of Europe
+                and globally. No elevation input; temperature encodes altitude.
+              properties:
+                belt:
+                  description: Bilingual classic belt name.
+                  properties:
+                    de: {type: string}
+                    en: {type: string}
+                basis: {type: string, description: "Method, e.g. 'thermoclimatic isotherm, Central-Europe-calibrated'."}
+                borderline: {type: boolean, description: "True when within 0.5 °C of a belt boundary."}
+                adjacentBelt:
+                  description: Nearer neighbouring belt (present only when borderline).
+                  properties:
+                    de: {type: string}
+                    en: {type: string}
+                indicators:
+                  description: Deciding indicators (°C) — auditable basis for the belt.
+                  properties:
+                    warmestMonthC: {type: number}
+                    warmestQuarterC: {type: number}
+                    matC: {type: number, description: Annual mean temperature.}
+                    biotemperatureC: {type: number, description: "Holdridge biotemperature (mean of monthly means clamped to [0,30])."}
+                thermotype:
+                  description: >
+                    Rivas-Martínez thermotype (formal, cross-Europe): horizon from
+                    positive temperature Tp × macrobioclimate suffix, e.g.
+                    orotemperate vs oromediterranean.
+                  properties:
+                    code: {type: string}
+                    de: {type: string}
+                    en: {type: string}
+                source: {type: string, description: "Citation for the belt/thermotype computation."}
     QueryResult:
       type: object
       description: >
