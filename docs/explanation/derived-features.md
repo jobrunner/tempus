@@ -58,3 +58,40 @@ also includes:
 - **`weatherCodeSource`** — a string citing the origin:
   "WMO Code Table 4677 (WW – present weather); weather-interpretation codes as
   used by Open-Meteo" (URL: <https://open-meteo.com/en/docs>).
+
+## Beaufort Wind Force
+
+Each weather feature (kind `"weather"`) that carries `windSpeed10m` is also
+classified on the **Beaufort scale**, using the published km/h class bounds:
+
+| Force | km/h | Deutsch | English |
+|---|---|---|---|
+| 0 | < 1 | Windstille | Calm |
+| 1 | 1–5 | leiser Zug | Light air |
+| 2 | 6–11 | leichte Brise | Light breeze |
+| 3 | 12–19 | schwache Brise | Gentle breeze |
+| 4 | 20–28 | mäßige Brise | Moderate breeze |
+| 5 | 29–38 | frische Brise | Fresh breeze |
+| 6 | 39–49 | starker Wind | Strong breeze |
+| 7 | 50–61 | steifer Wind | Near gale |
+| 8 | 62–74 | stürmischer Wind | Gale |
+| 9 | 75–88 | Sturm | Strong gale |
+| 10 | 89–102 | schwerer Sturm | Storm |
+| 11 | 103–117 | orkanartiger Sturm | Violent storm |
+| 12 | ≥ 118 | Orkan | Hurricane force |
+
+The classification adds three properties:
+
+- **`windBeaufort`** — the integer force (0–12).
+- **`windBeaufortDescription`** — a bilingual object `{"de": "...", "en": "..."}`
+  naming the force (e.g. `{"de": "schwache Brise", "en": "Gentle breeze"}`).
+- **`windBeaufortSource`** — a string citing the origin: "Beaufort-Skala (WMO),
+  abgeleitet aus der Windgeschwindigkeit in 10 m, tempus" (URL:
+  <https://en.wikipedia.org/wiki/Beaufort_scale>).
+
+The speed is converted to km/h from the unit the provider reports for
+`windSpeed10m` (km/h, m/s, mph, or knots).  If the provider reports no unit at
+all, or one that is not in that list, all three properties are omitted rather
+than derived from an unknown scale — "the provider said km/h" and "the provider
+said nothing" must not be the same case.  A non-finite speed is likewise left
+unclassified.

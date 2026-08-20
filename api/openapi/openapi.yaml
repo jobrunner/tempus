@@ -123,8 +123,34 @@ components:
         weather provider — Open-Meteo's archive is_day is unreliable for
         historical dates), isDaySource (citation for the solar computation), a
         bilingual human-readable explanation of the WMO weather code and its
-        source citation.
+        source citation, plus the Beaufort wind force derived from
+        windSpeed10m.
       properties:
+        windBeaufort:
+          type: integer
+          minimum: 0
+          maximum: 12
+          description: >
+            Beaufort wind force (0–12) derived from windSpeed10m using the
+            published km/h class bounds (0: <1, 1: 1–5, 2: 6–11, 3: 12–19,
+            4: 20–28, 5: 29–38, 6: 39–49, 7: 50–61, 8: 62–74, 9: 75–88,
+            10: 89–102, 11: 103–117, 12: ≥118). Absent when windSpeed10m is
+            missing, not finite, or reported without a unit or in an
+            unrecognised one.
+        windBeaufortDescription:
+          # allOf, not a bare $ref: in OpenAPI 3.0.x a description sibling to
+          # $ref is ignored by most tooling.
+          allOf:
+            - $ref: "#/components/schemas/BilingualLabel"
+          description: >
+            Bilingual (DE + EN) name of the Beaufort force (e.g.
+            "frische Brise" / "Fresh breeze"); present whenever
+            windBeaufort is present.
+        windBeaufortSource:
+          type: string
+          description: >
+            Source citation for windBeaufort, referencing "Beaufort-Skala
+            (WMO), abgeleitet aus der Windgeschwindigkeit in 10 m, tempus".
         isDay:
           type: boolean
           description: >
