@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/jobrunner/tempus/compare/v0.16.0...v0.17.0) (2026-08-20)
+
+
+### Features
+
+* **weather:** derive the Beaufort wind force from windSpeed10m ([#41](https://github.com/jobrunner/tempus/issues/41)) ([e43f5ed](https://github.com/jobrunner/tempus/commit/e43f5eda46bd1f40c5a24eda0a1d7d5bb281f8ed))
+
 ## [0.16.0](https://github.com/jobrunner/tempus/compare/v0.15.0...v0.16.0) (2026-08-02)
 
 
