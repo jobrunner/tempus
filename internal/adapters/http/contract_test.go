@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -169,6 +170,59 @@ func TestFeaturePropertiesSchemasAreWired(t *testing.T) {
 	if len(inOneOf) != documented {
 		t.Errorf("Feature.properties.oneOf has %d members but the spec defines %d *FeatureProperties schemas",
 			len(inOneOf), documented)
+	}
+}
+
+// TestObjectSchemasDeclareTheirType walks every schema in the spec and requires
+// that anything with a properties block also says type: object. OpenAPI 3.0
+// tooling is not obliged to infer it, and generators that don't produce weaker
+// validation or wrong types. Written after a re-indenting edit silently dropped
+// fourteen such declarations.
+func TestObjectSchemasDeclareTheirType(t *testing.T) {
+	specJSON, err := getOpenAPIJSON()
+	if err != nil {
+		t.Fatalf("getOpenAPIJSON: %v", err)
+	}
+	var spec struct {
+		Components struct {
+			Schemas map[string]any `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(specJSON, &spec); err != nil {
+		t.Fatalf("unmarshal spec: %v", err)
+	}
+
+	// walkSchema descends schema positions only — the properties map itself is
+	// a container of schemas, not a schema, and must not be checked.
+	var walkSchema func(node any, path string)
+	walkSchema = func(node any, path string) {
+		schema, ok := node.(map[string]any)
+		if !ok {
+			return
+		}
+		props, hasProps := schema["properties"].(map[string]any)
+		if hasProps {
+			// A composed schema declares its type inside the allOf member that
+			// carries the properties, not next to the composition.
+			if _, isComposed := schema["allOf"]; !isComposed && schema["type"] != "object" {
+				t.Errorf("%s has a properties block but declares type %v, want \"object\"",
+					path, schema["type"])
+			}
+			for name, sub := range props {
+				walkSchema(sub, path+"/properties/"+name)
+			}
+		}
+		for _, keyword := range []string{"allOf", "oneOf", "anyOf"} {
+			members, _ := schema[keyword].([]any)
+			for i, member := range members {
+				walkSchema(member, fmt.Sprintf("%s/%s[%d]", path, keyword, i))
+			}
+		}
+		walkSchema(schema["items"], path+"/items")
+		walkSchema(schema["additionalProperties"], path+"/additionalProperties")
+	}
+	for name, schema := range spec.Components.Schemas {
+		walkSchema(schema, name)
 	}
 }
 
