@@ -228,7 +228,8 @@ components:
               description: >
                 WMO weather-interpretation code (Code Table 4677, Open-Meteo subset).
             weatherCodeDescription:
-              $ref: "#/components/schemas/BilingualLabel"
+              allOf:
+                - $ref: "#/components/schemas/BilingualLabel"
               description: >
                 Bilingual (DE + EN) human-readable description of the WMO weather
                 code; present when the code is a known WMO Code Table 4677 value.
@@ -256,7 +257,8 @@ components:
               type: number
               description: Dew point at 2 m height in °C (rounded to 0.1 °C).
             comfort:
-              $ref: "#/components/schemas/BilingualLabel"
+              allOf:
+                - $ref: "#/components/schemas/BilingualLabel"
               description: >
                 Bilingual (DE + EN) human-comfort classification of the dew point
                 (e.g. "sehr angenehm" / "very comfortable"). Based on the standard
@@ -291,7 +293,8 @@ components:
               type: number
               description: Solar zenith angle (90 − elevation), degrees.
             lightPhase:
-              $ref: "#/components/schemas/BilingualLabel"
+              allOf:
+                - $ref: "#/components/schemas/BilingualLabel"
               description: >
                 Bilingual light-regime label: day, civil / nautical / astronomical
                 twilight, or night.
@@ -354,7 +357,8 @@ components:
               type: number
               description: Moon age since the last new moon (days).
             phase:
-              $ref: "#/components/schemas/BilingualLabel"
+              allOf:
+                - $ref: "#/components/schemas/BilingualLabel"
               description: >
                 Bilingual phase name (Neumond … abnehmende Sichel / New Moon …
                 Waning Crescent).
