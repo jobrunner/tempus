@@ -211,6 +211,7 @@ func (p *Provider) toFeature(data apiResponse, req domain.QueryRequest, useArchi
 		if de, en, ok := domain.WeatherCodeDescription(code); ok {
 			props["weatherCodeDescription"] = map[string]string{"de": de, "en": en}
 			props["weatherCodeSource"] = domain.WMOCodeSource
+			props["weatherCodeSourceURL"] = domain.WMOCodeSourceURL
 		}
 	}
 
@@ -223,6 +224,7 @@ func (p *Provider) toFeature(data apiResponse, req domain.QueryRequest, useArchi
 				props["windBeaufort"] = force
 				props["windBeaufortDescription"] = map[string]string{"de": de, "en": en}
 				props["windBeaufortSource"] = domain.BeaufortSource
+				props["windBeaufortSourceURL"] = domain.BeaufortSourceURL
 			}
 		}
 	}

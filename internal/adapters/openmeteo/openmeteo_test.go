@@ -122,6 +122,9 @@ func TestFetch_WeatherCodeDescription(t *testing.T) {
 	if !ok || src == "" {
 		t.Errorf("weatherCodeSource missing or empty: %v", res.Feature.Properties["weatherCodeSource"])
 	}
+	if got := res.Feature.Properties["weatherCodeSourceURL"]; got != domain.WMOCodeSourceURL {
+		t.Errorf("weatherCodeSourceURL = %v, want %q", got, domain.WMOCodeSourceURL)
+	}
 }
 
 func TestFetch_WindBeaufort(t *testing.T) {
@@ -158,6 +161,9 @@ func TestFetch_WindBeaufort(t *testing.T) {
 	if !ok || src == "" {
 		t.Errorf("windBeaufortSource missing or empty: %v", res.Feature.Properties["windBeaufortSource"])
 	}
+	if got := res.Feature.Properties["windBeaufortSourceURL"]; got != domain.BeaufortSourceURL {
+		t.Errorf("windBeaufortSourceURL = %v, want %q", got, domain.BeaufortSourceURL)
+	}
 }
 
 func TestFetch_WindBeaufortConvertsNonMetricUnit(t *testing.T) {
@@ -190,7 +196,9 @@ func TestFetch_WindBeaufortOmittedForUnknownUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	for _, key := range []string{"windBeaufort", "windBeaufortDescription", "windBeaufortSource"} {
+	for _, key := range []string{
+		"windBeaufort", "windBeaufortDescription", "windBeaufortSource", "windBeaufortSourceURL",
+	} {
 		if v, present := res.Feature.Properties[key]; present {
 			t.Errorf("%s = %v, want absent for an unrecognised wind unit", key, v)
 		}

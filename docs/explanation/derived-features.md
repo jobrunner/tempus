@@ -41,9 +41,10 @@ comfort scale:
 | ≤ 24 | sehr schwül | very humid |
 | > 24 | drückend | oppressive |
 
-Source: `comfortSource` property — "Taupunkt-Komfortskala (gängige
-meteorologische Einteilung)"; see also
-<https://en.wikipedia.org/wiki/Dew_point#Relationship_to_human_comfort>.
+Source: the `comfortSource` property — "Taupunkt-Komfortskala (gängige
+meteorologische Einteilung)" — with its canonical URL in `comfortSourceURL`
+(<https://en.wikipedia.org/wiki/Dew_point#Relationship_to_human_comfort>), so a
+client can link the citation rather than only display it.
 
 ## Weather Code Descriptions (WMO Code Table 4677)
 
@@ -57,7 +58,10 @@ also includes:
   Open-Meteo subset of WMO Code Table 4677; absent for unknown codes.
 - **`weatherCodeSource`** — a string citing the origin:
   "WMO Code Table 4677 (WW – present weather); weather-interpretation codes as
-  used by Open-Meteo" (URL: <https://open-meteo.com/en/docs>).
+  used by Open-Meteo".
+- **`weatherCodeSourceURL`** — the canonical URL for that citation
+  (<https://open-meteo.com/en/docs>), so a client can link it rather than only
+  display it.
 
 ## Beaufort Wind Force
 
@@ -86,8 +90,10 @@ The classification adds three properties:
 - **`windBeaufortDescription`** — a bilingual object `{"de": "...", "en": "..."}`
   naming the force (e.g. `{"de": "schwache Brise", "en": "Gentle breeze"}`).
 - **`windBeaufortSource`** — a string citing the origin: "Beaufort-Skala (WMO),
-  abgeleitet aus der Windgeschwindigkeit in 10 m, tempus" (URL:
-  <https://en.wikipedia.org/wiki/Beaufort_scale>).
+  abgeleitet aus der Windgeschwindigkeit in 10 m, tempus".
+- **`windBeaufortSourceURL`** — the canonical URL for that citation
+  (<https://en.wikipedia.org/wiki/Beaufort_scale>), so a client can link it
+  rather than only display it.
 
 The speed is converted to km/h from the unit the provider reports for
 `windSpeed10m` (km/h, m/s, mph, or knots).  If the provider reports no unit at
