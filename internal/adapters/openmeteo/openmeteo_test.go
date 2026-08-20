@@ -197,6 +197,24 @@ func TestFetch_WindBeaufortOmittedForUnknownUnit(t *testing.T) {
 	}
 }
 
+func TestFetch_WindBeaufortOmittedWithoutReportedUnit(t *testing.T) {
+	// hourly_units carries no entry for wind_speed_10m: the scale is unknown,
+	// so the speed must not be classified as if it were km/h.
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"latitude":49.8,"longitude":9.94,"hourly_units":{},` +
+			`"hourly":{"time":["2025-06-15T13:00"],"temperature_2m":[21.4],"wind_speed_10m":[500.0]}}`))
+	})
+	defer done()
+
+	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if v, present := res.Feature.Properties["windBeaufort"]; present {
+		t.Errorf("windBeaufort = %v, want absent when the provider reports no wind unit", v)
+	}
+}
+
 func TestFetch_WindBeaufortOmittedWithoutWindSpeed(t *testing.T) {
 	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"latitude":49.8,"longitude":9.94,"hourly_units":{},` +

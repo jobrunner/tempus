@@ -135,9 +135,13 @@ components:
             published km/h class bounds (0: <1, 1: 1–5, 2: 6–11, 3: 12–19,
             4: 20–28, 5: 29–38, 6: 39–49, 7: 50–61, 8: 62–74, 9: 75–88,
             10: 89–102, 11: 103–117, 12: ≥118). Absent when windSpeed10m is
-            missing or reported in an unrecognised unit.
+            missing, not finite, or reported without a unit or in an
+            unrecognised one.
         windBeaufortDescription:
-          $ref: "#/components/schemas/BilingualLabel"
+          # allOf, not a bare $ref: in OpenAPI 3.0.x a description sibling to
+          # $ref is ignored by most tooling.
+          allOf:
+            - $ref: "#/components/schemas/BilingualLabel"
           description: >
             Bilingual (DE + EN) name of the Beaufort force (e.g.
             "frische Brise" / "Fresh breeze"); present whenever

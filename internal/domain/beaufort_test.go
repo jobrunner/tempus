@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestBeaufort(t *testing.T) {
 	// One row per force, listing speeds at both ends of the published km/h
@@ -51,6 +54,22 @@ func TestBeaufortNegativeSpeedIsCalm(t *testing.T) {
 	}
 }
 
+func TestBeaufortNonFiniteIsUnclassified(t *testing.T) {
+	// A non-finite speed must never be published as a force: NaN compares
+	// false against every bound and would otherwise fall into the open-ended
+	// top class, reporting garbage as "Orkan".
+	for _, kmh := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		if _, _, _, ok := BeaufortFor(kmh, "km/h"); ok {
+			t.Errorf("BeaufortFor(%v, \"km/h\"): got ok=true, want false", kmh)
+		}
+	}
+	for _, kmh := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		if force, _, _ := Beaufort(kmh); force != 0 {
+			t.Errorf("Beaufort(%v) force: got %d, want 0", kmh, force)
+		}
+	}
+}
+
 func TestBeaufortFor(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -67,8 +86,8 @@ func TestBeaufortFor(t *testing.T) {
 		{"knots kn", 16, "kn", 5, true},        // 29.63 km/h
 		{"knots kt", 16, "kt", 5, true},
 		{"knots spelled out", 16, "knots", 5, true},
-		{"empty unit assumes km/h", 30, "", 5, true},
 		{"uppercase unit", 30, "KM/H", 5, true},
+		{"empty unit is unknown", 30, "", 0, false},
 		{"unknown unit", 30, "furlongs/fortnight", 0, false},
 	}
 	for _, tc := range tests {

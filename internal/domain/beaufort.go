@@ -1,6 +1,9 @@
 package domain
 
-import "strings"
+import (
+	"math"
+	"strings"
+)
 
 // BeaufortSource cites the origin of the Beaufort wind-force classification.
 const (
@@ -35,8 +38,16 @@ var beaufortScale = []beaufortClass{
 
 // Beaufort classifies a wind speed in km/h into a Beaufort force (0..12) and
 // returns German and English labels. Speeds below 1 km/h — including
-// physically impossible negative values — are force 0 (calm).
+// physically impossible negative values — are force 0 (calm). A non-finite
+// speed is force 0 as well: NaN compares false against every bound and would
+// otherwise fall through to the open-ended top class, reporting garbage as a
+// hurricane. Callers that must not publish such a value use BeaufortFor,
+// which rejects it outright.
 func Beaufort(kmh float64) (force int, de, en string) {
+	if math.IsNaN(kmh) || math.IsInf(kmh, 0) {
+		c := beaufortScale[0]
+		return 0, c.de, c.en
+	}
 	for i, c := range beaufortScale[:len(beaufortScale)-1] {
 		if kmh < c.maxKmh {
 			return i, c.de, c.en
@@ -49,7 +60,6 @@ func Beaufort(kmh float64) (force int, de, en string) {
 // beaufortUnitFactors converts a supported wind-speed unit to km/h. Keys are
 // lower-cased with "/" removed, so both "m/s" and "ms" match.
 var beaufortUnitFactors = map[string]float64{
-	"":      1, // Open-Meteo omits the unit only when it is the km/h default
 	"kmh":   1,
 	"ms":    3.6,
 	"mph":   1.609344,
@@ -60,9 +70,15 @@ var beaufortUnitFactors = map[string]float64{
 }
 
 // BeaufortFor classifies a wind speed given in unit into a Beaufort force,
-// converting to km/h first. ok is false when the unit is not recognised, so
-// callers never publish a force derived from an unknown scale.
+// converting to km/h first. ok is false when the speed is not finite or the
+// unit is missing or not recognised, so callers never publish a force derived
+// from an unknown scale. An empty unit is treated as unknown rather than
+// assumed to be km/h: "the provider said km/h" and "the provider said
+// nothing" must not be the same case.
 func BeaufortFor(speed float64, unit string) (force int, de, en string, ok bool) {
+	if math.IsNaN(speed) || math.IsInf(speed, 0) {
+		return 0, "", "", false
+	}
 	key := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(unit)), "/", "")
 	factor, known := beaufortUnitFactors[key]
 	if !known {

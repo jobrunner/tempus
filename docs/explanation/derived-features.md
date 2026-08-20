@@ -90,5 +90,8 @@ The classification adds three properties:
   <https://en.wikipedia.org/wiki/Beaufort_scale>).
 
 The speed is converted to km/h from the unit the provider reports for
-`windSpeed10m` (km/h, m/s, mph, or knots).  If the unit is not one of those,
-all three properties are omitted rather than derived from an unknown scale.
+`windSpeed10m` (km/h, m/s, mph, or knots).  If the provider reports no unit at
+all, or one that is not in that list, all three properties are omitted rather
+than derived from an unknown scale — "the provider said km/h" and "the provider
+said nothing" must not be the same case.  A non-finite speed is likewise left
+unclassified.
