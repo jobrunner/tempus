@@ -128,6 +128,11 @@ func TestDeriver_ComfortEnrichment(t *testing.T) {
 	if !ok || comfortSource == "" {
 		t.Errorf("comfortSource missing or empty: %v", f.Properties["comfortSource"])
 	}
+
+	// The citation is only linkable if its URL travels with it.
+	if got := f.Properties["comfortSourceURL"]; got != domain.DewPointComfortSourceURL {
+		t.Errorf("comfortSourceURL = %v, want %q", got, domain.DewPointComfortSourceURL)
+	}
 }
 
 func TestDeriver_SourcePresentButMissingRH(t *testing.T) {

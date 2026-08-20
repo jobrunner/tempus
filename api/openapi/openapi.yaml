@@ -211,6 +211,13 @@ components:
               description: >
                 Source citation for windBeaufort, referencing "Beaufort-Skala
                 (WMO), abgeleitet aus der Windgeschwindigkeit in 10 m, tempus".
+            windBeaufortSourceURL:
+              type: string
+              format: uri
+              description: >
+                Canonical URL for the Beaufort scale, so a client can link the
+                citation instead of only displaying it. Present whenever
+                windBeaufortSource is.
             isDay:
               type: boolean
               description: >
@@ -239,6 +246,13 @@ components:
                 Source citation for the weatherCodeDescription, referencing
                 "WMO Code Table 4677 (WW – present weather); weather-interpretation
                 codes as used by Open-Meteo".
+            weatherCodeSourceURL:
+              type: string
+              format: uri
+              description: >
+                Canonical URL for the weather-code table, so a client can link
+                the citation instead of only displaying it. Present whenever
+                weatherCodeSource is.
     DewPointFeatureProperties:
       description: >
         Properties of a dew-point feature (kind "dewpoint") derived from the
@@ -268,6 +282,13 @@ components:
               description: >
                 Source citation for the comfort classification, referencing the
                 standard meteorological dew-point comfort scale.
+            comfortSourceURL:
+              type: string
+              format: uri
+              description: >
+                Canonical URL for the dew-point comfort scale, so a client can
+                link the citation instead of only displaying it. Present
+                whenever comfortSource is.
     SunFeatureProperties:
       description: >
         Properties of a sun feature (kind "sun"), computed from the coordinate
