@@ -1359,6 +1359,17 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 if (props.windSpeed10m !== undefined && props.windSpeed10m !== null) {
                     html += weatherStat('Windgeschwindigkeit', esc(props.windSpeed10m) + '&#x202F;' + esc(units.windSpeed10m || 'km/h'));
                 }
+                if (props.windBeaufort !== undefined && props.windBeaufort !== null) {
+                    const bftDesc = (props.windBeaufortDescription || {}).de;
+                    let bft = esc(props.windBeaufort) + '&#x202F;Bft';
+                    if (bftDesc) {
+                        bft += ' &middot; ' + esc(bftDesc);
+                    }
+                    if (props.windBeaufortSource) {
+                        bft = '<span title="' + esc(props.windBeaufortSource) + '">' + bft + '</span>';
+                    }
+                    html += weatherStat('Beaufort', bft);
+                }
                 if (props.cloudCover !== undefined && props.cloudCover !== null) {
                     html += weatherStat('Bewölkung', esc(props.cloudCover) + '&#x202F;' + esc(units.cloudCover || '%'));
                 }

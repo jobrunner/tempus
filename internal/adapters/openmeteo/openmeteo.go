@@ -214,6 +214,19 @@ func (p *Provider) toFeature(data apiResponse, req domain.QueryRequest, useArchi
 		}
 	}
 
+	// Enrich with the Beaufort wind force, converted from the unit Open-Meteo
+	// reports for wind_speed_10m (km/h by default). An unrecognised unit is
+	// left unclassified rather than misclassified.
+	if wsRaw, present := props["windSpeed10m"]; present {
+		if ws, isFloat := wsRaw.(float64); isFloat {
+			if force, de, en, ok := domain.BeaufortFor(ws, units["windSpeed10m"]); ok {
+				props["windBeaufort"] = force
+				props["windBeaufortDescription"] = map[string]string{"de": de, "en": en}
+				props["windBeaufortSource"] = domain.BeaufortSource
+			}
+		}
+	}
+
 	feat := domain.NewPointFeature(
 		domain.Coordinate{Lat: data.Latitude, Lon: data.Longitude},
 		props,

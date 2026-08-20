@@ -124,6 +124,95 @@ func TestFetch_WeatherCodeDescription(t *testing.T) {
 	}
 }
 
+func TestFetch_WindBeaufort(t *testing.T) {
+	// archive_ok.json at 13:00 has wind_speed_10m=12.1 km/h → force 3.
+	body, _ := os.ReadFile("testdata/archive_ok.json")
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(body)
+	})
+	defer done()
+
+	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	if got := res.Feature.Properties["windBeaufort"]; got != 3 {
+		t.Errorf("windBeaufort = %v (%T), want 3", got, got)
+	}
+
+	desc, ok := res.Feature.Properties["windBeaufortDescription"].(map[string]string)
+	if !ok {
+		t.Fatalf("windBeaufortDescription missing or wrong type: %T %v",
+			res.Feature.Properties["windBeaufortDescription"],
+			res.Feature.Properties["windBeaufortDescription"])
+	}
+	if desc["de"] != "schwache Brise" {
+		t.Errorf("windBeaufortDescription.de = %q, want %q", desc["de"], "schwache Brise")
+	}
+	if desc["en"] != "Gentle breeze" {
+		t.Errorf("windBeaufortDescription.en = %q, want %q", desc["en"], "Gentle breeze")
+	}
+
+	src, ok := res.Feature.Properties["windBeaufortSource"].(string)
+	if !ok || src == "" {
+		t.Errorf("windBeaufortSource missing or empty: %v", res.Feature.Properties["windBeaufortSource"])
+	}
+}
+
+func TestFetch_WindBeaufortConvertsNonMetricUnit(t *testing.T) {
+	// 20 mph ≈ 32.2 km/h → force 5.
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"latitude":49.8,"longitude":9.94,` +
+			`"hourly_units":{"wind_speed_10m":"mph"},` +
+			`"hourly":{"time":["2025-06-15T13:00"],"temperature_2m":[21.4],"wind_speed_10m":[20.0]}}`))
+	})
+	defer done()
+
+	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if got := res.Feature.Properties["windBeaufort"]; got != 5 {
+		t.Errorf("windBeaufort = %v, want 5 (20 mph ≈ 32 km/h)", got)
+	}
+}
+
+func TestFetch_WindBeaufortOmittedForUnknownUnit(t *testing.T) {
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"latitude":49.8,"longitude":9.94,` +
+			`"hourly_units":{"wind_speed_10m":"furlongs/fortnight"},` +
+			`"hourly":{"time":["2025-06-15T13:00"],"temperature_2m":[21.4],"wind_speed_10m":[20.0]}}`))
+	})
+	defer done()
+
+	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	for _, key := range []string{"windBeaufort", "windBeaufortDescription", "windBeaufortSource"} {
+		if v, present := res.Feature.Properties[key]; present {
+			t.Errorf("%s = %v, want absent for an unrecognised wind unit", key, v)
+		}
+	}
+}
+
+func TestFetch_WindBeaufortOmittedWithoutWindSpeed(t *testing.T) {
+	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"latitude":49.8,"longitude":9.94,"hourly_units":{},` +
+			`"hourly":{"time":["2025-06-15T13:00"],"temperature_2m":[21.4]}}`))
+	})
+	defer done()
+
+	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if v, present := res.Feature.Properties["windBeaufort"]; present {
+		t.Errorf("windBeaufort = %v, want absent when windSpeed10m is missing", v)
+	}
+}
+
 func TestFetch_FutureRejected(t *testing.T) {
 	p, done := newProvider(t, func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("provider must not contact the network for future dates")
