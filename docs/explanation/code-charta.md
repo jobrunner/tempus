@@ -41,6 +41,11 @@ to pass is to genuinely simplify it or extract cohesive sub-functions.
 line coverage) fails the build unless it is grandfathered in `hotspot.allow`.
 This blocks *new* complex-and-untested files.
 
+The gate refuses to pass vacuously. If a cap metric is missing from every file,
+or if no file carries coverage at all — the coverage import is best-effort, so a
+broken test suite could leave the hotspot gate with nothing to judge — it fails
+with an explanation instead of reporting a green check that verified nothing.
+
 ## Today's baselines
 
 Every number in `.codecharta-ratchet.json` was measured on this repository, not

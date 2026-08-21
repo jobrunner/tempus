@@ -121,6 +121,17 @@ def main():
                   f"ccsh version/parser mismatch? Refusing to pass vacuously.", file=sys.stderr)
             return 2
 
+    # The coverage import is deliberately best-effort in CI (a failing test suite
+    # must not sink the map), which means the hotspot gate can end up with nothing
+    # to judge: every file skipped for lack of line_coverage, gate green, nothing
+    # checked. Fail loudly instead, for the same reason the cap metrics above
+    # refuse to pass vacuously.
+    if not any(a.get("line_coverage") is not None for a in files.values()):
+        print("::error::no file in the map carries line_coverage — the hotspot gate "
+              "would check nothing (did the coverage import fail?). Refusing to pass "
+              "vacuously.", file=sys.stderr)
+        return 2
+
     violations, hints = [], []
 
     # 1. Per-file aggregate complexity (sum of function complexity). Stops a file
