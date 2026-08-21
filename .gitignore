@@ -25,3 +25,10 @@ coverage.txt
 
 # air build output
 /tmp/
+
+# CodeCharta map + its intermediate parser outputs (make codecharta)
+/tempus.cc.json.gz
+/base.cc.json
+/git.cc.json
+/coverage.cc.json
+/coverage.info

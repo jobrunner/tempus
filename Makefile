@@ -1,5 +1,5 @@
 .PHONY: all build run test test-coverage lint vet fmt fmt-check arch debt \
-        debt-guard debt-coverage mutation verify docs docs-serve docs-openapi-check \
+        debt-guard debt-coverage mutation codecharta verify docs docs-serve docs-openapi-check \
         doc-drift hooks security vuln licenses release-dry help
 
 BINARY_NAME := tempus
@@ -69,6 +69,23 @@ mutation: ## Mutation testing (ubuntu only — gremlins panics on macOS)
 	 gremlins unleash --threshold-efficacy 90 --threshold-mcover 95 ./internal/domain || rc=1; \
 	 gremlins unleash --threshold-efficacy 77 --threshold-mcover 94 ./internal/application || rc=1; \
 	 exit $$rc
+
+codecharta: ## CodeCharta map (structure+complexity+coverage+git) -> tempus.cc.json.gz, then the ratchet gate (needs node+java)
+	@command -v ccsh >/dev/null 2>&1 || npm install -g codecharta-analysis@1.143.0
+	$(GO) install github.com/jandelgado/gcov2lcov@v1.1.1
+	ccsh unifiedparser . -fe=go -e='_test\.go,third_party,\.claude' -nc -o base.cc.json
+	ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
+	@$(GO) test -coverprofile=coverage.out ./... || true; \
+	 gobin=$$($(GO) env GOBIN); [ -n "$$gobin" ] || gobin=$$($(GO) env GOPATH)/bin; \
+	 inputs="base.cc.json git.cc.json"; \
+	 if [ -s coverage.out ]; then \
+	   "$$gobin"/gcov2lcov -infile=coverage.out -outfile=coverage.info; \
+	   ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json; \
+	   inputs="$$inputs coverage.cc.json"; \
+	 else echo "WARN: no coverage.out — map without coverage"; fi; \
+	 ccsh merge $$inputs -o tempus.cc.json.gz
+	python3 scripts/codecharta-ratchet.py tempus.cc.json.gz .codecharta-ratchet.json
+	@echo "-> tempus.cc.json.gz  (load in https://maibornwolff.github.io/codecharta/visualization/)"
 
 ## Canonical, non-mutating "is it green?" — mirror this in CI.
 verify: fmt-check vet lint test arch debt-guard ## Authoritative green check
