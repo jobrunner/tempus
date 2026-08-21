@@ -54,25 +54,50 @@ with an explanation instead of reporting a green check that verified nothing.
 ## Today's baselines
 
 Every number in `.codecharta-ratchet.json` was measured on this repository, not
-carried over from elsewhere. At the time the gate was introduced the 42 non-test
-Go files had a median complexity of 9.5, and these were the outliers:
+carried over from elsewhere. The 42-odd non-test Go files have a median
+complexity of around 10; these are the outliers still carrying a baseline:
 
 | File | File complexity | Worst function | Line coverage |
 |---|---|---|---|
 | `internal/adapters/aggregate/aggregate.go` | 51 | 7 | 87.4 % |
 | `internal/adapters/bioclim/bioclim.go` | 48 | 9 | 85.5 % |
-| `internal/adapters/openmeteo/openmeteo.go` | 47 | **17** | 83.8 % |
 | `internal/domain/koppen.go` | 45 | 10 | 91.1 % |
 | `internal/domain/lunar.go` | 39 | 8 | 96.4 % |
 | `internal/domain/bioclim.go` | 35 | 6 | 100 % |
 | `internal/adapters/http/server.go` | 33 | 5 | **65.3 %** |
-| `internal/app/app.go` | 30 | **15** | **67.0 %** |
+| `internal/adapters/openmeteo/feature.go` | 29 | 7 | 90.9 % |
 
 Coverage here is per file as the map records it, which is not the same as the
 per-package figures the coverage floors use.
 
-The last two are the grandfathered hotspots: complex and under-tested. They are
-recorded as visible debt, not as an exemption.
+`http/server.go` is the one remaining grandfathered hotspot: complex and
+under-tested. It is recorded as visible debt, not as an exemption.
+
+**The per-function baseline is empty.** No function in the repository exceeds the
+cap of 10 any more, so adding an entry there means a function was let past the
+cap and needs a reason in review.
+
+### What the first round of ratcheting changed
+
+The gate's first two targets were paid off rather than baselined:
+
+| | Before | After |
+|---|---|---|
+| `openmeteo.go` file / worst function | 47 / **17** | 23 / 8 |
+| `app.go` file / worst function | 30 / **15** | 18 / 7 |
+
+`toFeature` became `hourIndex` + `hourlyValues` + `enrichWeatherCode` +
+`enrichBeaufort` in a new `feature.go`; `app.New`'s provider wiring and
+observability setup moved to `providers.go` and `observability.go`. Both files
+fell below the per-file cap, so their baselines are gone entirely.
+
+Two honest caveats. Splitting a function costs a little total file complexity
+(each new function brings its own base), which is why `feature.go` is baselined
+at 29 — the win is the per-function maximum, which cannot be moved around. And
+`app.go` left the hotspot list because its complexity fell below the threshold,
+not because it got tested; its coverage is in fact lower now that the
+well-covered wiring moved out. That debt is real, and paying it is the next step
+rather than something the gate resolved.
 
 ## Ratcheting
 

@@ -6,19 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"time"
 
-	"github.com/jobrunner/tempus/internal/adapters/aggregate"
-	"github.com/jobrunner/tempus/internal/adapters/astronomy"
-	"github.com/jobrunner/tempus/internal/adapters/bioclim"
 	boltcache "github.com/jobrunner/tempus/internal/adapters/cache/bolt"
 	memcache "github.com/jobrunner/tempus/internal/adapters/cache/memory"
 	"github.com/jobrunner/tempus/internal/adapters/clock"
 	"github.com/jobrunner/tempus/internal/adapters/dewpoint"
 	httpapi "github.com/jobrunner/tempus/internal/adapters/http"
-	"github.com/jobrunner/tempus/internal/adapters/metrics"
-	"github.com/jobrunner/tempus/internal/adapters/openmeteo"
-	"github.com/jobrunner/tempus/internal/adapters/telemetry"
 	"github.com/jobrunner/tempus/internal/application"
 	"github.com/jobrunner/tempus/internal/config"
 	"github.com/jobrunner/tempus/internal/ports/output"
@@ -51,87 +44,11 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 	}
 
 	clk := clock.System{}
-	registry := application.NewRegistry()
+	registry := buildRegistry(cfg, cache, clk)
 
-	if cfg.Providers.OpenMeteo.Enabled {
-		om := openmeteo.New(openmeteo.Options{
-			ArchiveBaseURL:  cfg.Providers.OpenMeteo.ArchiveBaseURL,
-			ForecastBaseURL: cfg.Providers.OpenMeteo.ForecastBaseURL,
-			Timeout:         cfg.Providers.OpenMeteo.Timeout,
-			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
-			Clock:           clk,
-		})
-		cached := application.NewCachingProvider(om, cache, clk, application.CachingOptions{
-			Version:         "1",
-			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
-			MatureTTL:       365 * 24 * time.Hour,
-			ImmatureTTL:     time.Hour,
-			LatLonPrecision: 2,
-		})
-		registry.Register(cached)
-	}
-
-	// Sun and moon are pure computations: no external call, no cache, and they
-	// work for any date (past or future).
-	registry.Register(astronomy.NewSun())
-	registry.Register(astronomy.NewMoon())
-
-	// Weather aggregates (antecedent precipitation, day extrema, GDD). Fetches a
-	// time range from Open-Meteo; registered without the caching decorator
-	// because its output also depends on the per-request gddBase override, which
-	// the cache key does not capture.
-	if cfg.Providers.Aggregate.Enabled && cfg.Providers.OpenMeteo.Enabled {
-		registry.Register(aggregate.New(aggregate.Options{
-			ArchiveBaseURL:  cfg.Providers.OpenMeteo.ArchiveBaseURL,
-			ForecastBaseURL: cfg.Providers.OpenMeteo.ForecastBaseURL,
-			Timeout:         cfg.Providers.OpenMeteo.Timeout,
-			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
-			Clock:           clk,
-		}))
-	}
-
-	// Bioclim (19 BIO variables + Köppen-Geiger) from ERA5 monthly normals.
-	// Time-independent for a location+period, so it caches per coordinate itself
-	// (its own cache key includes the reference period, ignoring the instant).
-	if cfg.Providers.Bioclim.Enabled && cfg.Providers.OpenMeteo.Enabled {
-		registry.Register(bioclim.New(bioclim.Options{
-			ArchiveBaseURL: cfg.Providers.OpenMeteo.ArchiveBaseURL,
-			// The 30-year daily fetch is large; allow more time than a single-hour
-			// call. The query timeout still governs overall via context.
-			Timeout: 60 * time.Second,
-			Cache:   cache,
-		}))
-	}
-
-	// Wire tracing. When disabled the NoOpTracer is used so downstream code
-	// never has to nil-check the tracer.
-	serverOpts := httpapi.Options{ServiceName: "tempus", Version: version}
-
-	if cfg.Tracing.Enabled {
-		tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), cfg.Tracing, "tempus")
-		if err != nil {
-			return nil, err
-		}
-		serverOpts.TracerProvider = tp
-		a.closers = append(a.closers, func() error { return shutdown(context.Background()) })
-	}
-
-	// Wire metrics server. When disabled nothing is started.
-	if cfg.Metrics.Enabled {
-		metricsSrv, err := metrics.New(cfg.Metrics)
-		if err != nil {
-			return nil, err
-		}
-		go func() {
-			if err := metricsSrv.Start(); err != nil {
-				logger.Error("metrics server error", "error", err)
-			}
-		}()
-		a.closers = append(a.closers, func() error {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			return metricsSrv.Shutdown(ctx)
-		})
+	serverOpts, err := a.wireObservability(version)
+	if err != nil {
+		return nil, err
 	}
 
 	derivers := []output.FeatureDeriver{dewpoint.New()}
