@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/jobrunner/tempus/compare/v0.19.0...v0.20.0) (2026-08-21)
+
+
+### Features
+
+* **quality:** add the CodeCharta map and a complexity ratchet ([#47](https://github.com/jobrunner/tempus/issues/47)) ([9975a45](https://github.com/jobrunner/tempus/commit/9975a455eb9666bcf3fdec266e0073d145448ad4))
+
 ## [0.19.0](https://github.com/jobrunner/tempus/compare/v0.18.0...v0.19.0) (2026-08-21)
 
 
