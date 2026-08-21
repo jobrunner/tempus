@@ -26,8 +26,11 @@ const (
 	licenseURL   = "https://open-meteo.com/en/license"
 )
 
-// primaryVar must be present for an hour to count as available: the others may
-// legitimately be missing, temperature cannot.
+// primaryVar is the variable that decides whether an hour has data yet: when it
+// is in the response but null for the target hour, the hour counts as not yet
+// available. The other variables may legitimately be missing. A response that
+// omits this key entirely is treated as available without it — see
+// hourlyValues, whose behaviour TestHourlyValues_PrimaryVariableHandling pins.
 const primaryVar = "temperature_2m"
 
 // propWeatherCode is the output property name for the WMO code. It is named

@@ -108,5 +108,5 @@ the same way the coverage floors and the debt budget work. When a grandfathered
 hotspot gets tests, the gate says so; remove it from `allow`.
 
 What the gate points at next, now that the two complexity targets are paid off:
-coverage for `http/server.go`, the last grandfathered hotspot, and for
-`app/app.go`, whose test debt outlived its complexity.
+coverage for `internal/adapters/http/server.go`, the last grandfathered hotspot,
+and for `internal/app/app.go`, whose test debt outlived its complexity.
