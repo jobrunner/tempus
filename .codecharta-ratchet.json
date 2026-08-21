@@ -23,12 +23,10 @@
     "_empty_baseline_note": "Empty since refactoring round 1: no function in the repository exceeds the cap of 10 any more (the worst are openmeteo Fetch and domain koppen at 9-10). A new entry here means a function was allowed past 10 — it needs a reason in review."
   },
   "hotspot": {
-    "_note": "A file is a hotspot when it is complex AND under-tested; a NEW hotspot fails the build. internal/adapters/http/server.go is the only one left and is grandfathered — visible test debt, not an exemption. Remove it from 'allow' once its coverage improves; the ratchet prints a notice as soon as it no longer qualifies.",
+    "_note": "A file is a hotspot when it is complex AND under-tested; a NEW hotspot fails the build. The allowlist is EMPTY — the repository currently has no complex, under-tested file. Adding an entry means accepting new test debt and needs a reason in review.",
     "min_complexity": 30,
     "min_coverage": 75,
-    "allow": [
-      "internal/adapters/http/server.go"
-    ],
-    "_app_note": "internal/app/app.go left this list in refactoring round 1 because its complexity fell to 18, below min_complexity — NOT because it got tested. Its coverage is in fact lower now (43%), since the better-covered wiring moved to providers.go. The testing debt is real and is the subject of the follow-up coverage work; the hotspot gate simply no longer sees it."
+    "allow": [],
+    "_cleared_note": "Cleared in the coverage round after v0.20.0: internal/adapters/http/server.go went from 65.3% to 95.3% line coverage (lifecycle, health probes, error envelope, trace header, panic recovery) and internal/app/app.go from 67.0% to 88.2% (Run's shutdown path, the cache closers, buildCache's branches including its error). internal/app/observability.go sits at 60% but is not a hotspot (complexity 11): its remaining gaps are the tracing- and metrics-failure paths, which need error injection to reach."
   }
 }
