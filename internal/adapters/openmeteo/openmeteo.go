@@ -30,12 +30,17 @@ const (
 // legitimately be missing, temperature cannot.
 const primaryVar = "temperature_2m"
 
+// propWeatherCode is the output property name for the WMO code. It is named
+// because both the variable mapping below and the enrichment in feature.go
+// refer to it.
+const propWeatherCode = "weatherCode"
+
 // hourlyVars are requested from Open-Meteo, mapped to output property names.
 var hourlyVars = []struct{ api, prop string }{
 	{"temperature_2m", "temperature2m"},
 	{"relative_humidity_2m", "relativeHumidity2m"},
 	{"precipitation", "precipitation"},
-	{"weather_code", "weatherCode"},
+	{"weather_code", propWeatherCode},
 	{"wind_speed_10m", "windSpeed10m"},
 	{"cloud_cover", "cloudCover"},
 }

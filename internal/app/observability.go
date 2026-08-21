@@ -13,10 +13,11 @@ import (
 const metricsShutdownTimeout = 5 * time.Second
 
 // wireObservability sets up tracing and the metrics server as configured and
-// returns the server options carrying the tracer. Both are optional; when
-// tracing is disabled the options keep the no-op tracer, so downstream code
-// never has to nil-check. Anything that needs closing is appended to the app's
-// closers, which is why this is a method rather than a free function.
+// returns the server options carrying the tracer. Both are optional: with
+// tracing disabled the options carry no TracerProvider at all, and the HTTP
+// server skips the tracing middleware when it is nil (see setupRoutes).
+// Anything that needs closing is appended to the app's closers, which is why
+// this is a method rather than a free function.
 func (a *App) wireObservability(version string) (httpapi.Options, error) {
 	opts := httpapi.Options{ServiceName: "tempus", Version: version}
 

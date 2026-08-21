@@ -1,5 +1,5 @@
 {
-  "_comment": "Ratchet config for scripts/codecharta-ratchet.py, run against the CodeCharta map (tempus.cc.json.gz). Three gates: (1) per-file aggregate complexity, (2) per-FUNCTION complexity (not gameable by moving code between files), (3) hotspot (complex AND under-tested). Every number below was MEASURED on this repository at v0.19.0 — none was carried over from another project. Ratchet by LOWERING the numbers as the code improves; RAISING a baseline entry needs review justification.",
+  "_comment": "Ratchet config for scripts/codecharta-ratchet.py, run against the CodeCharta map (tempus.cc.json.gz). Three gates: (1) per-file aggregate complexity, (2) per-FUNCTION complexity (not gameable by moving code between files), (3) hotspot (complex AND under-tested). Every number below was MEASURED on this repository — none was carried over from another project. The initial set was measured at v0.19.0; entries added or changed later carry a dated note in the section they belong to, so a re-measured value is never mistaken for the original baseline. Ratchet by LOWERING the numbers as the code improves; RAISING a baseline entry needs review justification.",
   "complexity": {
     "metric": "complexity",
     "default_cap": 25,

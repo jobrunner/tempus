@@ -107,6 +107,6 @@ in. Raising a baseline entry is possible but needs a justification in review,
 the same way the coverage floors and the debt budget work. When a grandfathered
 hotspot gets tests, the gate says so; remove it from `allow`.
 
-The two most obvious first refactorings the gate points at: the worst function
-in `openmeteo.go` (17) and in `app.go` (15), and coverage for
-`http/server.go` and `app/app.go`, which would empty the hotspot allowlist.
+What the gate points at next, now that the two complexity targets are paid off:
+coverage for `http/server.go`, the last grandfathered hotspot, and for
+`app/app.go`, whose test debt outlived its complexity.

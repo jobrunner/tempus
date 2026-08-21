@@ -63,10 +63,15 @@ func hourIndex(data apiResponse, req domain.QueryRequest) int {
 }
 
 // hourlyValues reads the requested hour out of every hourly variable, returning
-// the values keyed by output property name plus their units. ok is false when
-// the primary variable (temperature) is absent or null: that means the hour
-// exists but the provider has not filled it in yet, which the caller reports as
-// not-yet-available rather than as a feature with holes in it.
+// the values keyed by output property name plus their units.
+//
+// ok is false when the primary variable is present in the response but has no
+// value for this hour: the hour exists and the provider has not filled it in
+// yet, which the caller reports as not-yet-available rather than as a feature
+// with holes in it. A response that omits the primary variable's key altogether
+// is a different case and stays ok — it would be a malformed response to a
+// request that always asks for it. Both cases are pinned by
+// TestHourlyValues_PrimaryVariableHandling.
 func hourlyValues(data apiResponse, idx int) (values map[string]any, units map[string]string, ok bool) {
 	values, units, ok = map[string]any{}, map[string]string{}, true
 	for _, v := range hourlyVars {
@@ -90,9 +95,9 @@ func hourlyValues(data apiResponse, idx int) (values map[string]any, units map[s
 }
 
 // enrichWeatherCode adds the bilingual WMO-4677 description for the weather
-// code, when the code is one this table knows.
+// code, when the WMO table has an entry for that code.
 func enrichWeatherCode(props map[string]any) {
-	raw, present := props["weatherCode"]
+	raw, present := props[propWeatherCode]
 	if !present {
 		return
 	}
