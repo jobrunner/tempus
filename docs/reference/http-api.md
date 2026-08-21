@@ -167,17 +167,26 @@ spec) and are intended for Kubernetes liveness/readiness probes.
 | `GET /docs` | Swagger UI — interactive API explorer |
 
 The spec lives twice in the repository — `internal/adapters/http/openapi.yaml`
-(embedded and served) and `api/openapi/openapi.yaml` (the published copy) — and
-both must stay byte-identical; a CI check fails otherwise.
+(embedded and served) and `api/openapi/openapi.yaml` (the published copy). The
+`OpenAPI Spec` workflow checks on every pull request that the two are
+byte-identical.
 
 ### Breaking-change policy
 
-Every pull request runs `oasdiff breaking` against the base branch's spec and
+The same workflow runs `oasdiff breaking` against the base branch's spec and
 fails on a breaking change: a removed or renamed property, a narrowed type, a
 new required field, a changed response shape. Payload-compatible changes that
 alter the *generated types* count too — turning `Feature.properties` from a free
 object into a discriminated union did (see #43).
 
 An intended break is allowed: label the pull request `api-breaking-ok` and give
-the reason in its description. That skips the check, so the label is the record
-of a deliberate decision rather than an oversight.
+the reason in its description. The label is the record of a deliberate decision
+rather than an oversight, and adding it re-runs the check. It does not bypass a
+check that failed for a tool or setup reason — only a completed comparison that
+found breaking changes.
+
+Two details matter if you ever touch that workflow: oasdiff runs with
+`--flatten-allof`, because the per-kind feature schemas are `allOf`
+compositions and without flattening every finding inside them is demoted to a
+warning that `--fail-on ERR` ignores; and the oasdiff version is pinned, so a
+new release cannot silently reclassify what counts as breaking.
