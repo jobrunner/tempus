@@ -1,5 +1,5 @@
 {
-  "_comment": "Ratchet config for scripts/codecharta-ratchet.py, run against the CodeCharta map (tempus.cc.json.gz). Three gates: (1) per-file aggregate complexity, (2) per-FUNCTION complexity (not gameable by moving code between files), (3) hotspot (complex AND under-tested). Every number below was MEASURED on this repository at v0.19.0 — none was carried over from another project. Ratchet by LOWERING the numbers as the code improves; RAISING a baseline entry needs review justification.",
+  "_comment": "Ratchet config for scripts/codecharta-ratchet.py, run against the CodeCharta map (tempus.cc.json.gz). Three gates: (1) per-file aggregate complexity, (2) per-FUNCTION complexity (not gameable by moving code between files), (3) hotspot (complex AND under-tested). Every number below was MEASURED on this repository — none was carried over from another project. The initial set was measured at v0.19.0; entries added or changed later carry a dated note in the section they belong to, so a re-measured value is never mistaken for the original baseline. Ratchet by LOWERING the numbers as the code improves; RAISING a baseline entry needs review justification.",
   "complexity": {
     "metric": "complexity",
     "default_cap": 25,
@@ -7,30 +7,28 @@
     "baseline": {
       "internal/adapters/aggregate/aggregate.go": 51,
       "internal/adapters/bioclim/bioclim.go": 48,
-      "internal/adapters/openmeteo/openmeteo.go": 47,
       "internal/domain/koppen.go": 45,
       "internal/domain/lunar.go": 39,
       "internal/domain/bioclim.go": 35,
       "internal/adapters/http/server.go": 33,
-      "internal/app/app.go": 30
-    }
+      "internal/adapters/openmeteo/feature.go": 29
+    },
+    "_round1_note": "Refactoring round 1 (v0.20.0 -> next): toFeature was split into hourIndex/hourlyValues/enrichWeatherCode/enrichBeaufort and moved to a new feature.go, and app.New's provider wiring and observability setup moved to providers.go and observability.go. openmeteo.go 47->23 and app.go 30->18 dropped below default_cap, so their entries are gone; the relocated mapping logic in feature.go is baselined at 29 (its worst function is 7). The split cost ~5 total file complexity in function overhead and bought a per-function max of 8 instead of 18."
   },
   "function_complexity": {
     "metric": "max_complexity_per_function",
     "default_cap": 10,
-    "_default_cap_note": "The single most complex FUNCTION in a file (McCabe). This is the real overall-complexity control: a function keeps its complexity wherever it lives, so moving it between files cannot game this gate — passing requires actually simplifying the function or extracting cohesive sub-functions. Measured: only two files exceed 10 today (baselined below); domain/koppen.go sits exactly at 10.",
-    "baseline": {
-      "internal/adapters/openmeteo/openmeteo.go": 17,
-      "internal/app/app.go": 15
-    }
+    "_default_cap_note": "The single most complex FUNCTION in a file (McCabe). This is the real overall-complexity control: a function keeps its complexity wherever it lives, so moving it between files cannot game this gate — passing requires actually simplifying the function or extracting cohesive sub-functions. No function in the repository exceeds the cap today, which is why the baseline is empty; the highest are openmeteo Fetch and domain/koppen.go at 9-10.",
+    "baseline": {},
+    "_empty_baseline_note": "Empty since refactoring round 1: no function in the repository exceeds the cap of 10 any more (the worst are openmeteo Fetch and domain koppen at 9-10). A new entry here means a function was allowed past 10 — it needs a reason in review."
   },
   "hotspot": {
-    "_note": "A file is a hotspot when it is complex AND under-tested; a NEW hotspot fails the build. The two files below are the measured current ones and are grandfathered — they are visible test debt, not an exemption. Remove them from 'allow' as their coverage improves; the ratchet prints a notice once a file no longer qualifies.",
+    "_note": "A file is a hotspot when it is complex AND under-tested; a NEW hotspot fails the build. internal/adapters/http/server.go is the only one left and is grandfathered — visible test debt, not an exemption. Remove it from 'allow' once its coverage improves; the ratchet prints a notice as soon as it no longer qualifies.",
     "min_complexity": 30,
     "min_coverage": 75,
     "allow": [
-      "internal/adapters/http/server.go",
-      "internal/app/app.go"
-    ]
+      "internal/adapters/http/server.go"
+    ],
+    "_app_note": "internal/app/app.go left this list in refactoring round 1 because its complexity fell to 18, below min_complexity — NOT because it got tested. Its coverage is in fact lower now (43%), since the better-covered wiring moved to providers.go. The testing debt is real and is the subject of the follow-up coverage work; the hotspot gate simply no longer sees it."
   }
 }

@@ -26,12 +26,24 @@ const (
 	licenseURL   = "https://open-meteo.com/en/license"
 )
 
+// primaryVar is the variable that decides whether an hour has data yet: when it
+// is in the response but null for the target hour, the hour counts as not yet
+// available. The other variables may legitimately be missing. A response that
+// omits this key entirely is treated as available without it — see
+// hourlyValues, whose behaviour TestHourlyValues_PrimaryVariableHandling pins.
+const primaryVar = "temperature_2m"
+
+// propWeatherCode is the output property name for the WMO code. It is named
+// because both the variable mapping below and the enrichment in feature.go
+// refer to it.
+const propWeatherCode = "weatherCode"
+
 // hourlyVars are requested from Open-Meteo, mapped to output property names.
 var hourlyVars = []struct{ api, prop string }{
 	{"temperature_2m", "temperature2m"},
 	{"relative_humidity_2m", "relativeHumidity2m"},
 	{"precipitation", "precipitation"},
-	{"weather_code", "weatherCode"},
+	{"weather_code", propWeatherCode},
 	{"wind_speed_10m", "windSpeed10m"},
 	{"cloud_cover", "cloudCover"},
 }
@@ -154,89 +166,6 @@ func (p *Provider) buildURL(base string, req domain.QueryRequest, useArchive boo
 	return u.String(), nil
 }
 
-func (p *Provider) toFeature(data apiResponse, req domain.QueryRequest, useArchive bool) (domain.ProviderResult, error) {
-	var times []string
-	if raw, ok := data.Hourly["time"]; ok {
-		_ = json.Unmarshal(raw, &times)
-	}
-	target := req.Instant.UTC().Format("2006-01-02T15:04")
-	idx := indexOf(times, target)
-	if idx < 0 {
-		return domain.ProviderResult{}, output.NewNotYetAvailableError(2 * time.Hour)
-	}
-
-	props := map[string]any{
-		"provider":   providerID,
-		"kind":       providerKind,
-		"observedAt": req.Instant.UTC().Format(time.RFC3339),
-	}
-	units := map[string]string{}
-	valueMissing := false
-	for _, v := range hourlyVars {
-		raw, ok := data.Hourly[v.api]
-		if !ok {
-			continue
-		}
-		var vals []*float64
-		if json.Unmarshal(raw, &vals) != nil || idx >= len(vals) || vals[idx] == nil {
-			if v.api == "temperature_2m" { // primary variable: null ⇒ not ready
-				valueMissing = true
-			}
-			continue
-		}
-		props[v.prop] = normalize(v.api, *vals[idx])
-		if unit, ok := data.HourlyUnits[v.api]; ok {
-			units[v.prop] = unit
-		}
-	}
-	if valueMissing {
-		return domain.ProviderResult{}, output.NewNotYetAvailableError(2 * time.Hour)
-	}
-	props["units"] = units
-
-	// Compute day/night from the sun's position; Open-Meteo's archive is_day is
-	// always 0 for historical dates and therefore unreliable.
-	props["isDay"] = domain.IsDaylight(data.Latitude, data.Longitude, req.Instant)
-	props["isDaySource"] = domain.SolarPositionSource
-
-	// Enrich with WMO-4677 weather-code description when available.
-	if wcRaw, present := props["weatherCode"]; present {
-		var code int
-		switch wc := wcRaw.(type) {
-		case int:
-			code = wc
-		case float64:
-			code = int(wc)
-		}
-		if de, en, ok := domain.WeatherCodeDescription(code); ok {
-			props["weatherCodeDescription"] = map[string]string{"de": de, "en": en}
-			props["weatherCodeSource"] = domain.WMOCodeSource
-			props["weatherCodeSourceURL"] = domain.WMOCodeSourceURL
-		}
-	}
-
-	// Enrich with the Beaufort wind force, converted from the unit Open-Meteo
-	// reports for wind_speed_10m (km/h by default). An unrecognised unit is
-	// left unclassified rather than misclassified.
-	if wsRaw, present := props["windSpeed10m"]; present {
-		if ws, isFloat := wsRaw.(float64); isFloat {
-			if force, de, en, ok := domain.BeaufortFor(ws, units["windSpeed10m"]); ok {
-				props["windBeaufort"] = force
-				props["windBeaufortDescription"] = map[string]string{"de": de, "en": en}
-				props["windBeaufortSource"] = domain.BeaufortSource
-				props["windBeaufortSourceURL"] = domain.BeaufortSourceURL
-			}
-		}
-	}
-
-	feat := domain.NewPointFeature(
-		domain.Coordinate{Lat: data.Latitude, Lon: data.Longitude},
-		props,
-		p.license(useArchive),
-	)
-	return domain.ProviderResult{Feature: feat}, nil
-}
-
 func (p *Provider) license(useArchive bool) domain.License {
 	src := "GFS/ICON forecast models"
 	if useArchive {
@@ -249,17 +178,6 @@ func (p *Provider) license(useArchive bool) domain.License {
 	}
 }
 
-// normalize converts weather_code, relative_humidity_2m and cloud_cover to
-// int; leaves other numeric values as float64.
-func normalize(apiName string, v float64) any {
-	switch apiName {
-	case "weather_code", "relative_humidity_2m", "cloud_cover":
-		return int(v)
-	default:
-		return v
-	}
-}
-
 func retryAfter(resp *http.Response) time.Duration {
 	if s := resp.Header.Get("Retry-After"); s != "" {
 		if secs, err := time.ParseDuration(s + "s"); err == nil {
@@ -267,13 +185,4 @@ func retryAfter(resp *http.Response) time.Duration {
 		}
 	}
 	return 30 * time.Second
-}
-
-func indexOf(s []string, target string) int {
-	for i, v := range s {
-		if v == target {
-			return i
-		}
-	}
-	return -1
 }
