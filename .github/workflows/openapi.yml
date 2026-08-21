@@ -1,0 +1,106 @@
+name: OpenAPI
+
+# Its own workflow rather than a job in ci.yml so it can listen for label
+# changes: adding api-breaking-ok has to re-run the gate, and ci.yml's default
+# pull_request activity types (opened, synchronize, reopened) never fire on a
+# label change.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+env:
+  # Pinned deliberately: this is a required gate, and a new oasdiff release can
+  # reclassify what counts as breaking. Bump it as its own reviewed change.
+  OASDIFF_VERSION: v1.29.1
+  SPEC: internal/adapters/http/openapi.yaml
+
+jobs:
+  spec:
+    name: OpenAPI Spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Spec copies byte-identical
+        run: ./scripts/openapi-mirror-check.sh
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Install oasdiff
+        run: go install github.com/oasdiff/oasdiff@${OASDIFF_VERSION}
+
+      - name: Fetch the base branch's spec
+        run: |
+          # Explicit destination ref: fetching a bare branch name does not
+          # reliably update the remote-tracking ref on a shallow checkout.
+          git fetch --no-tags --depth=1 origin \
+            "+refs/heads/$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
+          git show "origin/$GITHUB_BASE_REF:$SPEC" > "$RUNNER_TEMP/base-openapi.yaml"
+
+      - name: oasdiff breaking changes
+        id: oasdiff
+        # Failure is classified in the next step, which distinguishes "found
+        # breaking changes" from "the tool itself failed".
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          # --flatten-allof is required, not cosmetic: the per-kind feature
+          # schemas are allOf compositions, and without flattening oasdiff
+          # compares the branches separately and downgrades every finding
+          # inside them to a warning, which --fail-on ERR then ignores.
+          oasdiff breaking "$RUNNER_TEMP/base-openapi.yaml" "$SPEC" \
+            --flatten-allof --fail-on ERR 2>&1 | tee "$RUNNER_TEMP/oasdiff.log"
+
+      - name: Classify and report
+        env:
+          LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'api-breaking-ok') }}
+          OUTCOME: ${{ steps.oasdiff.outcome }}
+        run: |
+          log="$RUNNER_TEMP/oasdiff.log"
+          if [ "$OUTCOME" = success ]; then
+            state=clean
+          elif grep -qE '^[0-9]+ changes:.*[1-9][0-9]* error' "$log"; then
+            state=breaking
+          else
+            # An install, fetch or parse failure must never be reported as (or
+            # waved through like) a breaking change.
+            state=error
+          fi
+
+          {
+            echo "## OpenAPI breaking-change check"
+            echo
+            case "$state" in
+              clean)
+                echo "No breaking changes against \`$GITHUB_BASE_REF\`." ;;
+              breaking)
+                if [ "$LABELED" = true ]; then
+                  echo "Breaking change(s) against \`$GITHUB_BASE_REF\`, allowed by the"
+                  echo "\`api-breaking-ok\` label. The reason belongs in the PR description."
+                else
+                  echo "Breaking change(s) against \`$GITHUB_BASE_REF\`. If the break is"
+                  echo "intended, label the PR \`api-breaking-ok\` and say why in its"
+                  echo "description; the label re-runs this check."
+                fi ;;
+              error)
+                echo "The check could not complete — see the step log. This is a tool or"
+                echo "setup failure, not a statement about compatibility, and the"
+                echo "\`api-breaking-ok\` label does not bypass it." ;;
+            esac
+            echo
+            echo '```'
+            cat "$log" 2>/dev/null || echo "(no oasdiff output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          case "$state" in
+            clean) exit 0 ;;
+            breaking) [ "$LABELED" = true ] && exit 0 || exit 1 ;;
+            error) exit 1 ;;
+          esac
