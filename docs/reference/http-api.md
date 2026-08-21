@@ -165,3 +165,19 @@ spec) and are intended for Kubernetes liveness/readiness probes.
 |---|---|
 | `GET /openapi.json` | OpenAPI 3.0 spec (JSON) |
 | `GET /docs` | Swagger UI — interactive API explorer |
+
+The spec lives twice in the repository — `internal/adapters/http/openapi.yaml`
+(embedded and served) and `api/openapi/openapi.yaml` (the published copy) — and
+both must stay byte-identical; a CI check fails otherwise.
+
+### Breaking-change policy
+
+Every pull request runs `oasdiff breaking` against the base branch's spec and
+fails on a breaking change: a removed or renamed property, a narrowed type, a
+new required field, a changed response shape. Payload-compatible changes that
+alter the *generated types* count too — turning `Feature.properties` from a free
+object into a discriminated union did (see #43).
+
+An intended break is allowed: label the pull request `api-breaking-ok` and give
+the reason in its description. That skips the check, so the label is the record
+of a deliberate decision rather than an oversight.

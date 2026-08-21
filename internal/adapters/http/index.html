@@ -350,6 +350,21 @@
             color: var(--text-muted);
         }
 
+        /* Citation links: inherit the surrounding text's colour so a label does
+           not turn into a loud link, but stay recognisably clickable. */
+        .source-link {
+            color: inherit;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+            text-underline-offset: 0.15em;
+        }
+
+        .source-link:hover,
+        .source-link:focus-visible {
+            color: var(--primary);
+            text-decoration-style: solid;
+        }
+
         .weather-daytime {
             font-size: 0.75rem;
             font-weight: 500;
@@ -1198,6 +1213,17 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     .replace(/'/g, '&#39;');
             }
 
+            // Wraps already-escaped HTML in a link to a source citation's URL.
+            // Only http(s) is accepted — same check the attribution block uses,
+            // so a hostile URL scheme can never reach an href. Without a usable
+            // URL the content is returned unchanged, keeping the plain tooltip.
+            function sourceLink(innerHtml, url) {
+                const safeUrl = /^https?:\/\//i.test(url || '') ? url : '';
+                if (!safeUrl) return innerHtml;
+                return '<a class="source-link" href="' + esc(safeUrl) +
+                    '" target="_blank" rel="noopener noreferrer">' + innerHtml + '</a>';
+            }
+
             // --- Render results -----------------------------------------------------
 
             function renderResults(data) {
@@ -1323,7 +1349,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 }
                 if (wmoLabel) {
                     if (wmoSource) {
-                        html += '<div class="weather-desc" title="' + esc(wmoSource) + '">' + esc(wmoLabel) + '</div>';
+                        html += '<div class="weather-desc" title="' + esc(wmoSource) + '">' +
+                            sourceLink(esc(wmoLabel), props.weatherCodeSourceURL) + '</div>';
                     } else {
                         html += '<div class="weather-desc">' + esc(wmoLabel) + '</div>';
                     }
@@ -1366,7 +1393,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                         bft += ' &middot; ' + esc(bftDesc);
                     }
                     if (props.windBeaufortSource) {
-                        bft = '<span title="' + esc(props.windBeaufortSource) + '">' + bft + '</span>';
+                        bft = '<span title="' + esc(props.windBeaufortSource) + '">' +
+                            sourceLink(bft, props.windBeaufortSourceURL) + '</span>';
                     }
                     html += weatherStat('Beaufort', bft);
                 }
@@ -1425,7 +1453,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 const comfortSource = (props.comfortSource) || null;
                 if (comfortLabel) {
                     if (comfortSource) {
-                        html += '<div class="weather-desc" style="margin-top:0.25rem;font-style:italic;" title="' + esc(comfortSource) + '">' + esc(comfortLabel) + '</div>';
+                        html += '<div class="weather-desc" style="margin-top:0.25rem;font-style:italic;" title="' + esc(comfortSource) + '">' +
+                            sourceLink(esc(comfortLabel), props.comfortSourceURL) + '</div>';
                     } else {
                         html += '<div class="weather-desc" style="margin-top:0.25rem;font-style:italic;">' + esc(comfortLabel) + '</div>';
                     }
