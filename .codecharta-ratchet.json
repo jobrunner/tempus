@@ -3,7 +3,7 @@
   "complexity": {
     "metric": "complexity",
     "default_cap": 25,
-    "_default_cap_note": "Per-file SUM of function complexity. Every file not listed below must stay <= this. The measured median across the 42 non-test Go files is 10 and the highest non-baseline file is domain/belt.go at 25, so 25 is generous for an ordinary file while making an unusually complex NEW file require a reviewed config entry. This gate can be satisfied by splitting a file (the sum moves with the code) — see function_complexity for the ceiling that cannot.",
+    "_default_cap_note": "Per-file SUM of function complexity. Every file not listed below must stay <= this. The measured median across the 42 non-test Go files is 9.5 and the highest non-baseline file is internal/domain/belt.go at 25, so 25 is generous for an ordinary file while making an unusually complex NEW file require a reviewed config entry. This gate can be satisfied by splitting a file (the sum moves with the code) — see function_complexity for the ceiling that cannot.",
     "baseline": {
       "internal/adapters/aggregate/aggregate.go": 51,
       "internal/adapters/bioclim/bioclim.go": 48,

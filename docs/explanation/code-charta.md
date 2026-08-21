@@ -18,6 +18,11 @@ Three sources are merged into one map:
 Vendored skill templates under `.claude/` are excluded — they are other
 projects' code and would otherwise distort both the map and the gates.
 
+Running it locally needs Node and a JRE, because `ccsh` is a JVM tool. The
+Makefile uses an installed `ccsh` if there is one and otherwise falls back to
+`npx --yes codecharta-analysis@$(CCSH_VERSION)`, so nothing is installed
+globally and no admin rights are needed.
+
 ## The map is also a gate
 
 CodeCharta only visualises; it has no notion of "fail when worse". That is what
