@@ -18,12 +18,12 @@
   "function_complexity": {
     "metric": "max_complexity_per_function",
     "default_cap": 10,
-    "_default_cap_note": "The single most complex FUNCTION in a file (McCabe). This is the real overall-complexity control: a function keeps its complexity wherever it lives, so moving it between files cannot game this gate — passing requires actually simplifying the function or extracting cohesive sub-functions. Measured: only two files exceed 10 today (baselined below); domain/koppen.go sits exactly at 10.",
+    "_default_cap_note": "The single most complex FUNCTION in a file (McCabe). This is the real overall-complexity control: a function keeps its complexity wherever it lives, so moving it between files cannot game this gate — passing requires actually simplifying the function or extracting cohesive sub-functions. No function in the repository exceeds the cap today, which is why the baseline is empty; the highest are openmeteo Fetch and domain/koppen.go at 9-10.",
     "baseline": {},
     "_empty_baseline_note": "Empty since refactoring round 1: no function in the repository exceeds the cap of 10 any more (the worst are openmeteo Fetch and domain koppen at 9-10). A new entry here means a function was allowed past 10 — it needs a reason in review."
   },
   "hotspot": {
-    "_note": "A file is a hotspot when it is complex AND under-tested; a NEW hotspot fails the build. The two files below are the measured current ones and are grandfathered — they are visible test debt, not an exemption. Remove them from 'allow' as their coverage improves; the ratchet prints a notice once a file no longer qualifies.",
+    "_note": "A file is a hotspot when it is complex AND under-tested; a NEW hotspot fails the build. internal/adapters/http/server.go is the only one left and is grandfathered — visible test debt, not an exemption. Remove it from 'allow' once its coverage improves; the ratchet prints a notice as soon as it no longer qualifies.",
     "min_complexity": 30,
     "min_coverage": 75,
     "allow": [
