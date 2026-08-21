@@ -1,5 +1,5 @@
 .PHONY: all build run test test-coverage lint vet fmt fmt-check arch debt \
-        debt-guard debt-coverage mutation verify docs docs-serve docs-openapi-check \
+        debt-guard debt-coverage mutation codecharta verify docs docs-serve docs-openapi-check \
         doc-drift hooks security vuln licenses release-dry help
 
 BINARY_NAME := tempus
@@ -69,6 +69,27 @@ mutation: ## Mutation testing (ubuntu only — gremlins panics on macOS)
 	 gremlins unleash --threshold-efficacy 90 --threshold-mcover 95 ./internal/domain || rc=1; \
 	 gremlins unleash --threshold-efficacy 77 --threshold-mcover 94 ./internal/application || rc=1; \
 	 exit $$rc
+
+# Prefer an already-installed ccsh; otherwise run it through npx, which needs no
+# global install and no admin rights. Needs node and a JRE (ccsh is a JVM tool).
+CCSH_VERSION ?= 1.143.0
+CCSH ?= $(shell command -v ccsh 2>/dev/null || echo "npx --yes codecharta-analysis@$(CCSH_VERSION)")
+
+codecharta: ## CodeCharta map (structure+complexity+coverage+git) -> tempus.cc.json.gz, then the ratchet gate (needs node+java)
+	$(GO) install github.com/jandelgado/gcov2lcov@v1.1.1
+	$(CCSH) unifiedparser . -fe=go -e='_test\.go,third_party,\.claude' -nc -o base.cc.json
+	$(CCSH) gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
+	@$(GO) test -coverprofile=coverage.out ./... || true; \
+	 gobin=$$($(GO) env GOBIN); [ -n "$$gobin" ] || gobin=$$($(GO) env GOPATH)/bin; \
+	 inputs="base.cc.json git.cc.json"; \
+	 if [ -s coverage.out ]; then \
+	   "$$gobin"/gcov2lcov -infile=coverage.out -outfile=coverage.info; \
+	   $(CCSH) coverageimport coverage.info -f lcov -nc -o coverage.cc.json; \
+	   inputs="$$inputs coverage.cc.json"; \
+	 else echo "WARN: no coverage.out — map without coverage"; fi; \
+	 $(CCSH) merge $$inputs -o tempus.cc.json.gz
+	python3 scripts/codecharta-ratchet.py tempus.cc.json.gz .codecharta-ratchet.json
+	@echo "-> tempus.cc.json.gz  (load in https://maibornwolff.github.io/codecharta/visualization/)"
 
 ## Canonical, non-mutating "is it green?" — mirror this in CI.
 verify: fmt-check vet lint test arch debt-guard ## Authoritative green check
