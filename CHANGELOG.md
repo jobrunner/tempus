@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/jobrunner/tempus/compare/v0.18.0...v0.19.0) (2026-08-21)
+
+
+### Features
+
+* **frontend:** link source citations; ci: gate breaking OpenAPI changes ([#45](https://github.com/jobrunner/tempus/issues/45)) ([1f65dcb](https://github.com/jobrunner/tempus/commit/1f65dcb8a9d16bbc0e7429b6488a95e4fc88b75d))
+
 ## [0.18.0](https://github.com/jobrunner/tempus/compare/v0.17.0...v0.18.0) (2026-08-20)
 
 
