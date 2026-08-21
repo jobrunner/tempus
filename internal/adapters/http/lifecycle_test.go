@@ -120,6 +120,16 @@ func TestHandleQuery_ClientCancellationWritesNothing(t *testing.T) {
 	if rr.Body.Len() != 0 {
 		t.Errorf("body = %q, want empty for a cancelled client", rr.Body.String())
 	}
+	// "Writes nothing" has to mean the status line and headers too: a handler
+	// could call WriteHeader(500) and write no body, which an empty-body
+	// assertion alone would wave through. The recorder's default 200 with no
+	// Content-Type is what an untouched ResponseWriter looks like.
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want the recorder's untouched default 200", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "" {
+		t.Errorf("Content-Type = %q, want unset for a cancelled client", ct)
+	}
 }
 
 // With a tracer provider wired, otelmux creates a span and the middleware
