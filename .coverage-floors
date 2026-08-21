@@ -8,13 +8,13 @@ internal/application                                  89
 internal/config                                       86
 internal/adapters/cache/memory                        92
 internal/adapters/cache/bolt                          81
-internal/adapters/openmeteo                           81
+internal/adapters/openmeteo                           84
 internal/adapters/astronomy                           95
 internal/adapters/aggregate                           80
 internal/adapters/bioclim                             83
-internal/adapters/http                                59
+internal/adapters/http                                80
 internal/adapters/metrics                             66
 internal/adapters/telemetry                           71
 internal/ports/output                                 82
-internal/app                                          50
-TOTAL                                                 71
+internal/app                                          82
+TOTAL                                                 84

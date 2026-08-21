@@ -64,22 +64,24 @@ complexity of around 10; these are the outliers still carrying a baseline:
 | `internal/domain/koppen.go` | 45 | 10 | 91.1 % |
 | `internal/domain/lunar.go` | 39 | 8 | 96.4 % |
 | `internal/domain/bioclim.go` | 35 | 6 | 100 % |
-| `internal/adapters/http/server.go` | 33 | 5 | **65.3 %** |
+| `internal/adapters/http/server.go` | 33 | 5 | 95.3 % |
 | `internal/adapters/openmeteo/feature.go` | 29 | 7 | 90.9 % |
 
 Coverage here is per file as the map records it, which is not the same as the
 per-package figures the coverage floors use.
 
-`http/server.go` is the one remaining grandfathered hotspot: complex and
-under-tested. It is recorded as visible debt, not as an exemption.
+**The hotspot allowlist is empty.** No file in the repository is both complex and
+under-tested any more, so an entry there would mean accepting new test debt and
+needs a reason in review.
 
 **The per-function baseline is empty.** No function in the repository exceeds the
 cap of 10 any more, so adding an entry there means a function was let past the
 cap and needs a reason in review.
 
-### What the first round of ratcheting changed
+### What the ratcheting has changed so far
 
-The gate's first two targets were paid off rather than baselined:
+**Round 1 — complexity.** The gate's first two targets were paid off rather than
+baselined:
 
 | | Before | After |
 |---|---|---|
@@ -95,9 +97,24 @@ Two honest caveats. Splitting a function costs a little total file complexity
 (each new function brings its own base), which is why `feature.go` is baselined
 at 29 — the win is the per-function maximum, which cannot be moved around. And
 `app.go` left the hotspot list because its complexity fell below the threshold,
-not because it got tested; its coverage is in fact lower now that the
-well-covered wiring moved out. That debt is real, and paying it is the next step
-rather than something the gate resolved.
+not because it got tested; its coverage was in fact lower afterwards, once the
+well-covered wiring moved out.
+
+**Round 2 — coverage.** That debt was then paid, which emptied the hotspot
+allowlist:
+
+| File | Line coverage before | after |
+|---|---|---|
+| `internal/adapters/http/server.go` | 65.3 % | 95.3 % |
+| `internal/app/app.go` | 67.0 % (43 % after the split) | 88.2 % |
+
+The new tests cover the server lifecycle (`Start`/`Shutdown` reporting
+`ErrServerClosed`), the health and readiness probes including the fail-closed
+path, the uniform error envelope, the trace-ID header with and without tracing,
+panic recovery, `Run`'s shutdown-on-cancellation and its closers, and
+`buildCache`'s branches including its error path. The per-package floors in
+`.coverage-floors` were raised to match, so the improvement cannot quietly
+erode.
 
 ## Ratcheting
 
@@ -107,6 +124,9 @@ in. Raising a baseline entry is possible but needs a justification in review,
 the same way the coverage floors and the debt budget work. When a grandfathered
 hotspot gets tests, the gate says so; remove it from `allow`.
 
-What the gate points at next, now that the two complexity targets are paid off:
-coverage for `internal/adapters/http/server.go`, the last grandfathered hotspot,
-and for `internal/app/app.go`, whose test debt outlived its complexity.
+Both of the gate's opening targets are now paid off. `internal/app/observability.go`
+is the next honest gap at 60 % coverage — not a hotspot at complexity 11, but its
+untested parts are the tracing and metrics failure paths, which need error
+injection to reach. After that, the remaining baselines are the four
+domain/provider files between 35 and 51, where lowering the number means
+genuinely splitting up what the file does.
