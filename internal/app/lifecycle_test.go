@@ -24,6 +24,15 @@ func testConfig(t *testing.T) *config.Config {
 	// running instance or another test.
 	cfg.Server.Host = "127.0.0.1"
 	cfg.Server.Port = 0
+	// config.Load merges TEMPUS_* environment variables, so every field these
+	// tests assert on is pinned here: otherwise a developer machine or runner
+	// with, say, TEMPUS_PROVIDERS_BIOCLIM_ENABLED=false would fail the registry
+	// test for reasons that have nothing to do with the code.
+	cfg.Providers.OpenMeteo.Enabled = true
+	cfg.Providers.Aggregate.Enabled = true
+	cfg.Providers.Bioclim.Enabled = true
+	cfg.Tracing.Enabled = false
+	cfg.Metrics.Enabled = false
 	return cfg
 }
 
@@ -65,8 +74,13 @@ func TestApp_RunClosesTheDiskCache(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- a.Run(ctx) }()
 	cancel()
-	if err := <-done; err != nil {
-		t.Fatalf("Run: %v", err)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after the context was cancelled")
 	}
 
 	// Re-opening the same file proves the previous handle was released.

@@ -38,20 +38,21 @@ func serverWith(features input.FeatureService, health input.HealthChecker, opts 
 
 func TestHealthEndpoints(t *testing.T) {
 	tests := []struct {
+		name       string
 		path       string
 		health     input.HealthChecker
 		wantStatus int
 		wantBody   string
 	}{
-		{"/health", stubHealth{}, http.StatusOK, "ok"},
-		{"/health/live", stubHealth{}, http.StatusOK, "ok"},
-		{"/health/ready", stubHealth{}, http.StatusOK, "ok"},
+		{"health", "/health", stubHealth{}, http.StatusOK, "ok"},
+		{"live", "/health/live", stubHealth{}, http.StatusOK, "ok"},
+		{"ready", "/health/ready", stubHealth{}, http.StatusOK, "ok"},
 		// A readiness probe that reports not-ready must fail closed, so an
 		// orchestrator stops sending traffic instead of assuming health.
-		{"/health/ready", notReadyHealth{}, http.StatusServiceUnavailable, ""},
+		{"ready_reports_not_ready", "/health/ready", notReadyHealth{}, http.StatusServiceUnavailable, ""},
 	}
 	for _, tc := range tests {
-		t.Run(tc.path, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			srv := serverWith(stubFeatures{}, tc.health, Options{})
 			rr := httptest.NewRecorder()
 			srv.Router().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, tc.path, nil))
