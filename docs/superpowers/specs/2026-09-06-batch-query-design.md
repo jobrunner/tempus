@@ -169,12 +169,13 @@ Kein explizites Prioritätssystem (YAGNI). Die Fairness entsteht strukturell:
   Zeitraumlänge, bioclim (30-Jahres-Serie) deutlich höher (~30).
 - Ein In-Memory-Tageszähler (UTC-Tageswechsel) mit Budget
   `providers.openmeteo.daily_budget` (Default 8.000 — Puffer unter 10.000).
-- **Nur der Batch-Pfad prüft das Budget**: der Zähler lebt im Doer (er
-  zählt jeden Upstream-Call, egal woher), aber nur der `BatchService`
-  fragt ihn vor dem Dispatch jedes Punkts ab. Ist das Budget erschöpft,
-  bekommen die restlichen Punkte sofort einen Per-Provider-Fehler
-  (transient, `retryable: true`, Hinweis „daily budget exhausted, retry
-  tomorrow") statt Upstream-Calls zu feuern. Einzelabfragen laufen ungeprüft
+- **Nur der Batch-Pfad prüft das Budget**: Zähler und Durchsetzung leben im
+  Doer. Der `BatchService` markiert seinen Kontext als Batch-Ursprung; nur
+  für so markierte Requests reserviert der Doer Budget und lehnt bei
+  Erschöpfung sofort ab (ohne HTTP-Call) — der jeweilige Provider meldet das
+  als transienten Fehler (`retryable: true`, „daily budget exhausted, retry
+  tomorrow") im Item-Envelope. Astronomie-Provider (sun/moon) liefern dabei
+  weiter, weil sie den Doer nie berühren. Einzelabfragen laufen ungeprüft
   weiter (ihr Volumen ist vernachlässigbar; harte Grenzen setzt notfalls
   Open-Meteo selbst per 429, was der Doer sauber behandelt).
 - Erneuter Submit am Folgetag: bereits Geholtes kommt aus dem Cache,
