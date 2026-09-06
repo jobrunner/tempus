@@ -48,7 +48,7 @@ Randbedingungen aus der Klärung:
 ```json
 {
   "providers": ["weather", "aggregate"],
-  "gddBase": 10,
+  "gddBase": 7,
   "refPeriod": "1991-2020",
   "points": [
     { "id": "fund-17", "lat": 49.79, "lon": 9.95, "datetime": "2025-06-03T14:00:00Z" },
@@ -60,6 +60,10 @@ Randbedingungen aus der Klärung:
 - Gemeinsame Optionen (`providers`, `gddBase`, `refPeriod`) gelten für alle
   Punkte und heißen wie die Query-Parameter von `GET /api/v1/query`; alle
   optional mit denselben Defaults.
+- GDD-Semantik wie im Einzelrequest: der aggregate-Provider liefert **immer
+  Basis 5 und Basis 10** aus derselben Tagesserie; `gddBase` ergänzt nur
+  optional einen zusätzlichen `custom`-Wert. Batch-Items enthalten also
+  stets GDD5 und GDD10, ohne dass der Client etwas anfordern muss.
 - Pro Punkt: `lat`, `lon`, `datetime` (RFC 3339) — Parsing über die
   bestehende `domain.ParseQueryRequest`-Logik, damit Einzel- und
   Batch-Validierung nicht auseinanderlaufen.
