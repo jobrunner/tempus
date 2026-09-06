@@ -60,6 +60,16 @@ type CacheConfig struct {
 
 type QueryConfig struct {
 	Timeout time.Duration `mapstructure:"timeout"`
+	Batch   BatchConfig   `mapstructure:"batch"`
+}
+
+// BatchConfig bounds the batch endpoint: MaxPoints is the hard request cap,
+// MaxSyncPoints the synchronous-mode cap (larger batches must stream NDJSON),
+// Concurrency the batch worker-pool size.
+type BatchConfig struct {
+	MaxPoints     int `mapstructure:"max_points"`
+	MaxSyncPoints int `mapstructure:"max_sync_points"`
+	Concurrency   int `mapstructure:"concurrency"`
 }
 
 type ProvidersConfig struct {
@@ -80,6 +90,19 @@ type OpenMeteoConfig struct {
 	ForecastBaseURL string        `mapstructure:"forecast_base_url"`
 	Timeout         time.Duration `mapstructure:"timeout"`
 	ArchiveDelay    time.Duration `mapstructure:"archive_delay"`
+	RatePerMinute   int           `mapstructure:"rate_per_minute"`
+	RetryAttempts   int           `mapstructure:"retry_attempts"`
+	DailyBudget     int           `mapstructure:"daily_budget"`
+	Weights         CallWeights   `mapstructure:"weights"`
+}
+
+// CallWeights are the estimated Open-Meteo cost weights per call type; long
+// archive ranges count as multiple calls upstream, so bioclim's 30-year daily
+// series weighs far more than a single-day weather call.
+type CallWeights struct {
+	Weather   int `mapstructure:"weather"`
+	Aggregate int `mapstructure:"aggregate"`
+	Bioclim   int `mapstructure:"bioclim"`
 }
 
 // AggregateConfig configures the weather-aggregate provider (antecedent
@@ -112,11 +135,20 @@ func Defaults() {
 	viper.SetDefault("cache.type", "disk")
 	viper.SetDefault("cache.path", "./data/cache.bolt")
 	viper.SetDefault("query.timeout", 30*time.Second)
+	viper.SetDefault("query.batch.max_points", 10000)
+	viper.SetDefault("query.batch.max_sync_points", 1000)
+	viper.SetDefault("query.batch.concurrency", 4)
 	viper.SetDefault("providers.openmeteo.enabled", true)
 	viper.SetDefault("providers.openmeteo.archive_base_url", "https://archive-api.open-meteo.com/v1/archive")
 	viper.SetDefault("providers.openmeteo.forecast_base_url", "https://api.open-meteo.com/v1/forecast")
 	viper.SetDefault("providers.openmeteo.timeout", 10*time.Second)
 	viper.SetDefault("providers.openmeteo.archive_delay", 5*24*time.Hour)
+	viper.SetDefault("providers.openmeteo.rate_per_minute", 500)
+	viper.SetDefault("providers.openmeteo.retry_attempts", 3)
+	viper.SetDefault("providers.openmeteo.daily_budget", 8000)
+	viper.SetDefault("providers.openmeteo.weights.weather", 1)
+	viper.SetDefault("providers.openmeteo.weights.aggregate", 2)
+	viper.SetDefault("providers.openmeteo.weights.bioclim", 30)
 	viper.SetDefault("providers.aggregate.enabled", true)
 	viper.SetDefault("providers.bioclim.enabled", true)
 }
