@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -52,14 +53,8 @@ type Options struct {
 
 // NewServer builds the server, wires routes, and prepares the http.Server.
 func NewServer(addr string, features input.FeatureService, batch input.BatchService, providers input.ProviderLister, health input.HealthChecker, clock output.Clock, logger *slog.Logger, opts Options) *Server {
-	name := opts.ServiceName
-	if name == "" {
-		name = "tempus"
-	}
-	version := opts.Version
-	if version == "" {
-		version = "dev"
-	}
+	name := cmp.Or(opts.ServiceName, "tempus")
+	version := cmp.Or(opts.Version, "dev")
 	s := &Server{
 		features:       features,
 		batch:          batch,

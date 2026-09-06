@@ -10,10 +10,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -159,62 +157,6 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 	// consistent with the other providers.
 	resolved := domain.Coordinate{Lat: data.Latitude, Lon: data.Longitude}
 	return domain.NewPointFeature(resolved, props, p.license(period))
-}
-
-func (p *Provider) buildURL(coord domain.Coordinate, startY, endY int) (string, error) {
-	u, err := url.Parse(p.archiveBaseURL)
-	if err != nil {
-		return "", err
-	}
-	q := u.Query()
-	q.Set("latitude", fmt.Sprintf("%.5f", coord.Lat))
-	q.Set("longitude", fmt.Sprintf("%.5f", coord.Lon))
-	q.Set("timezone", "UTC")
-	q.Set("daily", "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum")
-	q.Set("start_date", fmt.Sprintf("%d-01-01", startY))
-	q.Set("end_date", fmt.Sprintf("%d-12-31", endY))
-	u.RawQuery = q.Encode()
-	return u.String(), nil
-}
-
-func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return output.NewTransientError(err, 30*time.Second)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return output.NewTransientError(fmt.Errorf("open-meteo status %d", resp.StatusCode), retryAfter(resp))
-	}
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return output.NewPermanentError(fmt.Errorf("open-meteo status %d: %s", resp.StatusCode, b))
-	}
-	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
-		return output.NewPermanentError(err)
-	}
-	return nil
-}
-
-// retryAfter reads the response's Retry-After header (seconds) so the
-// envelope's hint reflects what Open-Meteo actually asked for; it falls back
-// to a fixed 60s when the header is absent or unparsable.
-func retryAfter(resp *http.Response) time.Duration {
-	if s := resp.Header.Get("Retry-After"); s != "" {
-		if secs, err := time.ParseDuration(s + "s"); err == nil {
-			return secs
-		}
-	}
-	return 60 * time.Second
-}
-
-func (p *Provider) license(period string) domain.License {
-	return domain.License{
-		Name:        licenseName,
-		URL:         licenseURL,
-		Attribution: "Weather data by Open-Meteo.com; ERA5 (Copernicus Climate Change Service / ECMWF), " + period + "; " + domain.BioclimSource,
-	}
 }
 
 // monthlyNormals aggregates the daily archive range into 12-month climate

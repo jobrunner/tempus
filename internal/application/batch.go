@@ -43,9 +43,30 @@ func (s *BatchService) QueryBatch(ctx context.Context, points []input.BatchPoint
 	ctx, cancel := context.WithCancel(output.WithBatchOrigin(ctx))
 	defer cancel() // stops the dispatcher when emit aborts early
 
+	assign, order := s.buildGroups(points)
+	sem := make(chan struct{}, s.concurrency)
+	go s.dispatch(ctx, order, sem)
+
+	for i, p := range points {
+		if p.Req == nil {
+			if err := emit(input.BatchItem{ID: p.ID, Error: &input.BatchItemError{Message: p.ParseError}}); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := s.awaitAndEmit(ctx, p, assign[i], emit); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// buildGroups deduplicates points sharing the same fetch key: assign maps each
+// input point index to its group, and order lists each distinct group exactly
+// once, in first-seen order (the order dispatch fires them in).
+func (s *BatchService) buildGroups(points []input.BatchPoint) (assign []*group, order []*group) {
 	groups := map[string]*group{}
-	var order []*group
-	assign := make([]*group, len(points))
+	assign = make([]*group, len(points))
 	for i, p := range points {
 		if p.Req == nil {
 			continue
@@ -59,49 +80,45 @@ func (s *BatchService) QueryBatch(ctx context.Context, points []input.BatchPoint
 		}
 		assign[i] = g
 	}
+	return assign, order
+}
 
-	sem := make(chan struct{}, s.concurrency)
-	go func() {
-		for _, g := range order {
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			go func(g *group) {
-				defer func() { <-sem }()
-				g.res, g.err = s.features.Query(ctx, g.req)
-				close(g.done)
-			}(g)
-		}
-	}()
-
-	for i, p := range points {
-		if p.Req == nil {
-			if err := emit(input.BatchItem{ID: p.ID, Error: &input.BatchItemError{Message: p.ParseError}}); err != nil {
-				return err
-			}
-			continue
-		}
-		g := assign[i]
+// dispatch fetches each group through the bounded worker pool, releasing its
+// semaphore slot as soon as the fetch completes. It returns (via the closed
+// done channel) rather than an error since results are collected by the
+// caller reading g.res/g.err after g.done closes.
+func (s *BatchService) dispatch(ctx context.Context, order []*group, sem chan struct{}) {
+	for _, g := range order {
 		select {
+		case sem <- struct{}{}:
 		case <-ctx.Done():
-			return ctx.Err()
-		case <-g.done:
+			return
 		}
-		if g.err != nil {
-			return g.err // Query only errors on caller-canceled contexts
-		}
-		res := g.res // shallow copy: the echo is rewritten per point, features are shared read-only
-		res.Query = domain.QueryEcho{
-			Coordinate: p.Req.Coordinate,
-			Datetime:   p.Req.Instant.UTC().Format(time.RFC3339),
-		}
-		if err := emit(input.BatchItem{ID: p.ID, QueryResult: &res}); err != nil {
-			return err
-		}
+		go func(g *group) {
+			defer func() { <-sem }()
+			g.res, g.err = s.features.Query(ctx, g.req)
+			close(g.done)
+		}(g)
 	}
-	return nil
+}
+
+// awaitAndEmit waits for g's fetch to complete and emits the point's result
+// with its own echo (coordinate/datetime), preserving input order.
+func (s *BatchService) awaitAndEmit(ctx context.Context, p input.BatchPoint, g *group, emit func(input.BatchItem) error) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-g.done:
+	}
+	if g.err != nil {
+		return g.err // Query only errors on caller-canceled contexts
+	}
+	res := g.res // shallow copy: the echo is rewritten per point, features are shared read-only
+	res.Query = domain.QueryEcho{
+		Coordinate: p.Req.Coordinate,
+		Datetime:   p.Req.Instant.UTC().Format(time.RFC3339),
+	}
+	return emit(input.BatchItem{ID: p.ID, QueryResult: &res})
 }
 
 // groupKey identifies "the same fetch": rounded coordinate, instant, and the

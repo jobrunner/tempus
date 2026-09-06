@@ -56,7 +56,9 @@ func NewTransport(opts Options) *Transport {
 // RoundTrip implements http.RoundTripper.
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.budget != nil && output.IsBatchOrigin(req.Context()) && !t.budget.TryReserve(t.weight) {
-		return nil, ErrBudgetExhausted
+		// The retry hint is "until UTC midnight", when the daily budget rolls
+		// over — not a fabricated short backoff.
+		return nil, output.NewTransientError(ErrBudgetExhausted, t.budget.UntilReset())
 	}
 	for attempt := 0; ; attempt++ {
 		if t.limiter != nil {
@@ -68,16 +70,25 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if !shouldRetry(resp, err) || attempt >= t.attempts || req.Body != nil {
 			return resp, err
 		}
-		wait := retryDelay(resp, attempt)
-		if resp != nil {
-			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-			_ = resp.Body.Close()
+		if err := waitBeforeRetry(req, resp, attempt); err != nil {
+			return nil, err
 		}
-		select {
-		case <-req.Context().Done():
-			return nil, req.Context().Err()
-		case <-time.After(wait):
-		}
+	}
+}
+
+// waitBeforeRetry drains and closes a non-nil response body, then blocks until
+// either the retry delay elapses or the request's context is done.
+func waitBeforeRetry(req *http.Request, resp *http.Response, attempt int) error {
+	wait := retryDelay(resp, attempt)
+	if resp != nil {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		_ = resp.Body.Close()
+	}
+	select {
+	case <-req.Context().Done():
+		return req.Context().Err()
+	case <-time.After(wait):
+		return nil
 	}
 }
 

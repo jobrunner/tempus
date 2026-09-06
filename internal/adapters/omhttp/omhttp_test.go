@@ -117,6 +117,13 @@ func TestTransport_BudgetRejectsBatchOnly(t *testing.T) {
 	if !errors.Is(err, ErrBudgetExhausted) {
 		t.Fatalf("err = %v, want ErrBudgetExhausted", err)
 	}
+	pe, ok := output.AsProviderError(err)
+	if !ok {
+		t.Fatalf("err = %v, want a wrapped output.ProviderError", err)
+	}
+	if want := budget.UntilReset(); pe.RetryAfter != want {
+		t.Errorf("RetryAfter = %v, want %v (until UTC midnight)", pe.RetryAfter, want)
+	}
 	if resp2 != nil {
 		resp2.Body.Close()
 	}
