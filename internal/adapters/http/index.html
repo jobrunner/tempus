@@ -2013,6 +2013,21 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
         // --- Batch tab -------------------------------------------------------------
         (function initBatch() {
+            // esc: local duplicate of the single-query IIFE's HTML-escaping helper.
+            // The two IIFEs are sibling scopes (function declarations don't leak
+            // out of their enclosing function), so this IIFE cannot see that one's
+            // `esc` — duplicating the tiny helper here keeps this panel
+            // self-contained instead of restructuring the pre-existing IIFE.
+            function esc(str) {
+                if (str === null || str === undefined) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
             const tabSingle = document.getElementById('tabSingle');
             const tabBatch = document.getElementById('tabBatch');
             const singlePanel = document.getElementById('singlePanel');
