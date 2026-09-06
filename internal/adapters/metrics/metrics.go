@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -35,6 +36,14 @@ type Server struct {
 // metric names.
 func New(cfg config.MetricsConfig) (*Server, error) {
 	reg := prometheus.NewRegistry()
+	// client_golang's Go/process collectors self-register onto the package-global
+	// DefaultRegisterer only via their own init()-time convenience wrapper; a
+	// dedicated registry gets neither for free, so register them explicitly to
+	// keep the documented go_goroutines/process_* output.
+	reg.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
 	exporter, err := otelprometheus.New(otelprometheus.WithRegisterer(reg))
 	if err != nil {
 		return nil, fmt.Errorf("prometheus exporter: %w", err)

@@ -51,9 +51,17 @@ func TestRegisterBudgetGauges_ExposesSpentAndLimit(t *testing.T) {
 	}
 
 	body := scrape(t, srv.Handler())
+	// Pin both properties together: the new budget gauges must be present
+	// WITHOUT losing the standard Go runtime metrics that metrics.New's
+	// private-registry rewrite must still preserve (go_goroutines and
+	// process_* only ever self-register onto the global DefaultRegisterer via
+	// client_golang's package init(), so a naive dedicated prometheus.Registry
+	// silently drops them unless explicitly registered).
 	for _, want := range []string{
 		"tempus_openmeteo_daily_budget_spent",
 		"tempus_openmeteo_daily_budget_limit",
+		"go_goroutines",
+		"process_",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape output missing %q\n---\n%s", want, body)
