@@ -78,3 +78,5 @@ Bounds for `POST /api/v1/query/batch` — see the
 | `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_WEATHER` | `1` | Budget weight charged per weather-provider call |
 | `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_AGGREGATE` | `2` | Budget weight charged per aggregate-provider call (now cached, keyed by `gddBase`). The aggregate provider itself makes two upstream calls per fetch (daily range + hourly precipitation), so a point costs 2× this weight against the daily budget |
 | `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_BIOCLIM` | `30` | Budget weight charged per bioclim-provider call |
+
+The rate limiter and the daily budget are per-process, in-memory state: running multiple replicas multiplies the effective rate and daily budget (each replica enforces its own), and restarting a replica resets its share of the day's spent count.

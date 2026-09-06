@@ -62,6 +62,8 @@ provider status. This avoids repeat upstream calls for the same query inputs.
 | `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_AGGREGATE` | `2` | Budget weight per aggregate-provider call. The aggregate provider makes two upstream calls per fetch, so a point costs 2× this weight |
 | `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_BIOCLIM` | `30` | Budget weight per bioclim-provider call |
 
+The rate limiter and the daily budget are per-process, in-memory state: running multiple replicas multiplies the effective rate and daily budget, and restarting a replica resets its share of the day's spent count.
+
 ## Query
 
 | Variable | Default | Description |

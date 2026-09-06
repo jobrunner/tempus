@@ -259,6 +259,8 @@ than failing the batch:
 {"id": "a", "providers": [{"id": "open-meteo", "kind": "weather", "status": "unavailable", "retryable": true, "error": "Get \"https://api.open-meteo.com/v1/forecast?...\": open-meteo daily budget exhausted; retry tomorrow"}]}
 ```
 
+Both the rate limiter and the daily budget are per-process, in-memory state: running multiple replicas multiplies the effective rate and daily budget, and restarting a replica resets its share of the day's spent count.
+
 ---
 
 ## `GET /api/v1/providers`
