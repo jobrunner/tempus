@@ -44,6 +44,47 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/ProviderInfo"
+  /query/batch:
+    post:
+      summary: Batch feature query for many coordinate+time points
+      description: >
+        Processes up to query.batch.max_points points through the same
+        provider pipeline as GET /query. Responses stream as NDJSON (one
+        result item per line, input order) when the client sends
+        Accept: application/x-ndjson; otherwise a synchronous JSON envelope
+        is returned, capped at query.batch.max_sync_points points (413 above
+        that, with a hint to retry streaming). Invalid points become per-item
+        error objects and never abort the batch. Batch traffic is
+        rate-limited and budget-guarded against the Open-Meteo free tier;
+        exhausted budget surfaces as retryable per-provider errors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchQueryRequest"
+      responses:
+        "200":
+          description: Batch results (sync envelope, or NDJSON stream of items)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchQueryResponse"
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/BatchQueryResultItem"
+        "400":
+          description: Invalid request (empty points, too many points, bad JSON)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Body too large, or too many points for synchronous mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     Error:
@@ -578,3 +619,64 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProviderStatus"
+    BatchQueryPoint:
+      type: object
+      required: [lat, lon, datetime]
+      properties:
+        id:
+          type: string
+          description: Opaque echo id; defaults to the 0-based input index as string.
+        lat:
+          type: number
+        lon:
+          type: number
+        datetime:
+          type: string
+          description: Same formats as GET /query's datetime parameter.
+    BatchQueryRequest:
+      type: object
+      required: [points]
+      properties:
+        providers:
+          type: array
+          items:
+            type: string
+          description: Optional provider-id filter applied to every point.
+        gddBase:
+          type: number
+          description: Optional extra GDD base (°C, [-50,50]) applied to every point; base 5 and 10 are always included.
+        refPeriod:
+          type: string
+          description: Optional bioclim reference period 'YYYY-YYYY' applied to every point.
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchQueryPoint"
+    BatchQueryResultItem:
+      description: >
+        One result per input point, in input order: the single-query envelope
+        plus id — or, for unparsable points, only id + error.
+      allOf:
+        - $ref: "#/components/schemas/QueryResult"
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+            error:
+              type: object
+              properties:
+                message:
+                  type: string
+    BatchQueryResponse:
+      type: object
+      required: [results, total, processing_time_ms]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchQueryResultItem"
+        total:
+          type: integer
+        processing_time_ms:
+          type: integer

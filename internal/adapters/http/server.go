@@ -28,6 +28,8 @@ type Server struct {
 	server         *http.Server
 	router         *mux.Router
 	features       input.FeatureService
+	batch          input.BatchService
+	batchLimits    BatchLimits
 	providers      input.ProviderLister
 	clock          output.Clock
 	health         input.HealthChecker
@@ -44,10 +46,12 @@ type Options struct {
 	// Version is substituted into the frontend footer (e.g. from -ldflags). When
 	// empty, "dev" is shown.
 	Version string
+	// Batch bounds POST /api/v1/query/batch; zero fields fall back to defaults.
+	Batch BatchLimits
 }
 
 // NewServer builds the server, wires routes, and prepares the http.Server.
-func NewServer(addr string, features input.FeatureService, providers input.ProviderLister, health input.HealthChecker, clock output.Clock, logger *slog.Logger, opts Options) *Server {
+func NewServer(addr string, features input.FeatureService, batch input.BatchService, providers input.ProviderLister, health input.HealthChecker, clock output.Clock, logger *slog.Logger, opts Options) *Server {
 	name := opts.ServiceName
 	if name == "" {
 		name = "tempus"
@@ -58,6 +62,8 @@ func NewServer(addr string, features input.FeatureService, providers input.Provi
 	}
 	s := &Server{
 		features:       features,
+		batch:          batch,
+		batchLimits:    opts.Batch,
 		providers:      providers,
 		clock:          clock,
 		health:         health,
@@ -99,6 +105,7 @@ func (s *Server) setupRoutes() *mux.Router {
 	// openapi.yaml (enforced by TestRoutesMatchOpenAPISpec).
 	api := r.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
+	api.HandleFunc("/query/batch", s.handleQueryBatch).Methods(http.MethodPost)
 	api.HandleFunc("/providers", s.handleProviders).Methods(http.MethodGet)
 
 	// OpenAPI spec and Swagger UI — root-level, NOT under /api/v1 (not in the
@@ -246,3 +253,8 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap lets http.ResponseController (used for streaming Flush, e.g. by
+// handleQueryBatch's NDJSON writer) reach the underlying ResponseWriter's
+// Flush/Hijack support through this logging wrapper.
+func (rw *responseWriter) Unwrap() http.ResponseWriter { return rw.ResponseWriter }

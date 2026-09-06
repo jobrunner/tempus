@@ -20,6 +20,10 @@ const metricsShutdownTimeout = 5 * time.Second
 // this is a method rather than a free function.
 func (a *App) wireObservability(version string) (httpapi.Options, error) {
 	opts := httpapi.Options{ServiceName: "tempus", Version: version}
+	opts.Batch = httpapi.BatchLimits{
+		MaxPoints:     a.cfg.Query.Batch.MaxPoints,
+		MaxSyncPoints: a.cfg.Query.Batch.MaxSyncPoints,
+	}
 
 	if a.cfg.Tracing.Enabled {
 		tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), a.cfg.Tracing, "tempus")
