@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel/exporters/prometheus"
+	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
 	"github.com/jobrunner/tempus/internal/config"
@@ -28,9 +29,13 @@ type Server struct {
 }
 
 // New builds a Prometheus-backed MeterProvider and wires the scrape server.
-// Call Start to begin serving and Shutdown to drain.
+// Call Start to begin serving and Shutdown to drain. Each Server owns its own
+// prometheus.Registry rather than the package-global default registerer, so
+// multiple Servers (e.g. across tests in one process) never collide over
+// metric names.
 func New(cfg config.MetricsConfig) (*Server, error) {
-	exporter, err := prometheus.New()
+	reg := prometheus.NewRegistry()
+	exporter, err := otelprometheus.New(otelprometheus.WithRegisterer(reg))
 	if err != nil {
 		return nil, fmt.Errorf("prometheus exporter: %w", err)
 	}
@@ -45,7 +50,7 @@ func New(cfg config.MetricsConfig) (*Server, error) {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(path, promhttp.Handler())
+	mux.Handle(path, promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 	addr := ":" + strconv.Itoa(cfg.Port)
 	httpSrv := &http.Server{

@@ -19,11 +19,13 @@ import (
 )
 
 // omClients are the per-adapter HTTP clients sharing one rate limiter and one
-// daily budget. Each client carries its own cost weight and timeout.
+// daily budget. Each client carries its own cost weight and timeout. Budget is
+// nil when Open-Meteo is disabled (no clients are built at all).
 type omClients struct {
 	weather   *http.Client
 	aggregate *http.Client
 	bioclim   *http.Client
+	budget    *omhttp.Budget
 }
 
 // buildOpenMeteoClients wires the shared throttling transport. The limiter and
@@ -31,6 +33,9 @@ type omClients struct {
 // type because Open-Meteo weighs long archive ranges as multiple calls.
 func buildOpenMeteoClients(cfg *config.Config, clk output.Clock) omClients {
 	om := cfg.Providers.OpenMeteo
+	if !om.Enabled {
+		return omClients{}
+	}
 	// Burst 10 keeps a single interactive query (≤4 calls) latency-free while
 	// the sustained rate stays under the free-tier minute limit.
 	limiter := rate.NewLimiter(rate.Limit(float64(om.RatePerMinute)/60.0), 10)
@@ -52,15 +57,17 @@ func buildOpenMeteoClients(cfg *config.Config, clk output.Clock) omClients {
 		// The 30-year daily fetch is large; allow more time than a single-hour
 		// call (matches the previous hardcoded bioclim timeout).
 		bioclim: client(om.Weights.Bioclim, 60*time.Second),
+		budget:  budget,
 	}
 }
 
 // buildRegistry decides which providers this configuration runs. It is separate
 // from New because "which providers exist and under what conditions" is its own
 // question, told once, rather than four conditionals inside the composition root.
-func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock) *application.Registry {
+// clients is built once by the caller (app.New) so the budget it carries can
+// also be handed to the metrics wiring.
+func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, clients omClients) *application.Registry {
 	registry := application.NewRegistry()
-	clients := buildOpenMeteoClients(cfg, clk)
 
 	if cfg.Providers.OpenMeteo.Enabled {
 		registry.Register(cachedWeatherProvider(cfg, cache, clk, clients.weather))
