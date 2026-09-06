@@ -185,7 +185,7 @@ func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return output.NewTransientError(fmt.Errorf("open-meteo status %d", resp.StatusCode), 60*time.Second)
+		return output.NewTransientError(fmt.Errorf("open-meteo status %d", resp.StatusCode), retryAfter(resp))
 	}
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
@@ -195,6 +195,18 @@ func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
 		return output.NewPermanentError(err)
 	}
 	return nil
+}
+
+// retryAfter reads the response's Retry-After header (seconds) so the
+// envelope's hint reflects what Open-Meteo actually asked for; it falls back
+// to a fixed 60s when the header is absent or unparsable.
+func retryAfter(resp *http.Response) time.Duration {
+	if s := resp.Header.Get("Retry-After"); s != "" {
+		if secs, err := time.ParseDuration(s + "s"); err == nil {
+			return secs
+		}
+	}
+	return 60 * time.Second
 }
 
 func (p *Provider) license(period string) domain.License {

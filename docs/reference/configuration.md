@@ -44,13 +44,13 @@ practical walkthrough. This page lists every knob.
 | Variable | Default | Description |
 |---|---|---|
 | `TEMPUS_CACHE_TYPE` | `disk` | `disk` (bbolt) or `memory` |
-| `TEMPUS_CACHE_PATH` | `./tempus.db` | Path for the disk cache file |
+| `TEMPUS_CACHE_PATH` | `./data/cache.bolt` | Path for the disk cache file |
 
 ## Query
 
 | Variable | Default | Description |
 |---|---|---|
-| `TEMPUS_QUERY_TIMEOUT` | `15s` | Total deadline per `/api/v1/query` call |
+| `TEMPUS_QUERY_TIMEOUT` | `30s` | Total deadline per `/api/v1/query` call |
 
 ## Query — Batch
 
@@ -76,5 +76,5 @@ Bounds for `POST /api/v1/query/batch` — see the
 | `TEMPUS_PROVIDERS_OPENMETEO_RETRY_ATTEMPTS` | `3` | Retries for 429/5xx/network errors, honoring the upstream `Retry-After` header |
 | `TEMPUS_PROVIDERS_OPENMETEO_DAILY_BUDGET` | `8000` | Weighted daily call budget enforced **only** for batch-originated requests (`GET /api/v1/query` and the astronomy providers are never budget-checked); exhausted budget surfaces as a retryable per-provider error |
 | `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_WEATHER` | `1` | Budget weight charged per weather-provider call |
-| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_AGGREGATE` | `2` | Budget weight charged per aggregate-provider call (now cached, keyed by `gddBase`) |
+| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_AGGREGATE` | `2` | Budget weight charged per aggregate-provider call (now cached, keyed by `gddBase`). The aggregate provider itself makes two upstream calls per fetch (daily range + hourly precipitation), so a point costs 2× this weight against the daily budget |
 | `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_BIOCLIM` | `30` | Budget weight charged per bioclim-provider call |

@@ -245,16 +245,18 @@ Two distinct causes share this status:
 
 ### Throttling and the daily budget
 
-Batch traffic — and only batch traffic — is metered against a shared
-Open-Meteo token-bucket rate limiter and a weighted daily call budget (see
-[configuration](configuration.md#providers-open-meteo) for the knobs).
-`GET /api/v1/query` and the astronomy providers (`sun`/`moon`) are never
-budget-checked. When the day's weighted budget is spent, the affected
-provider(s) report a transient failure per point rather than failing the
-batch:
+The shared Open-Meteo token-bucket rate limiter applies to every Open-Meteo
+call — `GET /api/v1/query` included — not only batch traffic. The weighted
+daily call budget, however, is batch-only (see
+[configuration](configuration.md#providers-open-meteo) for the knobs). The
+aggregate provider makes two upstream calls per fetch, so a point costs 2×
+its configured weight against the budget. The astronomy providers
+(`sun`/`moon`) are never budget-checked. When the day's weighted budget is
+spent, the affected provider(s) report a transient failure per point rather
+than failing the batch:
 
 ```json
-{"id": "a", "providers": [{"id": "open-meteo", "kind": "weather", "status": "unavailable", "retryable": true, "error": "open-meteo daily budget exhausted; retry tomorrow"}]}
+{"id": "a", "providers": [{"id": "open-meteo", "kind": "weather", "status": "unavailable", "retryable": true, "error": "Get \"https://api.open-meteo.com/v1/forecast?...\": open-meteo daily budget exhausted; retry tomorrow"}]}
 ```
 
 ---

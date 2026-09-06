@@ -2,6 +2,7 @@ package aggregate
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,6 +50,34 @@ func req(instant time.Time, base *float64) domain.QueryRequest {
 		Coordinate:     domain.Coordinate{Lat: 49.79, Lon: 9.93},
 		Instant:        instant,
 		GDDBaseCelsius: base,
+	}
+}
+
+func TestFetch_RetryAfterReflectsHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "17")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	// A plain client: the adapter's own retryAfter parsing must be reached
+	// directly, without omhttp.Transport's internal retries intercepting the 429.
+	p := New(Options{
+		ArchiveBaseURL:  srv.URL,
+		ForecastBaseURL: srv.URL,
+		Timeout:         2 * time.Second,
+		ArchiveDelay:    5 * 24 * time.Hour,
+		Clock:           fixedClock{time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)},
+		HTTPClient:      &http.Client{},
+	})
+
+	_, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), nil))
+	var pe output.ProviderError
+	if !errors.As(err, &pe) {
+		t.Fatalf("Fetch err = %v, want ProviderError", err)
+	}
+	if pe.RetryAfter != 17*time.Second {
+		t.Errorf("RetryAfter = %v, want 17s", pe.RetryAfter)
 	}
 }
 

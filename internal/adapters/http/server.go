@@ -73,6 +73,10 @@ func NewServer(addr string, features input.FeatureService, batch input.BatchServ
 		frontendPage:   renderFrontend(version),
 	}
 	s.router = s.setupRoutes()
+	// No blanket WriteTimeout here: batch NDJSON streaming can legitimately run
+	// long, and a server-wide write deadline would kill it mid-stream. The
+	// batch handler lifts any per-connection write deadline itself for its
+	// response (see streamBatchNDJSON in batch_render.go).
 	s.server = &http.Server{
 		Addr:              addr,
 		Handler:           s.router,

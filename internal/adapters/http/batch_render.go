@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/jobrunner/tempus/internal/ports/input"
 )
@@ -43,8 +44,15 @@ func (s *Server) writeBatchSync(w http.ResponseWriter, r *http.Request, points [
 // client detects a broken stream by comparing line count to points sent.
 func (s *Server) streamBatchNDJSON(w http.ResponseWriter, r *http.Request, points []input.BatchPoint) {
 	w.Header().Set("Content-Type", "application/x-ndjson")
-	w.WriteHeader(http.StatusOK)
 	rc := http.NewResponseController(w)
+	// Lift any server-wide WriteTimeout for this response: a batch stream can
+	// legitimately run long, and a blanket deadline must not kill it mid-flight.
+	// Not every ResponseWriter supports this (e.g. in tests); ignore the error.
+	_ = rc.SetWriteDeadline(time.Time{})
+	w.WriteHeader(http.StatusOK)
+	// Flush the header immediately so the client sees a response before the
+	// first (possibly slow) item arrives.
+	_ = rc.Flush()
 	enc := json.NewEncoder(w)
 	err := s.batch.QueryBatch(r.Context(), points, func(it input.BatchItem) error {
 		if err := enc.Encode(it); err != nil { // Encode appends the newline

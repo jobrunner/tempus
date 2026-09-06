@@ -138,7 +138,7 @@ func TestBatchService_BoundsConcurrencyAndMarksBatchOrigin(t *testing.T) {
 func TestBatchService_EmitErrorAborts(t *testing.T) {
 	f := &countingFeatures{}
 	svc := application.NewBatchService(f, 1, 2)
-	wantErr := context.Canceled // beliebiger Sentinel
+	wantErr := context.Canceled // any sentinel error works here
 	err := svc.QueryBatch(context.Background(),
 		[]input.BatchPoint{point("a", 1, 2), point("b", 3, 4)},
 		func(input.BatchItem) error { return wantErr })

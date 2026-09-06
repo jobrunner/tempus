@@ -60,8 +60,9 @@ func postBatch(t *testing.T, srv *Server, body string, accept string) *httptest.
 }
 
 func TestHandleQueryBatch_SyncEnvelope(t *testing.T) {
-	// 2 Punkte (einer mit id, einer ohne) → 200, results in Reihenfolge,
-	// fehlende id = Index als String, total == 2, processing_time_ms vorhanden.
+	// 2 points (one with an id, one without) → 200, results in request order,
+	// a missing id falls back to its index as a string, total == 2, and
+	// processing_time_ms is populated (asserted below).
 	body := `{"points":[
 		{"id":"x","lat":49.79,"lon":9.95,"datetime":"2025-06-03T14:00:00Z"},
 		{"lat":47.42,"lon":10.98,"datetime":"2025-06-03T14:00:00Z"}]}`
@@ -79,6 +80,11 @@ func TestHandleQueryBatch_SyncEnvelope(t *testing.T) {
 	}
 	if env.Total != 2 || len(env.Results) != 2 {
 		t.Fatalf("total/results = %d/%d, want 2/2", env.Total, len(env.Results))
+	}
+	// The test clock is fixed, so start and end read the same instant and the
+	// envelope's processing_time_ms is deterministically zero rather than absent.
+	if env.ProcessingTimeMS != 0 {
+		t.Errorf("processing_time_ms = %d, want 0 (fixed clock)", env.ProcessingTimeMS)
 	}
 	var first struct {
 		ID string `json:"id"`
