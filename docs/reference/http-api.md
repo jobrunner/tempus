@@ -122,6 +122,143 @@ features are still computed.
 
 ---
 
+## `POST /api/v1/query/batch`
+
+Query many coordinate+time points in one request through the same provider
+pipeline as `GET /api/v1/query`. Points that share a rounded coordinate,
+instant, and options are fetched once and fanned out to every matching
+result, so duplicate points in a batch cost nothing extra.
+
+### Request — `BatchQueryRequest`
+
+```json
+{
+  "providers": ["open-meteo"],
+  "gddBase": 7,
+  "refPeriod": "1991-2020",
+  "points": [
+    {"id": "a", "lat": 48.137, "lon": 11.576, "datetime": "2025-07-01T12:00:00Z"},
+    {"id": "b", "lat": 52.520, "lon": 13.405, "datetime": "2025-07-02T12:00:00Z"}
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `providers` | string[] | no | Provider-id filter applied to every point. Omit to query all enabled providers. |
+| `gddBase` | number | no | Extra GDD base (°C, [-50,50]) applied to every point, **in addition to** the two bases the aggregate provider always computes — see [note below](#gdd-base-5-and-10). |
+| `refPeriod` | string | no | Bioclim reference period `YYYY-YYYY`, same rules as `GET /api/v1/query`. |
+| `points` | array | yes | 1..`query.batch.max_points` points (default cap 10000, see [configuration](configuration.md)). |
+| `points[].id` | string | no | Opaque echo id. Defaults to the 0-based input index as a string. |
+| `points[].lat` / `.lon` | number | yes | WGS84 coordinate. |
+| `points[].datetime` | string | yes | Same formats as `GET /api/v1/query`'s `datetime`. |
+
+An invalid point (bad coordinate, unparseable datetime, out-of-range
+`gddBase`, …) does **not** fail the whole request: it becomes a per-item
+error result (see below) and every other point is still processed.
+
+### Response modes
+
+The response shape depends on the `Accept` header of the request:
+
+#### Synchronous — `200 OK`, `BatchQueryResponse`
+
+Default when the client does not send `Accept: application/x-ndjson`. All
+results are buffered and returned as one JSON envelope, capped at
+`query.batch.max_sync_points` points (default 1000; see
+[`413` below](#413-request-entity-too-large)):
+
+```json
+{
+  "results": [
+    {
+      "id": "a",
+      "query": {"coordinate": {"lat": 48.137, "lon": 11.576}, "datetime": "2025-07-01T12:00:00Z"},
+      "features": [ /* same Feature[] shape as GET /api/v1/query */ ],
+      "providers": [ /* same ProviderStatus[] shape as GET /api/v1/query */ ]
+    }
+  ],
+  "total": 1,
+  "processing_time_ms": 842
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `results[]` | array | One item per input point, in input order — see [Result items](#result-items) below. |
+| `total` | integer | `len(results)` |
+| `processing_time_ms` | integer | Wall-clock time spent processing the batch |
+
+#### Streaming — `200 OK`, NDJSON
+
+Sent when the request carries `Accept: application/x-ndjson`. The response
+is `Content-Type: application/x-ndjson`: one result item per line, flushed as
+each point finishes, in input order — no envelope, no trailing summary. A
+client detects a truncated stream by comparing the line count to the number
+of points it sent. Streaming has no sync-mode point cap, so it is the way to
+process batches larger than `query.batch.max_sync_points`.
+
+#### Result items
+
+Both modes emit the same per-point item shape (`BatchQueryResultItem`): the
+single-query envelope (`query`, `features`, `providers`) plus the echo `id` —
+or, for a point that failed to parse, only `id` and `error`:
+
+```json
+{"id": "c", "error": {"message": "invalid lat: must be a number in [-90,90]"}}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Echo of the point's `id` (or its input index) |
+| `query` / `features` / `providers` | — | Present for a processed point; same shape as `GET /api/v1/query`'s `200` response |
+| `error.message` | string | Present instead of `query`/`features`/`providers` for a point that never reached the query path |
+
+#### GDD base 5 and 10
+
+The aggregate provider's growing-degree-days are always computed for base
+temperatures 5 °C and 10 °C, whatever `gddBase` says — a batch client can
+never lose those two series. A request-level `gddBase` (like the `7` in the
+example above) only adds one more, `custom`, base alongside them.
+
+### Errors
+
+#### `400 Bad Request`
+
+Empty `points`, malformed JSON, or more points than `query.batch.max_points`:
+
+```json
+{"error": "invalid_request", "message": "too many points: 12000 > 10000"}
+```
+
+#### `413 Request Entity Too Large`
+
+Two distinct causes share this status:
+
+- The request body exceeds the size cap (`query.batch.max_points * 512
+  bytes + 64 KiB`, sized generously for small per-point JSON objects):
+  `"request body too large"`.
+- The client asked for the synchronous envelope (no NDJSON `Accept` header)
+  with more points than `query.batch.max_sync_points`:
+  `"more than 1000 points require streaming; retry with Accept:
+  application/x-ndjson"`.
+
+### Throttling and the daily budget
+
+Batch traffic — and only batch traffic — is metered against a shared
+Open-Meteo token-bucket rate limiter and a weighted daily call budget (see
+[configuration](configuration.md#providers-open-meteo) for the knobs).
+`GET /api/v1/query` and the astronomy providers (`sun`/`moon`) are never
+budget-checked. When the day's weighted budget is spent, the affected
+provider(s) report a transient failure per point rather than failing the
+batch:
+
+```json
+{"id": "a", "providers": [{"id": "open-meteo", "kind": "weather", "status": "unavailable", "retryable": true, "error": "open-meteo daily budget exhausted; retry tomorrow"}]}
+```
+
+---
+
 ## `GET /api/v1/providers`
 
 List all registered providers and their attribution metadata.

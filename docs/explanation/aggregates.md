@@ -7,9 +7,10 @@ Open-Meteo archive range and is aimed at enriching occurrence records (e.g.
 biological collection data) with the weather/climate context of a find.
 
 Unlike a derived feature, it fetches a **time range** (not just the fund hour),
-so it is a full provider. It is registered **without the cache** because its
-output also depends on the per-request `gddBase` override, which the cache key
-does not capture.
+so it is a full provider. It is registered **with the cache**, like the
+weather provider; the per-request `gddBase` override is folded into the cache
+key so a batch of points with different `gddBase` values never collide on the
+same cache entry.
 
 ## What it returns
 
