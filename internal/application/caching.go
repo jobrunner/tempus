@@ -19,6 +19,11 @@ type CachingOptions struct {
 	MatureTTL       time.Duration // TTL for immutable (mature) data
 	ImmatureTTL     time.Duration // TTL for data still inside the maturity window
 	LatLonPrecision int           // decimal places for the cache-key coordinate rounding
+
+	// KeyParams optionally contributes provider-specific request parameters to
+	// the cache key (e.g. the aggregate provider's gddBase). Empty/nil keeps
+	// the legacy key format, so existing cache entries stay valid.
+	KeyParams func(domain.QueryRequest) string
 }
 
 // CachingProvider decorates a FeatureProvider with a Cache. It implements
@@ -42,7 +47,11 @@ func (c *CachingProvider) Attribution() domain.License { return c.inner.Attribut
 // Fetch returns a cached feature when present, else calls the inner provider and
 // caches the result with a maturity-based TTL. Errors are never cached.
 func (c *CachingProvider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.ProviderResult, error) {
-	key := CacheKey(c.inner.ID(), c.opts.Version, req, c.opts.LatLonPrecision)
+	params := ""
+	if c.opts.KeyParams != nil {
+		params = c.opts.KeyParams(req)
+	}
+	key := CacheKey(c.inner.ID(), c.opts.Version, req, c.opts.LatLonPrecision, params)
 
 	if raw, ok, err := c.cache.Get(ctx, key); err == nil && ok {
 		var f domain.Feature
@@ -72,12 +81,18 @@ func (c *CachingProvider) ttlFor(instant time.Time) time.Duration {
 
 // CacheKey derives a deterministic key. Coordinates are rounded to precision
 // decimals so nearby points share the coarse weather grid cell (better hit rate);
-// determinism preserves idempotency.
-func CacheKey(providerID, version string, req domain.QueryRequest, precision int) string {
+// determinism preserves idempotency. params, when non-empty, partitions the key
+// further (e.g. by a provider-specific request parameter); an empty params
+// reproduces the legacy raw format byte-for-byte, so existing cache entries
+// stay valid.
+func CacheKey(providerID, version string, req domain.QueryRequest, precision int, params string) string {
 	lat := roundTo(req.Coordinate.Lat, precision)
 	lon := roundTo(req.Coordinate.Lon, precision)
 	raw := fmt.Sprintf("%s|%s|%.*f|%.*f|%s",
 		providerID, version, precision, lat, precision, lon, req.Instant.UTC().Format(time.RFC3339))
+	if params != "" {
+		raw += "|" + params
+	}
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }

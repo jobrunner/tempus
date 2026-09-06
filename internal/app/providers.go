@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/jobrunner/tempus/internal/adapters/openmeteo"
 	"github.com/jobrunner/tempus/internal/application"
 	"github.com/jobrunner/tempus/internal/config"
+	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
@@ -69,18 +71,29 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock) *ap
 	registry.Register(astronomy.NewSun())
 	registry.Register(astronomy.NewMoon())
 
-	// Weather aggregates (antecedent precipitation, day extrema, GDD). Fetches a
-	// time range from Open-Meteo; registered without the caching decorator
-	// because its output also depends on the per-request gddBase override, which
-	// the cache key does not capture.
+	// Weather aggregates: cached like the weather provider; the per-request
+	// gddBase override is part of the cache key via KeyParams.
 	if cfg.Providers.Aggregate.Enabled && cfg.Providers.OpenMeteo.Enabled {
-		registry.Register(aggregate.New(aggregate.Options{
+		agg := aggregate.New(aggregate.Options{
 			ArchiveBaseURL:  cfg.Providers.OpenMeteo.ArchiveBaseURL,
 			ForecastBaseURL: cfg.Providers.OpenMeteo.ForecastBaseURL,
 			Timeout:         cfg.Providers.OpenMeteo.Timeout,
 			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
 			Clock:           clk,
 			HTTPClient:      clients.aggregate,
+		})
+		registry.Register(application.NewCachingProvider(agg, cache, clk, application.CachingOptions{
+			Version:         "1",
+			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
+			MatureTTL:       365 * 24 * time.Hour,
+			ImmatureTTL:     time.Hour,
+			LatLonPrecision: 2,
+			KeyParams: func(req domain.QueryRequest) string {
+				if req.GDDBaseCelsius == nil {
+					return ""
+				}
+				return fmt.Sprintf("gdd=%.2f", *req.GDDBaseCelsius)
+			},
 		}))
 	}
 

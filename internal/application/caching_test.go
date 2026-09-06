@@ -2,7 +2,10 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -99,10 +102,61 @@ func TestCaching_TTLByMaturity(t *testing.T) {
 
 func TestCacheKey_RoundsCoords(t *testing.T) {
 	instant := time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)
-	a := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.791, Lon: 9.934}, Instant: instant}, 2)
-	b := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.789, Lon: 9.931}, Instant: instant}, 2)
+	a := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.791, Lon: 9.934}, Instant: instant}, 2, "")
+	b := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.789, Lon: 9.931}, Instant: instant}, 2, "")
 	if a != b {
 		t.Errorf("coords within rounding must share a key: %s vs %s", a, b)
+	}
+}
+
+// TestCacheKey_EmptyParamsKeepLegacyFormat pins the raw key format for
+// params=="" byte-for-byte, so existing cache entries stay valid across
+// deploys that add KeyParams for a provider that did not use it before.
+func TestCacheKey_EmptyParamsKeepLegacyFormat(t *testing.T) {
+	r := domain.QueryRequest{
+		Coordinate: domain.Coordinate{Lat: 49.79345, Lon: 9.95341},
+		Instant:    time.Date(2025, 6, 3, 14, 0, 0, 0, time.UTC),
+	}
+	// The legacy raw format, reproduced literally: params must not change it.
+	raw := fmt.Sprintf("%s|%s|%.*f|%.*f|%s",
+		"open-meteo", "1", 2, 49.79, 2, 9.95, r.Instant.UTC().Format(time.RFC3339))
+	sum := sha256.Sum256([]byte(raw))
+	want := hex.EncodeToString(sum[:])
+	if got := CacheKey("open-meteo", "1", r, 2, ""); got != want {
+		t.Errorf("CacheKey with empty params = %s, want legacy %s", got, want)
+	}
+	if same := CacheKey("open-meteo", "1", r, 2, "gdd=7.00"); same == want {
+		t.Error("non-empty params must produce a different key")
+	}
+}
+
+// TestCachingProvider_KeyParamsSeparateEntries verifies that KeyParams
+// partitions the cache: requests differing only in GDDBaseCelsius must miss
+// independently, while identical GDDBaseCelsius values hit.
+func TestCachingProvider_KeyParamsSeparateEntries(t *testing.T) {
+	base7, base9 := 7.0, 9.0
+	inner := &countingProvider{}
+	cp := NewCachingProvider(inner, newFakeCache(), fixedClock{}, CachingOptions{
+		Version: "1", MatureTTL: time.Hour, ImmatureTTL: time.Hour, LatLonPrecision: 2,
+		KeyParams: func(req domain.QueryRequest) string {
+			if req.GDDBaseCelsius == nil {
+				return ""
+			}
+			return fmt.Sprintf("gdd=%.2f", *req.GDDBaseCelsius)
+		},
+	})
+	r := domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 1, Lon: 2}, Instant: time.Unix(0, 0).UTC()}
+	r.GDDBaseCelsius = &base7
+	_, _ = cp.Fetch(context.Background(), r)
+	r.GDDBaseCelsius = &base9
+	_, _ = cp.Fetch(context.Background(), r)
+	if inner.calls != 2 {
+		t.Fatalf("inner calls = %d, want 2 (distinct gddBase must miss)", inner.calls)
+	}
+	r.GDDBaseCelsius = &base7
+	res, _ := cp.Fetch(context.Background(), r)
+	if inner.calls != 2 || !res.Cached {
+		t.Fatalf("inner calls = %d, cached = %v; want 2, true", inner.calls, res.Cached)
 	}
 }
 
