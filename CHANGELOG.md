@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/jobrunner/tempus/compare/v0.20.0...v0.21.0) (2026-09-07)
+
+
+### Features
+
+* batch query endpoint with self-throttling Open-Meteo access ([b04fe53](https://github.com/jobrunner/tempus/commit/b04fe53e67a46a2d501935063ab0edb9b2f6c624))
+
 ## [0.20.0](https://github.com/jobrunner/tempus/compare/v0.19.0...v0.20.0) (2026-08-21)
 
 
