@@ -15,6 +15,7 @@
             --card: #ffffff;
             --text: #1e293b;
             --text-muted: #64748b;
+            --text-disabled: #475569;
             --border: #e2e8f0;
             --radius: 8px;
             --shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -207,8 +208,13 @@
             outline-offset: 2px;
         }
 
+        /* Explicit color (not just background) so disabled buttons stay legible:
+           .btn-secondary's `color: var(--text)` has equal specificity, so without
+           this it wins by source order and produces dark text on a dark
+           background (~3:1 contrast). --border/--text-disabled gives ~6.15:1. */
         .btn:disabled {
-            background: var(--text-muted);
+            background: var(--border);
+            color: var(--text-disabled);
             cursor: not-allowed;
         }
 
@@ -262,6 +268,12 @@
             font-size: 0.875rem;
             margin-bottom: 1rem;
             display: none;
+            /* Grouped batch-parse errors are joined with '\n' (formatParseErrors);
+               pre-line keeps those line breaks without letting a wall of
+               same-reason errors grow the box without bound. */
+            white-space: pre-line;
+            max-height: 240px;
+            overflow-y: auto;
         }
 
         .error-box.active {
@@ -2180,13 +2192,36 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     let id = '';
                     let rest = parts;
                     if (parts.length === 4) { id = parts[0]; rest = parts.slice(1); }
-                    if (rest.length !== 3) { errors.push('Zeile ' + (i + 1) + ': erwartet [id' + sep + '] lat' + sep + ' lon' + sep + ' datetime'); return; }
+                    if (rest.length !== 3) { errors.push({ line: i + 1, reason: 'erwartet [id' + sep + '] lat' + sep + ' lon' + sep + ' datetime' }); return; }
                     const lat = Number(rest[0].replace(',', '.'));
                     const lon = Number(rest[1].replace(',', '.'));
-                    if (!isFinite(lat) || !isFinite(lon)) { errors.push('Zeile ' + (i + 1) + ': lat/lon keine Zahl'); return; }
+                    if (!isFinite(lat) || !isFinite(lon)) { errors.push({ line: i + 1, reason: 'lat/lon keine Zahl' }); return; }
                     points.push({ id: id || String(points.length), lat: lat, lon: lon, datetime: rest[2] });
                 });
                 return { points: points, errors: errors };
+            }
+
+            // formatParseErrors groups rows that failed for the identical reason
+            // (e.g. a wrong file format fails every row alike) into one summary
+            // line instead of one near-duplicate line per row — a batch of 500+
+            // rows with the same mistake becomes one readable line, not a wall
+            // of text. Small groups are still spelled out per line.
+            function formatParseErrors(errors) {
+                const GROUP_THRESHOLD = 4;
+                const byReason = new Map();
+                errors.forEach(function (e) {
+                    if (!byReason.has(e.reason)) byReason.set(e.reason, []);
+                    byReason.get(e.reason).push(e.line);
+                });
+                const lines = [];
+                byReason.forEach(function (rowNums, reason) {
+                    if (rowNums.length <= GROUP_THRESHOLD) {
+                        rowNums.forEach(function (n) { lines.push('Zeile ' + n + ': ' + reason); });
+                    } else {
+                        lines.push(rowNums.length + ' Zeilen (' + rowNums.slice(0, 3).join(', ') + ', …): ' + reason);
+                    }
+                });
+                return lines.join('\n');
             }
 
             function providerSummary(item) {
@@ -2289,7 +2324,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     return;
                 }
                 const parsed = parseBatchLines(inputEl.value);
-                if (parsed.errors.length) { showBatchError(parsed.errors.join(' — ')); return; }
+                if (parsed.errors.length) { showBatchError(formatParseErrors(parsed.errors)); return; }
                 if (!parsed.points.length) { showBatchError('Keine Punkte eingegeben.'); return; }
                 runBatch(parsed.points);
             });
