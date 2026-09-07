@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/jobrunner/tempus/compare/v0.21.0...v0.22.0) (2026-09-07)
+
+
+### Features
+
+* **frontend:** provider multiselect and CSV upload for the batch tab ([#56](https://github.com/jobrunner/tempus/issues/56)) ([95cb9df](https://github.com/jobrunner/tempus/commit/95cb9df414154de54b4d22d0b83cc6beac14fbc5))
+
 ## [0.21.0](https://github.com/jobrunner/tempus/compare/v0.20.0...v0.21.0) (2026-09-07)
 
 
