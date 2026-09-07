@@ -12,8 +12,13 @@ per-feature mandatory attribution.
 - **Mandatory attribution** — every `Feature` carries a `license` block (`name`,
   `url`, `attribution`). Serving a feature without a complete license is a contract
   violation that the service enforces at the port boundary.
-- **No future queries** — the service only returns data for datetimes that are not
-  in the future; future datetimes are rejected with `400 Bad Request`.
+- **Batch queries** — `POST /api/v1/query/batch` processes many coordinate + time
+  points through the same provider pipeline, as a synchronous envelope or an NDJSON
+  stream, self-throttled against the Open-Meteo free tier.
+- **Future datetimes are provider-scoped** — astronomy providers (sun/moon) compute
+  for any date, while providers that cannot serve the future (weather, aggregate)
+  report a non-retryable per-provider error in the envelope instead of failing the
+  request.
 
 ## Quick links
 
