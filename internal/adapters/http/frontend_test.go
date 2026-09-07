@@ -15,6 +15,8 @@ func TestFrontend_ContainsBatchTab(t *testing.T) {
 		`id="tabSingle"`, `id="tabBatch"`, `id="batchPanel"`,
 		`id="batchInput"`, `id="batchProgress"`, `id="batchRunBtn"`,
 		`id="batchAbortBtn"`, `id="batchExportBtn"`, `id="batchTable"`,
+		`id="batchProvidersSummary"`, `id="batchProvidersPanel"`,
+		`id="batchCsvUploadBtn"`, `id="batchFile"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("frontend page is missing %s", want)
