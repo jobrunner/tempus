@@ -35,10 +35,19 @@ type fixedClock struct{}
 
 func (fixedClock) Now() time.Time { return time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC) }
 
+// stubBatchService is a no-op input.BatchService for tests that exercise
+// routes other than the batch endpoint itself (see batch_test.go for the
+// batch-specific echoBatch fake).
+type stubBatchService struct{}
+
+func (stubBatchService) QueryBatch(context.Context, []input.BatchPoint, func(input.BatchItem) error) error {
+	return nil
+}
+
 func testServer() *Server {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	res := domain.QueryResult{Features: []domain.Feature{}, Providers: []domain.ProviderStatus{{ID: "open-meteo", Status: "ok"}}}
-	return NewServer(":0", stubFeatures{res}, stubProviders{}, stubHealth{}, fixedClock{}, logger, Options{})
+	return NewServer(":0", stubFeatures{res}, stubBatchService{}, stubProviders{}, stubHealth{}, fixedClock{}, logger, Options{})
 }
 
 func TestHandleQuery_OK(t *testing.T) {

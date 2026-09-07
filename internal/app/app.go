@@ -44,17 +44,19 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 	}
 
 	clk := clock.System{}
-	registry := buildRegistry(cfg, cache, clk)
+	clients := buildOpenMeteoClients(cfg, clk)
+	registry := buildRegistry(cfg, cache, clk, clients)
 
-	serverOpts, err := a.wireObservability(version)
+	serverOpts, err := a.wireObservability(version, clients.budget)
 	if err != nil {
 		return nil, err
 	}
 
 	derivers := []output.FeatureDeriver{dewpoint.New()}
 	features := application.NewFeatureService(registry, derivers, logger, cfg.Query.Timeout)
+	batch := application.NewBatchService(features, cfg.Query.Batch.Concurrency, 2)
 	addr := cfg.Server.Host + ":" + strconv.Itoa(cfg.Server.Port)
-	a.server = httpapi.NewServer(addr, features, registry, readyAlways{}, clk, logger, serverOpts)
+	a.server = httpapi.NewServer(addr, features, batch, registry, readyAlways{}, clk, logger, serverOpts)
 	return a, nil
 }
 

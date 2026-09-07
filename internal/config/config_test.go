@@ -29,3 +29,26 @@ func TestLoadDefaultsAndEnvOverride(t *testing.T) {
 		t.Errorf("archiveDelay = %v, want 120h", cfg.Providers.OpenMeteo.ArchiveDelay)
 	}
 }
+
+func TestLoad_BatchAndThrottleDefaults(t *testing.T) {
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Query.Batch.MaxPoints; got != 10000 {
+		t.Errorf("query.batch.max_points = %d, want 10000", got)
+	}
+	if got := cfg.Query.Batch.MaxSyncPoints; got != 1000 {
+		t.Errorf("query.batch.max_sync_points = %d, want 1000", got)
+	}
+	if got := cfg.Query.Batch.Concurrency; got != 4 {
+		t.Errorf("query.batch.concurrency = %d, want 4", got)
+	}
+	om := cfg.Providers.OpenMeteo
+	if om.RatePerMinute != 500 || om.RetryAttempts != 3 || om.DailyBudget != 8000 {
+		t.Errorf("openmeteo throttle defaults = %+v, want 500/3/8000", om)
+	}
+	if om.Weights.Weather != 1 || om.Weights.Aggregate != 2 || om.Weights.Bioclim != 30 {
+		t.Errorf("openmeteo weights = %+v, want 1/2/30", om.Weights)
+	}
+}

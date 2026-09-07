@@ -33,7 +33,7 @@ func discardLogger() *slog.Logger {
 }
 
 func serverWith(features input.FeatureService, health input.HealthChecker, opts Options) *Server {
-	return NewServer("127.0.0.1:0", features, stubProviders{}, health, fixedClock{}, discardLogger(), opts)
+	return NewServer("127.0.0.1:0", features, stubBatchService{}, stubProviders{}, health, fixedClock{}, discardLogger(), opts)
 }
 
 func TestHealthEndpoints(t *testing.T) {

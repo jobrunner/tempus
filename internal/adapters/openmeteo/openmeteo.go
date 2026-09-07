@@ -119,6 +119,9 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
+		if pe, ok := output.AsProviderError(err); ok {
+			return domain.ProviderResult{}, pe
+		}
 		return domain.ProviderResult{}, output.NewTransientError(err, 30*time.Second)
 	}
 	defer resp.Body.Close()

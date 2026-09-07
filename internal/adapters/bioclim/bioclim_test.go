@@ -3,6 +3,7 @@ package bioclim
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jobrunner/tempus/internal/domain"
+	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
 // memCache is a minimal in-memory output.Cache for the test.
@@ -77,6 +79,27 @@ func req(refPeriod string) domain.QueryRequest {
 		Coordinate: domain.Coordinate{Lat: 52.5, Lon: 13.4},
 		Instant:    time.Date(2005, 6, 15, 12, 0, 0, 0, time.UTC),
 		RefPeriod:  refPeriod,
+	}
+}
+
+func TestFetch_RetryAfterReflectsHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "42")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	// A plain client: the adapter's own retryAfter parsing must be reached
+	// directly, without omhttp.Transport's internal retries intercepting the 429.
+	p := New(Options{ArchiveBaseURL: srv.URL, Timeout: 2 * time.Second, HTTPClient: &http.Client{}})
+
+	_, err := p.Fetch(context.Background(), req("1991-1992"))
+	var pe output.ProviderError
+	if !errors.As(err, &pe) {
+		t.Fatalf("Fetch err = %v, want ProviderError", err)
+	}
+	if pe.RetryAfter != 42*time.Second {
+		t.Errorf("RetryAfter = %v, want 42s", pe.RetryAfter)
 	}
 }
 

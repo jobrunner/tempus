@@ -2,6 +2,7 @@ package aggregate
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,6 +50,66 @@ func req(instant time.Time, base *float64) domain.QueryRequest {
 		Coordinate:     domain.Coordinate{Lat: 49.79, Lon: 9.93},
 		Instant:        instant,
 		GDDBaseCelsius: base,
+	}
+}
+
+func TestFetch_RetryAfterReflectsHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "17")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	// A plain client: the adapter's own retryAfter parsing must be reached
+	// directly, without omhttp.Transport's internal retries intercepting the 429.
+	p := New(Options{
+		ArchiveBaseURL:  srv.URL,
+		ForecastBaseURL: srv.URL,
+		Timeout:         2 * time.Second,
+		ArchiveDelay:    5 * 24 * time.Hour,
+		Clock:           fixedClock{time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)},
+		HTTPClient:      &http.Client{},
+	})
+
+	_, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), nil))
+	var pe output.ProviderError
+	if !errors.As(err, &pe) {
+		t.Fatalf("Fetch err = %v, want ProviderError", err)
+	}
+	if pe.RetryAfter != 17*time.Second {
+		t.Errorf("RetryAfter = %v, want 17s", pe.RetryAfter)
+	}
+}
+
+// roundTripperFunc adapts a function to http.RoundTripper for tests.
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestFetch_PropagatesClassifiedTransportError(t *testing.T) {
+	// A transport-level failure that already carries a classified
+	// output.ProviderError (e.g. omhttp's budget-exhaustion) must surface with
+	// its own RetryAfter, not be re-wrapped behind a fabricated 30s hint.
+	want := output.NewTransientError(errors.New("daily budget exhausted"), 3*time.Hour)
+	rt := roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return nil, want
+	})
+	p := New(Options{
+		ArchiveBaseURL:  "http://example.invalid",
+		ForecastBaseURL: "http://example.invalid",
+		Timeout:         2 * time.Second,
+		ArchiveDelay:    5 * 24 * time.Hour,
+		Clock:           fixedClock{time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)},
+		HTTPClient:      &http.Client{Transport: rt},
+	})
+
+	_, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), nil))
+	pe, ok := output.AsProviderError(err)
+	if !ok {
+		t.Fatalf("Fetch err = %v, want output.ProviderError", err)
+	}
+	if pe.RetryAfter != 3*time.Hour {
+		t.Errorf("RetryAfter = %v, want 3h (propagated, not the generic 30s)", pe.RetryAfter)
 	}
 }
 

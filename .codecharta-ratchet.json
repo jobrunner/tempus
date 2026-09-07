@@ -5,15 +5,16 @@
     "default_cap": 25,
     "_default_cap_note": "Per-file SUM of function complexity. Every file not listed below must stay <= this. The measured median across the 42 non-test Go files is 9.5 and the highest non-baseline file is internal/domain/belt.go at 25, so 25 is generous for an ordinary file while making an unusually complex NEW file require a reviewed config entry. This gate can be satisfied by splitting a file (the sum moves with the code) — see function_complexity for the ceiling that cannot.",
     "baseline": {
-      "internal/adapters/aggregate/aggregate.go": 51,
-      "internal/adapters/bioclim/bioclim.go": 48,
+      "internal/adapters/aggregate/aggregate.go": 49,
+      "internal/adapters/bioclim/bioclim.go": 39,
       "internal/domain/koppen.go": 45,
       "internal/domain/lunar.go": 39,
       "internal/domain/bioclim.go": 35,
-      "internal/adapters/http/server.go": 33,
+      "internal/adapters/http/server.go": 32,
       "internal/adapters/openmeteo/feature.go": 29
     },
-    "_round1_note": "Refactoring round 1 (v0.20.0 -> next): toFeature was split into hourIndex/hourlyValues/enrichWeatherCode/enrichBeaufort and moved to a new feature.go, and app.New's provider wiring and observability setup moved to providers.go and observability.go. openmeteo.go 47->23 and app.go 30->18 dropped below default_cap, so their entries are gone; the relocated mapping logic in feature.go is baselined at 29 (its worst function is 7). The split cost ~5 total file complexity in function overhead and bought a per-function max of 8 instead of 18."
+    "_round1_note": "Refactoring round 1 (v0.20.0 -> next): toFeature was split into hourIndex/hourlyValues/enrichWeatherCode/enrichBeaufort and moved to a new feature.go, and app.New's provider wiring and observability setup moved to providers.go and observability.go. openmeteo.go 47->23 and app.go 30->18 dropped below default_cap, so their entries are gone; the relocated mapping logic in feature.go is baselined at 29 (its worst function is 7). The split cost ~5 total file complexity in function overhead and bought a per-function max of 8 instead of 18.",
+    "_round2_note": "Refactoring round 2 (batch-query follow-up): aggregate.go 51->49 (slices.Index replaced indexOf, min/max builtins replaced pairedDailyTemps/sumWindow's manual clamps, retryAfter's two ifs collapsed to one — no split needed). bioclim.go 48->39 (same toolbox plus splitting its HTTP plumbing — buildURL/getJSON/retryAfter/license — into a new bioclim_http.go, measured at complexity 12 — far under default_cap 25). server.go 33->32 (cmp.Or replaced two ServiceName/Version fallback ifs)."
   },
   "function_complexity": {
     "metric": "max_complexity_per_function",

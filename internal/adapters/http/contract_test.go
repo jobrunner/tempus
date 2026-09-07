@@ -231,5 +231,5 @@ func TestObjectSchemasDeclareTheirType(t *testing.T) {
 func newContractTestServer(t *testing.T) *Server {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-	return NewServer(":0", stubFeatures{}, stubProviders{}, stubHealth{}, fixedClock{}, logger, Options{})
+	return NewServer(":0", stubFeatures{}, stubBatchService{}, stubProviders{}, stubHealth{}, fixedClock{}, logger, Options{})
 }

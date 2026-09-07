@@ -24,6 +24,8 @@ Key metrics:
 | `tempus_provider_requests_total` | Counter | Provider fetch attempts, labelled by `provider` and `status` |
 | `tempus_cache_hits_total` | Counter | Cache hits, labelled by `provider` |
 | `tempus_cache_misses_total` | Counter | Cache misses, labelled by `provider` |
+| `tempus_openmeteo_daily_budget_spent` | Gauge | Weighted Open-Meteo calls spent from today's daily budget (only when Open-Meteo is enabled) |
+| `tempus_openmeteo_daily_budget_limit` | Gauge | Configured daily weighted-call budget for Open-Meteo (only when Open-Meteo is enabled) |
 | Standard Go runtime metrics | — | `go_goroutines`, `go_gc_duration_seconds`, etc. |
 
 ## Tracing (OpenTelemetry)

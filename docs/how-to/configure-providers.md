@@ -40,7 +40,7 @@ All configuration is via environment variables with the prefix `TEMPUS_`.
 | Variable | Default | Description |
 |---|---|---|
 | `TEMPUS_CACHE_TYPE` | `disk` | `disk`, `memory` |
-| `TEMPUS_CACHE_PATH` | `./tempus.db` | File path for disk cache (bbolt) |
+| `TEMPUS_CACHE_PATH` | `./data/cache.bolt` | File path for disk cache (bbolt) |
 
 The cache stores provider responses keyed by (coordinate-grid-cell, datetime-bucket).
 Cached results are served immediately and flagged with `"cached": true` in the
@@ -55,9 +55,25 @@ provider status. This avoids repeat upstream calls for the same query inputs.
 | `TEMPUS_PROVIDERS_OPENMETEO_FORECAST_BASE_URL` | `https://api.open-meteo.com` | Forecast endpoint (recent past only) |
 | `TEMPUS_PROVIDERS_OPENMETEO_TIMEOUT` | `10s` | Per-request timeout |
 | `TEMPUS_PROVIDERS_OPENMETEO_ARCHIVE_DELAY` | `5d` | How far in the past archive data is available (forecast used before this window) |
+| `TEMPUS_PROVIDERS_OPENMETEO_RATE_PER_MINUTE` | `500` | Shared token-bucket rate limit (calls/minute) applied to every Open-Meteo call, including `GET /api/v1/query`, not only batch traffic |
+| `TEMPUS_PROVIDERS_OPENMETEO_RETRY_ATTEMPTS` | `3` | Retries for 429/5xx/network errors, honoring the upstream `Retry-After` header |
+| `TEMPUS_PROVIDERS_OPENMETEO_DAILY_BUDGET` | `8000` | Weighted daily call budget enforced only for `POST /api/v1/query/batch` traffic |
+| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_WEATHER` | `1` | Budget weight per weather-provider call |
+| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_AGGREGATE` | `2` | Budget weight per aggregate-provider call. The aggregate provider makes two upstream calls per fetch, so a point costs 2× this weight |
+| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_BIOCLIM` | `30` | Budget weight per bioclim-provider call |
+
+The rate limiter and the daily budget are per-process, in-memory state: running multiple replicas multiplies the effective rate and daily budget, and restarting a replica resets its share of the day's spent count.
 
 ## Query
 
 | Variable | Default | Description |
 |---|---|---|
-| `TEMPUS_QUERY_TIMEOUT` | `15s` | Total timeout per `GET /api/v1/query` call |
+| `TEMPUS_QUERY_TIMEOUT` | `30s` | Total timeout per `GET /api/v1/query` call |
+
+## Query — Batch
+
+| Variable | Default | Description |
+|---|---|---|
+| `TEMPUS_QUERY_BATCH_MAX_POINTS` | `10000` | Hard cap on points per `POST /api/v1/query/batch` request |
+| `TEMPUS_QUERY_BATCH_MAX_SYNC_POINTS` | `1000` | Cap for the synchronous JSON envelope; stream NDJSON above this |
+| `TEMPUS_QUERY_BATCH_CONCURRENCY` | `4` | Worker-pool size for deduplicated point fetches |

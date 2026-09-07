@@ -14,6 +14,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/jobrunner/tempus/internal/domain"
@@ -151,7 +152,7 @@ func (p *Provider) buildProps(req domain.QueryRequest, start time.Time,
 	}
 
 	dayOK := false
-	if idx := indexOf(daily.Daily.Time, req.Instant.UTC().Format("2006-01-02")); idx >= 0 {
+	if idx := slices.Index(daily.Daily.Time, req.Instant.UTC().Format("2006-01-02")); idx >= 0 {
 		if td := dayExtrema(daily, idx); td != nil {
 			props["temperatureDay"] = td
 			dayOK = true
@@ -233,11 +234,14 @@ func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
 	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
+		if pe, ok := output.AsProviderError(err); ok {
+			return pe
+		}
 		return output.NewTransientError(err, 30*time.Second)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return output.NewTransientError(fmt.Errorf("open-meteo status %d", resp.StatusCode), 30*time.Second)
+		return output.NewTransientError(fmt.Errorf("open-meteo status %d", resp.StatusCode), retryAfter(resp))
 	}
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
@@ -247,6 +251,16 @@ func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
 		return output.NewPermanentError(err)
 	}
 	return nil
+}
+
+// retryAfter reads the response's Retry-After header (seconds) so the
+// envelope's hint reflects what Open-Meteo actually asked for; it falls back
+// to a fixed 30s when the header is absent or unparsable.
+func retryAfter(resp *http.Response) time.Duration {
+	if secs, err := time.ParseDuration(resp.Header.Get("Retry-After") + "s"); err == nil {
+		return secs
+	}
+	return 30 * time.Second
 }
 
 func (p *Provider) license() domain.License {
@@ -259,10 +273,7 @@ func (p *Provider) license() domain.License {
 
 // pairedDailyTemps returns the daily min/max pairs where both values are present.
 func pairedDailyTemps(daily dailyResponse) (tmin, tmax []float64) {
-	n := len(daily.Daily.TMin)
-	if len(daily.Daily.TMax) < n {
-		n = len(daily.Daily.TMax)
-	}
+	n := min(len(daily.Daily.TMin), len(daily.Daily.TMax))
 	for i := 0; i < n; i++ {
 		if daily.Daily.TMin[i] == nil || daily.Daily.TMax[i] == nil {
 			continue
@@ -292,7 +303,7 @@ func dayExtrema(daily dailyResponse, idx int) map[string]any {
 // ok is false when the instant's hour is not present in the response.
 func precipWindows(instant time.Time, hourly hourlyResponse) (map[string]any, bool) {
 	target := instant.UTC().Format("2006-01-02T15:04")
-	idx := indexOf(hourly.Hourly.Time, target)
+	idx := slices.Index(hourly.Hourly.Time, target)
 	if idx < 0 {
 		return nil, false
 	}
@@ -305,10 +316,7 @@ func precipWindows(instant time.Time, hourly hourlyResponse) (map[string]any, bo
 
 // sumWindow sums the up-to-hours values ending at endIdx (inclusive), skipping nils.
 func sumWindow(vals []*float64, endIdx, hours int) float64 {
-	start := endIdx - hours + 1
-	if start < 0 {
-		start = 0
-	}
+	start := max(endIdx-hours+1, 0)
 	var sum float64
 	for i := start; i <= endIdx && i < len(vals); i++ {
 		if vals[i] != nil {
@@ -316,15 +324,6 @@ func sumWindow(vals []*float64, endIdx, hours int) float64 {
 		}
 	}
 	return sum
-}
-
-func indexOf(s []string, target string) int {
-	for i, v := range s {
-		if v == target {
-			return i
-		}
-	}
-	return -1
 }
 
 func round1(v float64) float64 { return math.Round(v*10) / 10 }
