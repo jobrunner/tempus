@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/jobrunner/tempus/compare/v0.22.0...v0.22.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **frontend:** legible disabled buttons and grouped batch parse errors ([#58](https://github.com/jobrunner/tempus/issues/58)) ([2aaf84d](https://github.com/jobrunner/tempus/commit/2aaf84d24c99ca29fa3cf82b79623ff3aa25c247))
+
 ## [0.22.0](https://github.com/jobrunner/tempus/compare/v0.21.0...v0.22.0) (2026-09-07)
 
 
