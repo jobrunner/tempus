@@ -217,3 +217,38 @@ func TestCORSPreflightForEveryWritingRoute(t *testing.T) {
 		})
 	}
 }
+
+// An unusable pattern must be reported at startup and must not silently enable
+// a half-configured CORS layer. Parsing once here (rather than per request) is
+// also what keeps a typo from looking like "configured but never matching".
+func TestCORS_UnusableOriginPatternIsReportedAndSkipped(t *testing.T) {
+	var logged strings.Builder
+	logger := slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	srv := NewServer(":0", stubFeatures{}, stubBatchService{}, stubProviders{}, stubHealth{}, fixedClock{}, logger,
+		Options{CORSAllowedOrigins: []string{"example.test", "https://good.test"}}) // first lacks a scheme
+
+	if !strings.Contains(logged.String(), "example.test") {
+		t.Errorf("startup log should name the unusable pattern, got: %s", logged.String())
+	}
+	// The usable one still works …
+	if got := doCORS(srv, "https://good.test").Header().Get("Access-Control-Allow-Origin"); got != "https://good.test" {
+		t.Errorf("Allow-Origin = %q, want the valid pattern to still apply", got)
+	}
+	// … and the broken one grants nothing.
+	if got := doCORS(srv, "https://example.test").Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Allow-Origin = %q, want empty — the pattern was unusable", got)
+	}
+}
+
+// With every configured pattern unusable, CORS must stay off entirely rather
+// than run an allow-list that can never match.
+func TestCORS_AllPatternsUnusableDisablesCORS(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	srv := NewServer(":0", stubFeatures{}, stubBatchService{}, stubProviders{}, stubHealth{}, fixedClock{}, logger,
+		Options{CORSAllowedOrigins: []string{"nonsense", "also://bad/path"}})
+
+	rr := doPreflight(srv, "/api/v1/query/batch", "https://a.test", http.MethodPost)
+	if rr.Code == http.StatusNoContent {
+		t.Error("preflight was short-circuited although no usable origin is configured")
+	}
+}

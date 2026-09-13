@@ -30,20 +30,20 @@ type Server struct {
 	// handler is what the server actually serves: the router, wrapped in CORS
 	// when origins are configured. Router() still exposes the bare router for
 	// route walking; Handler() is what tests and the composition root serve.
-	handler            http.Handler
-	corsAllowedOrigins []string
-	rateLimiter        *ipRateLimiter // nil when rate limiting is disabled
-	trustedProxies     []*net.IPNet
-	features           input.FeatureService
-	batch              input.BatchService
-	batchLimits        BatchLimits
-	providers          input.ProviderLister
-	clock              output.Clock
-	health             input.HealthChecker
-	logger             *slog.Logger
-	serviceName        string
-	tracerProvider     trace.TracerProvider // may be nil (tracing disabled)
-	frontendPage       []byte
+	handler        http.Handler
+	corsPatterns   []domain.OriginPattern
+	rateLimiter    *ipRateLimiter // nil when rate limiting is disabled
+	trustedProxies []*net.IPNet
+	features       input.FeatureService
+	batch          input.BatchService
+	batchLimits    BatchLimits
+	providers      input.ProviderLister
+	clock          output.Clock
+	health         input.HealthChecker
+	logger         *slog.Logger
+	serviceName    string
+	tracerProvider trace.TracerProvider // may be nil (tracing disabled)
+	frontendPage   []byte
 }
 
 // Options carries optional dependencies (tracing, service name, …).
@@ -88,18 +88,18 @@ func NewServer(addr string, features input.FeatureService, batch input.BatchServ
 	name := cmp.Or(opts.ServiceName, "tempus")
 	version := cmp.Or(opts.Version, "dev")
 	s := &Server{
-		features:           features,
-		batch:              batch,
-		batchLimits:        opts.Batch,
-		providers:          providers,
-		clock:              clock,
-		health:             health,
-		logger:             logger,
-		serviceName:        name,
-		tracerProvider:     opts.TracerProvider,
-		frontendPage:       renderFrontend(version),
-		corsAllowedOrigins: opts.CORSAllowedOrigins,
+		features:       features,
+		batch:          batch,
+		batchLimits:    opts.Batch,
+		providers:      providers,
+		clock:          clock,
+		health:         health,
+		logger:         logger,
+		serviceName:    name,
+		tracerProvider: opts.TracerProvider,
+		frontendPage:   renderFrontend(version),
 	}
+	s.initCORS(opts.CORSAllowedOrigins)
 	s.initRateLimit(opts.RateLimit)
 	s.router = s.setupRoutes()
 	s.handler = s.wrapCORS(s.router)

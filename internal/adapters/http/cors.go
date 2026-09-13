@@ -4,15 +4,33 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+
+	"github.com/jobrunner/tempus/internal/domain"
 )
 
 // corsMaxAgeSeconds is how long a browser may cache a preflight result.
 const corsMaxAgeSeconds = "86400" // 24 hours
 
-// wrapCORS returns h unchanged when no origins are configured, so a service
-// without CORS keeps byte-identical responses and pays nothing per request.
+// initCORS parses the configured allow-list once, at startup. Patterns that
+// cannot be parsed are reported rather than skipped in silence: an entry with a
+// typo (or without a scheme) matches nothing, and an operator who never sees a
+// message is left believing CORS is configured when it is not.
+func (s *Server) initCORS(origins []string) {
+	for _, raw := range origins {
+		p, err := domain.ParseOriginPattern(raw)
+		if err != nil {
+			s.logger.Warn("ignoring unusable CORS origin pattern", "pattern", raw, "error", err)
+			continue
+		}
+		s.corsPatterns = append(s.corsPatterns, p)
+	}
+}
+
+// wrapCORS returns h unchanged when no usable origins are configured, so a
+// service without CORS keeps byte-identical responses and pays nothing per
+// request.
 func (s *Server) wrapCORS(h http.Handler) http.Handler {
-	if len(s.corsAllowedOrigins) == 0 {
+	if len(s.corsPatterns) == 0 {
 		return h
 	}
 	return s.corsHandler(h)
@@ -80,10 +98,12 @@ func (s *Server) routeAllowsMethod(r *http.Request, method string) bool {
 	return s.router.Match(probe, &match) && match.MatchErr == nil
 }
 
-// isOriginAllowed reports whether origin matches any configured pattern.
+// isOriginAllowed reports whether the request's Origin matches any configured
+// pattern. The patterns are pre-parsed (see initCORS), so this stays a
+// comparison per request rather than a re-parse of the whole allow-list.
 func (s *Server) isOriginAllowed(origin string) bool {
-	for _, pattern := range s.corsAllowedOrigins {
-		if matchOrigin(origin, pattern) {
+	for _, p := range s.corsPatterns {
+		if p.MatchesString(origin) {
 			return true
 		}
 	}
