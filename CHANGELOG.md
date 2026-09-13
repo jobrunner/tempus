@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/jobrunner/tempus/compare/v0.23.0...v0.24.0) (2026-09-13)
+
+
+### Features
+
+* **http:** add optional per-client-IP rate limiting ([#63](https://github.com/jobrunner/tempus/issues/63)) ([e15e0e8](https://github.com/jobrunner/tempus/commit/e15e0e85c2863480f0bd9c009051f20ac0a7a184))
+
 ## [0.23.0](https://github.com/jobrunner/tempus/compare/v0.22.1...v0.23.0) (2026-09-13)
 
 
