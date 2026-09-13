@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/jobrunner/tempus/compare/v0.22.1...v0.23.0) (2026-09-13)
+
+
+### Features
+
+* **http:** add configurable CORS support ([#61](https://github.com/jobrunner/tempus/issues/61)) ([bc374a6](https://github.com/jobrunner/tempus/commit/bc374a64922723a953190fda9999fc108c725c01))
+
 ## [0.22.1](https://github.com/jobrunner/tempus/compare/v0.22.0...v0.22.1) (2026-09-07)
 
 
