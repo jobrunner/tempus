@@ -221,6 +221,7 @@ func TestApp_CORSOriginReachesTheResponse(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/v1/query/batch", nil)
 	req.Header.Set("Origin", "https://a.test")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
 	rr := httptest.NewRecorder()
 	app.Handler().ServeHTTP(rr, req)
 

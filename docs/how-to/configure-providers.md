@@ -8,7 +8,7 @@ All configuration is via environment variables with the prefix `TEMPUS_`.
 |---|---|---|
 | `TEMPUS_SERVER_HOST` | `0.0.0.0` | Listen address |
 | `TEMPUS_SERVER_PORT` | `8080` | Listen port |
-| `TEMPUS_SERVER_READ_TIMEOUT` | `30s` | HTTP read timeout |
+| `TEMPUS_SERVER_READ_TIMEOUT` | `30s` | Whole-request read timeout (headers + body) |
 | `TEMPUS_SERVER_SHUTDOWN_TIMEOUT` | `15s` | Graceful shutdown window |
 | `TEMPUS_SERVER_CORS_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated browser origins allowed cross-origin; empty disables CORS. See [configuration reference](../reference/configuration.md#cors). |
 

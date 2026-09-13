@@ -41,11 +41,17 @@ func (s *Server) corsHandler(next http.Handler) http.Handler {
 			}
 		}
 
-		// Preflights never reach a handler. Answering 204 regardless of whether
-		// the origin is allowed is deliberate: without the Allow-Origin header
-		// above, the browser rejects the request anyway, and a uniform answer
-		// avoids leaking which origins are configured.
-		if r.Method == http.MethodOptions {
+		// Only a real preflight is short-circuited: OPTIONS carrying both Origin
+		// and Access-Control-Request-Method. A bare OPTIONS (no Origin, or a
+		// probe without the request-method header) keeps falling through to the
+		// router exactly as it did before CORS existed — otherwise enabling CORS
+		// would silently turn every OPTIONS into a 204.
+		//
+		// Answering 204 regardless of whether the origin is *allowed* is
+		// deliberate: without the Allow-Origin header above the browser rejects
+		// the response anyway, and a uniform answer avoids leaking which origins
+		// are configured.
+		if r.Method == http.MethodOptions && origin != "" && r.Header.Get("Access-Control-Request-Method") != "" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -66,35 +72,45 @@ func (s *Server) isOriginAllowed(origin string) bool {
 
 // matchOrigin matches an origin against one pattern: either exactly, or as a
 // "*.example.com" wildcard covering subdomains (but not the bare domain).
+//
+// Only the host label is wildcarded. Scheme and port must still match exactly,
+// so "https://*.example.com" does NOT admit "http://sub.example.com" (plaintext)
+// or "https://sub.example.com:8443" (a different service on the same host) —
+// an origin is the scheme/host/port triple, and widening it silently would hand
+// responses to servers the operator never listed.
 func matchOrigin(origin, pattern string) bool {
 	if origin == pattern {
 		return true
 	}
 
-	// Wildcard patterns may be written with or without a scheme
-	// ("https://*.example.com" or "*.example.com"); compare hosts either way.
-	patternHost := extractHost(pattern)
-	if !strings.HasPrefix(patternHost, "*.") {
+	oScheme, oHost, oPort := splitOrigin(origin)
+	pScheme, pHost, pPort := splitOrigin(pattern)
+	if oScheme != pScheme || oPort != pPort {
 		return false
 	}
-	suffix := patternHost[1:] // "*.example.com" -> ".example.com"
-	originHost := extractHost(origin)
+	if !strings.HasPrefix(pHost, "*.") {
+		return false
+	}
+	suffix := pHost[1:] // "*.example.com" -> ".example.com"
 	// len > len(suffix) keeps "example.com" itself out, and requiring the dot
 	// keeps "evil-example.com" out.
-	return strings.HasSuffix(originHost, suffix) && len(originHost) > len(suffix)
+	return strings.HasSuffix(oHost, suffix) && len(oHost) > len(suffix)
 }
 
-// extractHost strips scheme, port and path from an origin or pattern.
-func extractHost(origin string) string {
-	host := origin
-	if idx := strings.Index(host, "://"); idx != -1 {
-		host = host[idx+3:]
+// splitOrigin breaks an origin (or a wildcard pattern) into scheme, host and
+// port. A pattern written without a scheme yields an empty scheme, which then
+// only matches an equally scheme-less origin — browsers always send one, so
+// such a pattern matches nothing and is better rejected than quietly widened.
+func splitOrigin(origin string) (scheme, host, port string) {
+	rest := origin
+	if idx := strings.Index(rest, "://"); idx != -1 {
+		scheme, rest = rest[:idx], rest[idx+3:]
 	}
-	if idx := strings.Index(host, "/"); idx != -1 {
-		host = host[:idx]
+	if idx := strings.Index(rest, "/"); idx != -1 {
+		rest = rest[:idx]
 	}
-	if idx := strings.Index(host, ":"); idx != -1 {
-		host = host[:idx]
+	if idx := strings.LastIndex(rest, ":"); idx != -1 {
+		rest, port = rest[:idx], rest[idx+1:]
 	}
-	return host
+	return scheme, rest, port
 }

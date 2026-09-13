@@ -56,6 +56,11 @@ type Options struct {
 	// origins (exact or "*.example.com"). Empty disables CORS entirely, which
 	// is the default — the bundled frontend is served from the same origin.
 	CORSAllowedOrigins []string
+	// ReadTimeout bounds reading the whole request (headers plus body) and is
+	// plumbed through from config: a key that is declared and documented but
+	// never read is worse than a missing knob, because an operator who sets it
+	// gets silence instead of an error. Zero means no limit.
+	ReadTimeout time.Duration
 }
 
 // NewServer builds the server, wires routes, and prepares the http.Server.
@@ -85,6 +90,7 @@ func NewServer(addr string, features input.FeatureService, batch input.BatchServ
 		Addr:              addr,
 		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       opts.ReadTimeout,
 	}
 	return s
 }
