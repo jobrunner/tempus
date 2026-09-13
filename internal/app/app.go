@@ -74,7 +74,7 @@ func buildCache(cfg config.CacheConfig) (output.Cache, func() error, error) {
 }
 
 // Handler exposes the router for tests.
-func (a *App) Handler() http.Handler { return a.server.Router() }
+func (a *App) Handler() http.Handler { return a.server.Handler() }
 
 // Run starts the server and shuts down gracefully on ctx cancellation.
 func (a *App) Run(ctx context.Context) error {

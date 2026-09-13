@@ -12,8 +12,29 @@ practical walkthrough. This page lists every knob.
 |---|---|---|
 | `TEMPUS_SERVER_HOST` | `0.0.0.0` | Bind address |
 | `TEMPUS_SERVER_PORT` | `8080` | HTTP listen port |
-| `TEMPUS_SERVER_READ_TIMEOUT` | `10s` | Header read timeout |
-| `TEMPUS_SERVER_SHUTDOWN_TIMEOUT` | `5s` | Graceful shutdown window |
+| `TEMPUS_SERVER_READ_TIMEOUT` | `30s` | Header read timeout |
+| `TEMPUS_SERVER_SHUTDOWN_TIMEOUT` | `15s` | Graceful shutdown window |
+| `TEMPUS_SERVER_CORS_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated browser origins allowed to call the API cross-origin. Empty disables CORS entirely. |
+
+### CORS
+
+The bundled frontend is served from the same origin as the API, so it needs no
+CORS. Set `TEMPUS_SERVER_CORS_ALLOWED_ORIGINS` only when a **browser** client on
+a different domain must call the API — native apps and server-side clients are
+unaffected by CORS.
+
+```bash
+TEMPUS_SERVER_CORS_ALLOWED_ORIGINS="https://app.example.com,https://*.staging.example.com"
+```
+
+Entries are matched either exactly or as a `*.domain` wildcard, which covers
+subdomains but not the bare domain (`*.example.com` allows `app.example.com`,
+not `example.com`). Allowed origins are echoed back in
+`Access-Control-Allow-Origin`; requests from other origins are served normally
+but without CORS headers, so the browser blocks them. Preflight `OPTIONS`
+requests are answered with `204` and advertise `GET, POST, OPTIONS` — POST
+matters because `/api/v1/query/batch` posts JSON, which always triggers a
+preflight.
 
 ## Logging
 
