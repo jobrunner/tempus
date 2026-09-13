@@ -2,7 +2,8 @@ package httpapi
 
 import (
 	"net/http"
-	"strings"
+
+	"github.com/gorilla/mux"
 )
 
 // corsMaxAgeSeconds is how long a browser may cache a preflight result.
@@ -35,7 +36,15 @@ func (s *Server) corsHandler(next http.Handler) http.Handler {
 			w.Header().Add("Vary", "Origin")
 			if s.isOriginAllowed(origin) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				// Answer with the method the ROUTER accepts for this path rather
+				// than a hand-written list. A literal "GET, POST, OPTIONS" is
+				// correct exactly until someone adds a DELETE route: nothing
+				// fails at build time, and the endpoint is simply unusable from
+				// a browser. Deriving it from the route table makes that drift
+				// impossible.
+				if m := r.Header.Get("Access-Control-Request-Method"); m != "" && s.routeAllowsMethod(r, m) {
+					w.Header().Set("Access-Control-Allow-Methods", m+", OPTIONS")
+				}
 				w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization")
 				w.Header().Set("Access-Control-Max-Age", corsMaxAgeSeconds)
 			}
@@ -60,6 +69,17 @@ func (s *Server) corsHandler(next http.Handler) http.Handler {
 	})
 }
 
+// routeAllowsMethod asks the router whether method+path would match a route.
+// mux reports a path that exists under a different method via
+// RouteMatch.MatchErr == ErrMethodMismatch, so a method the service does not
+// serve is never advertised as allowed.
+func (s *Server) routeAllowsMethod(r *http.Request, method string) bool {
+	probe := r.Clone(r.Context())
+	probe.Method = method
+	var match mux.RouteMatch
+	return s.router.Match(probe, &match) && match.MatchErr == nil
+}
+
 // isOriginAllowed reports whether origin matches any configured pattern.
 func (s *Server) isOriginAllowed(origin string) bool {
 	for _, pattern := range s.corsAllowedOrigins {
@@ -68,49 +88,4 @@ func (s *Server) isOriginAllowed(origin string) bool {
 		}
 	}
 	return false
-}
-
-// matchOrigin matches an origin against one pattern: either exactly, or as a
-// "*.example.com" wildcard covering subdomains (but not the bare domain).
-//
-// Only the host label is wildcarded. Scheme and port must still match exactly,
-// so "https://*.example.com" does NOT admit "http://sub.example.com" (plaintext)
-// or "https://sub.example.com:8443" (a different service on the same host) —
-// an origin is the scheme/host/port triple, and widening it silently would hand
-// responses to servers the operator never listed.
-func matchOrigin(origin, pattern string) bool {
-	if origin == pattern {
-		return true
-	}
-
-	oScheme, oHost, oPort := splitOrigin(origin)
-	pScheme, pHost, pPort := splitOrigin(pattern)
-	if oScheme != pScheme || oPort != pPort {
-		return false
-	}
-	if !strings.HasPrefix(pHost, "*.") {
-		return false
-	}
-	suffix := pHost[1:] // "*.example.com" -> ".example.com"
-	// len > len(suffix) keeps "example.com" itself out, and requiring the dot
-	// keeps "evil-example.com" out.
-	return strings.HasSuffix(oHost, suffix) && len(oHost) > len(suffix)
-}
-
-// splitOrigin breaks an origin (or a wildcard pattern) into scheme, host and
-// port. A pattern written without a scheme yields an empty scheme, which then
-// only matches an equally scheme-less origin — browsers always send one, so
-// such a pattern matches nothing and is better rejected than quietly widened.
-func splitOrigin(origin string) (scheme, host, port string) {
-	rest := origin
-	if idx := strings.Index(rest, "://"); idx != -1 {
-		scheme, rest = rest[:idx], rest[idx+3:]
-	}
-	if idx := strings.Index(rest, "/"); idx != -1 {
-		rest = rest[:idx]
-	}
-	if idx := strings.LastIndex(rest, ":"); idx != -1 {
-		rest, port = rest[:idx], rest[idx+1:]
-	}
-	return scheme, rest, port
 }

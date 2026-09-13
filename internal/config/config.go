@@ -25,11 +25,26 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host            string        `mapstructure:"host"`
-	Port            int           `mapstructure:"port"`
-	ReadTimeout     time.Duration `mapstructure:"read_timeout"`
-	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
-	CORS            CORSConfig    `mapstructure:"cors"`
+	Host            string          `mapstructure:"host"`
+	Port            int             `mapstructure:"port"`
+	ReadTimeout     time.Duration   `mapstructure:"read_timeout"`
+	ShutdownTimeout time.Duration   `mapstructure:"shutdown_timeout"`
+	CORS            CORSConfig      `mapstructure:"cors"`
+	RateLimit       RateLimitConfig `mapstructure:"rate_limit"`
+}
+
+// RateLimitConfig caps requests per client IP on /api/v1. Disabled by default:
+// it is meant for a tempus exposed directly on a public IP, without a
+// rate-limiting gateway in front.
+type RateLimitConfig struct {
+	Enabled bool    `mapstructure:"enabled"`
+	Rate    float64 `mapstructure:"rate"`  // sustained requests per second per client IP
+	Burst   int     `mapstructure:"burst"` // token-bucket depth per client IP
+	// TrustedProxies are CIDRs of front proxies/load balancers. When the direct
+	// peer is within one, the client IP is taken from X-Forwarded-For (right-most
+	// non-trusted entry); otherwise the direct peer is used. Empty (the default)
+	// = never trust forwarded headers.
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
 }
 
 // CORSConfig lists the browser origins allowed to call the API from another
@@ -138,6 +153,10 @@ func Defaults() {
 	// Registering the key is what lets AutomaticEnv pick up
 	// TEMPUS_SERVER_CORS_ALLOWED_ORIGINS; the empty default keeps CORS off.
 	viper.SetDefault("server.cors.allowed_origins", []string{})
+	viper.SetDefault("server.rate_limit.enabled", false)
+	viper.SetDefault("server.rate_limit.rate", 100.0)
+	viper.SetDefault("server.rate_limit.burst", 200)
+	viper.SetDefault("server.rate_limit.trusted_proxies", []string{})
 
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "json")

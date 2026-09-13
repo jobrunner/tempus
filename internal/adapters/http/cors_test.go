@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gorilla/mux"
 )
 
 // newCORSTestServer builds a server whose CORS middleware allows the given
@@ -156,5 +158,62 @@ func TestCORS_BareOptionsStillReachesTheRouter(t *testing.T) {
 
 	if rr.Code == http.StatusNoContent {
 		t.Errorf("bare OPTIONS answered 204 by the CORS layer; it should fall through to the router (405)")
+	}
+}
+
+// TestCORSPreflightForEveryWritingRoute derives its cases from the route table,
+// so an endpoint added tomorrow is covered without touching this test. It gates
+// both ways CORS silently breaks: a middleware registered via router.Use (mux
+// bypasses it for the unmatched OPTIONS, so no headers come back) and an
+// Access-Control-Allow-Methods list that has drifted from the routes. Neither
+// shows up in a unit test, in curl, or in the same-origin frontend — the usual
+// discovery path is an integrator's bug report.
+//
+// Driving Handler() rather than Router() is the whole point: the bare router has
+// no CORS layer, so the same test against Router() would prove nothing.
+func TestCORSPreflightForEveryWritingRoute(t *testing.T) {
+	const origin = "https://app.example.test"
+	srv := newCORSTestServer(t, origin)
+
+	type op struct{ method, path string }
+	var ops []op
+	err := srv.Router().Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+		// Matcher-only routes have no template, and path-var routes cannot be
+		// preflighted literally; both are skipped (same idiom as contract_test).
+		tmpl, _ := route.GetPathTemplate()
+		if tmpl == "" || strings.Contains(tmpl, "{") {
+			return nil
+		}
+		methods, _ := route.GetMethods()
+		for _, m := range methods {
+			// GET/HEAD are "simple requests" — no preflight, nothing to pin.
+			if m != http.MethodGet && m != http.MethodHead && m != http.MethodOptions {
+				ops = append(ops, op{m, tmpl})
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk router: %v", err)
+	}
+	if len(ops) == 0 {
+		t.Skip("no writing routes registered yet — nothing to preflight")
+	}
+
+	for _, o := range ops {
+		t.Run(o.method+" "+o.path, func(t *testing.T) {
+			rr := doPreflight(srv, o.path, origin, o.method)
+
+			if rr.Code != http.StatusNoContent {
+				t.Errorf("preflight status = %d, want 204", rr.Code)
+			}
+			if got := rr.Header().Get("Access-Control-Allow-Origin"); got != origin {
+				t.Errorf("Allow-Origin = %q, want %q", got, origin)
+			}
+			if got := rr.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, o.method) {
+				t.Errorf("Allow-Methods = %q, must contain %s — the browser blocks the real request otherwise",
+					got, o.method)
+			}
+		})
 	}
 }

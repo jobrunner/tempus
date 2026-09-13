@@ -15,6 +15,10 @@ practical walkthrough. This page lists every knob.
 | `TEMPUS_SERVER_READ_TIMEOUT` | `30s` | Whole-request read timeout (headers + body). Batch POSTs must upload within it. |
 | `TEMPUS_SERVER_SHUTDOWN_TIMEOUT` | `15s` | Graceful shutdown window |
 | `TEMPUS_SERVER_CORS_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated browser origins allowed to call the API cross-origin. Empty disables CORS entirely. |
+| `TEMPUS_SERVER_RATE_LIMIT_ENABLED` | `false` | Per-client-IP rate limiting on `/api/v1` |
+| `TEMPUS_SERVER_RATE_LIMIT_RATE` | `100` | Sustained requests per second per client IP |
+| `TEMPUS_SERVER_RATE_LIMIT_BURST` | `200` | Token-bucket depth per client IP |
+| `TEMPUS_SERVER_RATE_LIMIT_TRUSTED_PROXIES` | _(empty)_ | Comma-separated CIDRs of front proxies whose `X-Forwarded-For` may be believed |
 
 ### CORS
 
@@ -41,6 +45,40 @@ blocks them. A preflight (`OPTIONS` carrying `Origin` and
 `GET, POST, OPTIONS` — POST matters because `/api/v1/query/batch` posts JSON,
 which always triggers a preflight. A plain `OPTIONS` without those headers is
 left to the router, exactly as before CORS was available.
+
+### Rate limiting
+
+Off by default, and only worth enabling when tempus is reachable directly on a
+public IP without a rate-limiting gateway in front. It applies to `/api/v1`
+only — health and readiness probes must keep answering under load, or an
+orchestrator kills a container that is merely busy. Over-limit requests get
+`429` with `Retry-After: 1` in the usual error envelope.
+
+```bash
+TEMPUS_SERVER_RATE_LIMIT_ENABLED=true
+TEMPUS_SERVER_RATE_LIMIT_RATE=100
+TEMPUS_SERVER_RATE_LIMIT_BURST=200
+```
+
+Buckets are per client IP and expire after 10 idle minutes, so memory stays
+bounded without a background sweeper.
+
+**Behind a proxy**, set `TEMPUS_SERVER_RATE_LIMIT_TRUSTED_PROXIES` to the
+proxy's CIDRs — otherwise every request appears to come from the proxy and all
+clients share one bucket. `X-Forwarded-For` is believed only when the direct
+peer is inside one of those CIDRs, and the client is then taken as the
+**right-most** entry that is not itself a trusted proxy. Anything further left
+is attacker-controlled: clients can prepend arbitrary values, and trusting them
+would let anyone mint a fresh bucket per request.
+
+Two caveats worth knowing before turning it on:
+
+- **Shared IPs.** Mobile clients behind CGNAT share one address, so a per-IP
+  limit counts them together. That is why the default is deliberately generous.
+- **Batch requests.** `POST /api/v1/query/batch` is a single request no matter
+  how many points it carries, so the rate limit barely constrains it. What
+  bounds batch cost is the worker pool (`TEMPUS_QUERY_BATCH_CONCURRENCY`) and
+  the weighted Open-Meteo daily budget.
 
 ## Logging
 
