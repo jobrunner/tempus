@@ -105,3 +105,17 @@ func TestHandleIndex_OK(t *testing.T) {
 		t.Error("body does not contain lat input (id=\"lat\")")
 	}
 }
+
+// TEMPUS_SERVER_READ_TIMEOUT was declared and documented but never reached the
+// HTTP server, which only set ReadHeaderTimeout. A config key that silently
+// does nothing is worse than a missing one, so pin that Options carries it
+// through. (Raised in review on the CORS PR.)
+func TestNewServer_AppliesReadTimeout(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	srv := NewServer(":0", stubFeatures{}, stubBatchService{}, stubProviders{}, stubHealth{}, fixedClock{}, logger,
+		Options{ReadTimeout: 7 * time.Second})
+
+	if got := srv.server.ReadTimeout; got != 7*time.Second {
+		t.Errorf("http.Server ReadTimeout = %v, want 7s from Options", got)
+	}
+}

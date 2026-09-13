@@ -52,3 +52,37 @@ func TestLoad_BatchAndThrottleDefaults(t *testing.T) {
 		t.Errorf("openmeteo weights = %+v, want 1/2/30", om.Weights)
 	}
 }
+
+func TestLoad_CORSDisabledByDefault(t *testing.T) {
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Server.CORS.Enabled() {
+		t.Errorf("CORS must be off by default, got origins %v", cfg.Server.CORS.AllowedOrigins)
+	}
+}
+
+// A comma-separated env var must arrive as separate origins — viper's decoder
+// hook is what makes TEMPUS_SERVER_CORS_ALLOWED_ORIGINS usable at all.
+func TestLoad_CORSOriginsFromEnv(t *testing.T) {
+	t.Setenv("TEMPUS_SERVER_CORS_ALLOWED_ORIGINS", "https://a.test,https://*.b.test")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := cfg.Server.CORS.AllowedOrigins
+	want := []string{"https://a.test", "https://*.b.test"}
+	if len(got) != len(want) {
+		t.Fatalf("origins = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("origins[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	if !cfg.Server.CORS.Enabled() {
+		t.Error("CORS must report enabled when origins are configured")
+	}
+}

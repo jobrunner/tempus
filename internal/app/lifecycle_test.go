@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -202,3 +204,52 @@ func TestBuildRegistry_RespectsConfiguration(t *testing.T) {
 type stoppedClock struct{}
 
 func (stoppedClock) Now() time.Time { return time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC) }
+
+// CORS is configured in internal/config but enforced in the HTTP adapter, so
+// the wiring between them is exactly what a unit test on either side misses.
+// Serving App.Handler() (rather than the bare router) is part of that contract:
+// the CORS wrapper sits outside the router.
+func TestApp_CORSOriginReachesTheResponse(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Server.CORS.AllowedOrigins = []string{"https://a.test"}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	app, err := New(cfg, logger, "test")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/query/batch", nil)
+	req.Header.Set("Origin", "https://a.test")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("preflight status = %d, want 204", rr.Code)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://a.test" {
+		t.Errorf("Allow-Origin = %q, want the configured origin — config did not reach the middleware", got)
+	}
+}
+
+// And with no origins configured the service must look exactly as before.
+func TestApp_CORSOffByDefault(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Server.CORS.AllowedOrigins = nil
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	app, err := New(cfg, logger, "test")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/providers", nil)
+	req.Header.Set("Origin", "https://a.test")
+	rr := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Allow-Origin = %q, want none when CORS is unconfigured", got)
+	}
+}

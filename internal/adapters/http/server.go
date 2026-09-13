@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
-	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jobrunner/tempus/internal/domain"
@@ -26,18 +24,23 @@ const keyStatus = "status"
 
 // Server wraps the HTTP server and its router. It holds only driving ports.
 type Server struct {
-	server         *http.Server
-	router         *mux.Router
-	features       input.FeatureService
-	batch          input.BatchService
-	batchLimits    BatchLimits
-	providers      input.ProviderLister
-	clock          output.Clock
-	health         input.HealthChecker
-	logger         *slog.Logger
-	serviceName    string
-	tracerProvider trace.TracerProvider // may be nil (tracing disabled)
-	frontendPage   []byte
+	server *http.Server
+	router *mux.Router
+	// handler is what the server actually serves: the router, wrapped in CORS
+	// when origins are configured. Router() still exposes the bare router for
+	// route walking; Handler() is what tests and the composition root serve.
+	handler            http.Handler
+	corsAllowedOrigins []string
+	features           input.FeatureService
+	batch              input.BatchService
+	batchLimits        BatchLimits
+	providers          input.ProviderLister
+	clock              output.Clock
+	health             input.HealthChecker
+	logger             *slog.Logger
+	serviceName        string
+	tracerProvider     trace.TracerProvider // may be nil (tracing disabled)
+	frontendPage       []byte
 }
 
 // Options carries optional dependencies (tracing, service name, …).
@@ -49,6 +52,15 @@ type Options struct {
 	Version string
 	// Batch bounds POST /api/v1/query/batch; zero fields fall back to defaults.
 	Batch BatchLimits
+	// CORSAllowedOrigins enables cross-origin access for the listed browser
+	// origins (exact or "*.example.com"). Empty disables CORS entirely, which
+	// is the default — the bundled frontend is served from the same origin.
+	CORSAllowedOrigins []string
+	// ReadTimeout bounds reading the whole request (headers plus body) and is
+	// plumbed through from config: a key that is declared and documented but
+	// never read is worse than a missing knob, because an operator who sets it
+	// gets silence instead of an error. Zero means no limit.
+	ReadTimeout time.Duration
 }
 
 // NewServer builds the server, wires routes, and prepares the http.Server.
@@ -56,26 +68,29 @@ func NewServer(addr string, features input.FeatureService, batch input.BatchServ
 	name := cmp.Or(opts.ServiceName, "tempus")
 	version := cmp.Or(opts.Version, "dev")
 	s := &Server{
-		features:       features,
-		batch:          batch,
-		batchLimits:    opts.Batch,
-		providers:      providers,
-		clock:          clock,
-		health:         health,
-		logger:         logger,
-		serviceName:    name,
-		tracerProvider: opts.TracerProvider,
-		frontendPage:   renderFrontend(version),
+		features:           features,
+		batch:              batch,
+		batchLimits:        opts.Batch,
+		providers:          providers,
+		clock:              clock,
+		health:             health,
+		logger:             logger,
+		serviceName:        name,
+		tracerProvider:     opts.TracerProvider,
+		frontendPage:       renderFrontend(version),
+		corsAllowedOrigins: opts.CORSAllowedOrigins,
 	}
 	s.router = s.setupRoutes()
+	s.handler = s.wrapCORS(s.router)
 	// No blanket WriteTimeout here: batch NDJSON streaming can legitimately run
 	// long, and a server-wide write deadline would kill it mid-stream. The
 	// batch handler lifts any per-connection write deadline itself for its
 	// response (see streamBatchNDJSON in batch_render.go).
 	s.server = &http.Server{
 		Addr:              addr,
-		Handler:           s.router,
+		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       opts.ReadTimeout,
 	}
 	return s
 }
@@ -122,6 +137,11 @@ func (s *Server) setupRoutes() *mux.Router {
 // Router exposes the router so tests (and the contract fitness function) can
 // walk the registered routes.
 func (s *Server) Router() *mux.Router { return s.router }
+
+// Handler is what the server serves: the router plus any outer middleware that
+// must see requests the router would not match (currently CORS preflights).
+// Serve this — not Router() — or cross-origin behaviour silently disappears.
+func (s *Server) Handler() http.Handler { return s.handler }
 
 // Start / Shutdown manage the lifecycle (called by the composition root).
 func (s *Server) Start() error { return s.server.ListenAndServe() }
@@ -198,62 +218,3 @@ func (s *Server) writeError(w http.ResponseWriter, status int, message string) {
 		"message": message,
 	})
 }
-
-// --- middleware --------------------------------------------------------------
-
-func (s *Server) traceIDHeaderMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
-			w.Header().Set("X-Trace-Id", sc.TraceID().String())
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		next.ServeHTTP(wrapped, r)
-		fields := []any{
-			"method", r.Method, "path", r.URL.Path,
-			keyStatus, wrapped.statusCode, "duration", time.Since(start),
-		}
-		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
-			fields = append(fields, "trace_id", sc.TraceID().String())
-		}
-		s.logger.Info("request", fields...)
-	})
-}
-
-func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
-					span.RecordError(fmt.Errorf("panic: %v", err), trace.WithStackTrace(true))
-					span.SetStatus(otelcodes.Error, "panic recovered")
-				}
-				s.logger.Error("panic recovered", "error", err, "path", r.URL.Path)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
-}
-
-// responseWriter captures the status code for the logging middleware.
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-// Unwrap lets http.ResponseController (used for streaming Flush, e.g. by
-// handleQueryBatch's NDJSON writer) reach the underlying ResponseWriter's
-// Flush/Hijack support through this logging wrapper.
-func (rw *responseWriter) Unwrap() http.ResponseWriter { return rw.ResponseWriter }

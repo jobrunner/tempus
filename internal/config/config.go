@@ -29,7 +29,23 @@ type ServerConfig struct {
 	Port            int           `mapstructure:"port"`
 	ReadTimeout     time.Duration `mapstructure:"read_timeout"`
 	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+	CORS            CORSConfig    `mapstructure:"cors"`
 }
+
+// CORSConfig lists the browser origins allowed to call the API from another
+// site. Empty (the default) means no CORS headers are sent at all — the
+// service then behaves exactly as it did before CORS existed, which is correct
+// for the bundled frontend because that is served from the same origin.
+type CORSConfig struct {
+	// AllowedOrigins holds exact origins ("https://example.com") and wildcard
+	// patterns ("https://*.example.com"). Set via
+	// TEMPUS_SERVER_CORS_ALLOWED_ORIGINS as a comma-separated list.
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
+}
+
+// Enabled reports whether any origin is allowed; the middleware is only wired
+// in when this is true.
+func (c CORSConfig) Enabled() bool { return len(c.AllowedOrigins) > 0 }
 
 type LoggingConfig struct {
 	Level  string `mapstructure:"level"`  // debug|info|warn|error
@@ -119,6 +135,9 @@ func Defaults() {
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.read_timeout", 30*time.Second)
 	viper.SetDefault("server.shutdown_timeout", 15*time.Second)
+	// Registering the key is what lets AutomaticEnv pick up
+	// TEMPUS_SERVER_CORS_ALLOWED_ORIGINS; the empty default keeps CORS off.
+	viper.SetDefault("server.cors.allowed_origins", []string{})
 
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "json")
