@@ -23,7 +23,7 @@ All configuration is via environment variables with the prefix `TEMPUS_`.
 | Variable | Default | Description |
 |---|---|---|
 | `TEMPUS_METRICS_ENABLED` | `false` | Expose Prometheus metrics |
-| `TEMPUS_METRICS_PORT` | `9090` | Metrics listen port |
+| `TEMPUS_METRICS_PORT` | `2112` | Metrics listen port |
 | `TEMPUS_METRICS_PATH` | `/metrics` | Metrics path |
 
 ## Tracing (OpenTelemetry)
