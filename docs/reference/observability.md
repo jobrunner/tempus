@@ -13,7 +13,7 @@ Both liveness and readiness return HTTP 200 on success, HTTP 503 on failure.
 ## Metrics (Prometheus)
 
 Enable with `TEMPUS_METRICS_ENABLED=true`. The metrics server runs on a
-separate port (default `9090`) and exposes `GET /metrics` in the Prometheus
+separate port (default `2112`) and exposes `GET /metrics` in the Prometheus
 text format.
 
 Key metrics:

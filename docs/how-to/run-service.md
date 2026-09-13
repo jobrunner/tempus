@@ -37,7 +37,7 @@ Both return HTTP 200 on success.
 | Port | Purpose |
 |---|---|
 | 8080 (default) | HTTP API (`TEMPUS_SERVER_PORT`) |
-| 9090 (default) | Prometheus metrics (`TEMPUS_METRICS_PORT`) — when metrics enabled |
+| 2112 (default) | Prometheus metrics (`TEMPUS_METRICS_PORT`) — when metrics enabled |
 
 ## Logging
 

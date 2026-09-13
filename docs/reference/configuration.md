@@ -27,7 +27,7 @@ practical walkthrough. This page lists every knob.
 | Variable | Default | Description |
 |---|---|---|
 | `TEMPUS_METRICS_ENABLED` | `false` | Enable Prometheus `/metrics` endpoint |
-| `TEMPUS_METRICS_PORT` | `9090` | Metrics server port |
+| `TEMPUS_METRICS_PORT` | `2112` | Metrics server port |
 | `TEMPUS_METRICS_PATH` | `/metrics` | Metrics URL path |
 
 ## Tracing (OpenTelemetry)
