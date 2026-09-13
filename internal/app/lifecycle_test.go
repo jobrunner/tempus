@@ -253,3 +253,37 @@ func TestApp_CORSOffByDefault(t *testing.T) {
 		t.Errorf("Allow-Origin = %q, want none when CORS is unconfigured", got)
 	}
 }
+
+// Rate limiting is configured in internal/config and enforced in the HTTP
+// adapter; this pins that the wiring between them works end to end, including
+// that probes stay exempt.
+func TestApp_RateLimitReachesTheRouter(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Server.RateLimit.Enabled = true
+	cfg.Server.RateLimit.Rate = 0.0001 // effectively: only the burst is available
+	cfg.Server.RateLimit.Burst = 1
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	app, err := New(cfg, logger, "test")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	do := func(path string) int {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "10.9.9.9:1234"
+		rr := httptest.NewRecorder()
+		app.Handler().ServeHTTP(rr, req)
+		return rr.Code
+	}
+
+	if got := do("/api/v1/providers"); got != http.StatusOK {
+		t.Fatalf("first API call = %d, want 200", got)
+	}
+	if got := do("/api/v1/providers"); got != http.StatusTooManyRequests {
+		t.Errorf("second API call = %d, want 429 — config did not reach the middleware", got)
+	}
+	if got := do("/health/ready"); got != http.StatusOK {
+		t.Errorf("readiness probe = %d, want 200 even when the API is limited", got)
+	}
+}

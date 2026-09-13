@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -31,6 +32,8 @@ type Server struct {
 	// route walking; Handler() is what tests and the composition root serve.
 	handler            http.Handler
 	corsAllowedOrigins []string
+	rateLimiter        *ipRateLimiter // nil when rate limiting is disabled
+	trustedProxies     []*net.IPNet
 	features           input.FeatureService
 	batch              input.BatchService
 	batchLimits        BatchLimits
@@ -61,6 +64,23 @@ type Options struct {
 	// never read is worse than a missing knob, because an operator who sets it
 	// gets silence instead of an error. Zero means no limit.
 	ReadTimeout time.Duration
+	// RateLimit optionally caps requests per client IP on /api/v1. Disabled by
+	// default — meant for a tempus exposed without a gateway in front.
+	RateLimit RateLimit
+}
+
+// RateLimit configures the per-client-IP limiter on /api/v1.
+type RateLimit struct {
+	Enabled bool
+	// Rate is sustained requests per second per client IP, Burst the bucket
+	// depth (how much a client may spend at once).
+	Rate  float64
+	Burst int
+	// TrustedProxies are CIDRs of front proxies. X-Forwarded-For is only
+	// believed when the direct peer falls inside one; empty (the default) means
+	// never trust forwarded headers, which is correct when tempus is reached
+	// directly.
+	TrustedProxies []string
 }
 
 // NewServer builds the server, wires routes, and prepares the http.Server.
@@ -80,6 +100,7 @@ func NewServer(addr string, features input.FeatureService, batch input.BatchServ
 		frontendPage:       renderFrontend(version),
 		corsAllowedOrigins: opts.CORSAllowedOrigins,
 	}
+	s.initRateLimit(opts.RateLimit)
 	s.router = s.setupRoutes()
 	s.handler = s.wrapCORS(s.router)
 	// No blanket WriteTimeout here: batch NDJSON streaming can legitimately run
@@ -118,6 +139,11 @@ func (s *Server) setupRoutes() *mux.Router {
 	// Versioned business surface. Every route under here MUST be documented in
 	// openapi.yaml (enforced by TestRoutesMatchOpenAPISpec).
 	api := r.PathPrefix("/api/v1").Subrouter()
+	// Rate limiting sits on this subrouter only, so /health* stays answerable
+	// under load — an orchestrator must not kill a container that is merely busy.
+	if s.rateLimiter != nil {
+		api.Use(s.rateLimitMiddleware)
+	}
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
 	api.HandleFunc("/query/batch", s.handleQueryBatch).Methods(http.MethodPost)
 	api.HandleFunc("/providers", s.handleProviders).Methods(http.MethodGet)

@@ -33,6 +33,12 @@ func (a *App) wireObservability(version string, budget *omhttp.Budget) (httpapi.
 	}
 	opts.CORSAllowedOrigins = a.cfg.Server.CORS.AllowedOrigins
 	opts.ReadTimeout = a.cfg.Server.ReadTimeout
+	opts.RateLimit = httpapi.RateLimit{
+		Enabled:        a.cfg.Server.RateLimit.Enabled,
+		Rate:           a.cfg.Server.RateLimit.Rate,
+		Burst:          a.cfg.Server.RateLimit.Burst,
+		TrustedProxies: a.cfg.Server.RateLimit.TrustedProxies,
+	}
 
 	if a.cfg.Tracing.Enabled {
 		tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), a.cfg.Tracing, "tempus")

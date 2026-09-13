@@ -11,6 +11,7 @@ All configuration is via environment variables with the prefix `TEMPUS_`.
 | `TEMPUS_SERVER_READ_TIMEOUT` | `30s` | Whole-request read timeout (headers + body) |
 | `TEMPUS_SERVER_SHUTDOWN_TIMEOUT` | `15s` | Graceful shutdown window |
 | `TEMPUS_SERVER_CORS_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated browser origins allowed cross-origin; empty disables CORS. See [configuration reference](../reference/configuration.md#cors). |
+| `TEMPUS_SERVER_RATE_LIMIT_ENABLED` | `false` | Per-client-IP rate limiting on `/api/v1`; see [configuration reference](../reference/configuration.md#rate-limiting) for the rate, burst and trusted-proxy knobs |
 
 ## Logging
 
