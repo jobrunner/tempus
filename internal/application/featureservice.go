@@ -68,16 +68,26 @@ func (s *FeatureService) Query(ctx context.Context, req domain.QueryRequest) (do
 
 	for _, d := range s.derivers {
 		derived, err := d.Derive(ctx, req, res.Features)
-		if err == nil {
-			res.Features = append(res.Features, derived...)
-			res.Providers = append(res.Providers, domain.ProviderStatus{
-				ID:     d.ID(),
-				Kind:   d.Kind(),
-				Status: domain.StatusOK,
-			})
-		} else {
+		if err != nil {
 			res.Providers = append(res.Providers, s.statusFor(d, err))
+			continue
 		}
+		// Same contract as a provider: a derived feature is still a feature
+		// tempus publishes, and it inherits attribution from whatever it was
+		// computed from. One incomplete block rejects the deriver's whole batch
+		// — a partially attributed batch is not a meaningful thing to serve.
+		if lerr := firstIncompleteLicense(derived); lerr != nil {
+			s.logger.Error("deriver returned a feature without complete attribution",
+				"deriver", d.ID(), "kind", d.Kind(), "error", lerr)
+			res.Providers = append(res.Providers, s.statusFor(d, output.NewPermanentError(lerr)))
+			continue
+		}
+		res.Features = append(res.Features, derived...)
+		res.Providers = append(res.Providers, domain.ProviderStatus{
+			ID:     d.ID(),
+			Kind:   d.Kind(),
+			Status: domain.StatusOK,
+		})
 	}
 
 	return res, nil
@@ -102,6 +112,21 @@ func (s *FeatureService) fetchOne(ctx context.Context, p output.FeatureProvider,
 }) {
 	res, err := p.Fetch(ctx, req)
 	if err == nil {
+		// Attribution is the one obligation tempus carries on behalf of its
+		// upstream sources, so the licence block is validated HERE, at the port
+		// boundary, rather than trusted. A provider returning an incomplete
+		// block is a contract violation: serving the feature anyway would strip
+		// attribution from data that requires it, silently and invisibly.
+		//
+		// Classified as permanent, not transient — retrying returns the same
+		// empty block. The caller still gets HTTP 200 with a per-provider
+		// status, like every other provider fault in this service.
+		if lerr := res.Feature.License.Validate(); lerr != nil {
+			s.logger.Error("provider returned a feature without complete attribution",
+				"provider", p.ID(), "kind", p.Kind(), "error", lerr)
+			o.status = s.statusFor(p, output.NewPermanentError(lerr))
+			return o
+		}
 		f := res.Feature
 		o.feature = &f
 		o.status = domain.ProviderStatus{ID: p.ID(), Kind: p.Kind(), Status: domain.StatusOK, Cached: res.Cached}
@@ -140,4 +165,15 @@ func (s *FeatureService) echo(req domain.QueryRequest) domain.QueryEcho {
 		Coordinate: req.Coordinate,
 		Datetime:   req.Instant.UTC().Format(time.RFC3339),
 	}
+}
+
+// firstIncompleteLicense returns the first attribution problem in features, or
+// nil if every one of them carries a complete licence block.
+func firstIncompleteLicense(features []domain.Feature) error {
+	for _, f := range features {
+		if err := f.License.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -10,10 +10,32 @@ Every `Feature` in a tempus response carries a `license` block:
 }
 ```
 
-All three fields are **required**. The service enforces this at the port boundary:
-a `FeatureProvider` that returns a `Feature` with a missing or empty license field
-is a contract violation detected at startup (if the license is statically known)
-or at runtime (if the provider omits it).
+All three fields are **required**, and the service enforces it at the port
+boundary rather than trusting providers.
+
+`FeatureService` validates `Feature.License` on every result that crosses the
+`FeatureProvider` port, and on every feature a `FeatureDeriver` produces. A block
+missing `name`, `url` or `attribution` — or carrying only whitespace — is treated
+as a **permanent** provider fault:
+
+- the feature is **not** served,
+- the provider appears in `providers[]` with `"status": "error"` and
+  `"retryable": false`, and an `error` message naming the missing fields,
+- the response is still HTTP 200, like every other per-provider fault here.
+
+Non-retryable is deliberate: retrying returns the same empty block, so asking the
+client to try again would only postpone the problem.
+
+For a deriver, one incomplete block rejects that deriver's whole batch. A
+partially attributed batch is not a meaningful thing to publish.
+
+!!! note "No startup check"
+
+    Validation happens at request time only. There is no startup pass that
+    inspects each provider's statically declared `Attribution()`, so a provider
+    whose licence is wrong is discovered on the first request that uses it, not
+    at boot. Earlier versions of this page claimed such a startup check existed;
+    it never did.
 
 ## Why mandatory attribution?
 

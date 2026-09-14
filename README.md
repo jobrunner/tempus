@@ -69,10 +69,10 @@ curl -X POST http://localhost:8080/api/v1/query/batch \
 - **HTTP 200 auch bei Provider-Fehlern.** Fehlschläge einzelner Provider stehen
   im Antwort-Envelope (`providers[].status`, `retryable`), nicht im Statuscode.
   Ein Client kann so die erfolgreichen Teile verwenden und gezielt nachfragen.
-- **Quellenangabe reist mit.** Jedes Feature trägt einen `license`-Block, den
-  jeder Provider setzt. Das ist eine Konvention, kein Gate: es gibt heute keine
-  Validierung, die ein Feature mit unvollständiger Lizenz abweist (s. Abschnitt
-  [Lizenz](#lizenz)).
+- **Quellenangabe ist Pflicht.** Jedes Feature trägt einen `license`-Block mit
+  `name`, `url` und `attribution`. Fehlt eines davon, wird das Feature an der
+  Port-Grenze abgewiesen und der Provider als `error` (nicht retrybar) im
+  Envelope gemeldet — statt unattributierte Daten auszuliefern.
 
 ## Dokumentation
 
@@ -114,12 +114,11 @@ Sonntag-1990-Koeffizienten für den Taupunkt, die WorldClim-Definitionen und
 Köppen-Geiger für die BIO-Variablen, ERA5 über Copernicus/ECMWF und Open-Meteo
 für die Wetterdaten.
 
-Die Zuschreibung reist mit den Daten: jedes Feature trägt einen `license`-Block
-(`name`, `url`, `attribution`), den jeder Provider setzt. Wer tempus-Antworten
-weiterverwendet, bekommt diese Angaben mit und sollte sie mitführen.
-
-Einschränkung, die man kennen sollte: der Block ist **Konvention, nicht
-erzwungen**. `domain.NewPointFeature` speichert die Lizenz, ohne sie zu prüfen,
-und kein Port weist ein Feature mit unvollständiger Lizenz ab. Ein Provider, der
-den Block leer lässt, fällt heute niemandem auf. Eine Validierung an der
-Port-Grenze wäre die naheliegende Härtung.
+Die Zuschreibung reist mit den Daten und ist **erzwungen**, nicht nur
+dokumentiert: jedes Feature trägt einen `license`-Block (`name`, `url`,
+`attribution`), und `FeatureService` validiert ihn an der Port-Grenze, bevor ein
+Feature in die Antwort gelangt. Ein Provider oder Deriver, der den Block
+unvollständig lässt, bekommt den Status `error` (nicht retrybar, denn ein
+erneuter Versuch liefert denselben leeren Block) und sein Feature wird nicht
+ausgeliefert. Wer tempus-Antworten weiterverwendet, bekommt die Angaben also
+verlässlich mit und sollte sie mitführen.

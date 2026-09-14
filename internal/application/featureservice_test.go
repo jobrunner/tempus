@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func discard() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, ni
 
 func okProv(id string) output.FeatureProvider {
 	return okProvider{id: id, feat: domain.NewPointFeature(
-		domain.Coordinate{Lat: 1, Lon: 2}, map[string]any{"v": 1.0}, domain.License{Name: id, Attribution: "by " + id})}
+		domain.Coordinate{Lat: 1, Lon: 2}, map[string]any{"v": 1.0}, domain.License{Name: id, URL: "https://example.org/" + id, Attribution: "by " + id})}
 }
 
 type okProvider struct {
@@ -173,7 +174,7 @@ func TestFeatureService_DeriverSuccess(t *testing.T) {
 	derivedFeat := domain.NewPointFeature(
 		domain.Coordinate{Lat: 49.79, Lon: 9.93},
 		map[string]any{"kind": "dewpoint", "dewPoint2m": 12.0},
-		domain.License{Name: "Magnus-Formel", Attribution: "Taupunkt"},
+		domain.License{Name: "Magnus-Formel", URL: "https://en.wikipedia.org/wiki/Dew_point", Attribution: "Taupunkt"},
 	)
 	d := fakeDeriver{id: "fake", feat: &derivedFeat}
 	svc := NewFeatureService(reg, []output.FeatureDeriver{d}, discard(), 5*time.Second)
@@ -216,5 +217,73 @@ func TestFeatureService_DeriverNotYetAvailable(t *testing.T) {
 	}
 	if !st.Retryable {
 		t.Error("not-yet-available must be retryable")
+	}
+}
+
+// A provider returning an incomplete licence must not have its feature served.
+// Attribution is the obligation tempus carries on behalf of its sources, so an
+// unattributed feature is a contract violation — reported like any other
+// permanent provider fault (HTTP 200, per-provider status), not silently
+// forwarded.
+func TestFeatureService_RejectsIncompleteLicenseAtPortBoundary(t *testing.T) {
+	bad := domain.NewPointFeature(
+		domain.Coordinate{Lat: 1, Lon: 2},
+		map[string]any{"v": 1.0},
+		domain.License{Name: "some-licence", Attribution: "someone"}, // no URL
+	)
+	reg := NewRegistry()
+	reg.Register(okProvider{id: "naughty", feat: bad})
+	svc := NewFeatureService(reg, nil, discard(), 5*time.Second)
+
+	res, err := svc.Query(context.Background(), domain.QueryRequest{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Features) != 0 {
+		t.Errorf("feature with an incomplete licence was served: %+v", res.Features)
+	}
+	if len(res.Providers) != 1 {
+		t.Fatalf("want 1 provider status, got %d", len(res.Providers))
+	}
+	st := res.Providers[0]
+	if st.Status != domain.StatusError {
+		t.Errorf("status = %q, want %q", st.Status, domain.StatusError)
+	}
+	if st.Retryable {
+		t.Error("an incomplete licence is not retryable — retrying yields the same block")
+	}
+	if !strings.Contains(st.Error, "url") {
+		t.Errorf("error %q should name the missing field", st.Error)
+	}
+}
+
+// Derivers are held to the same contract as providers. A derived feature is
+// still a feature tempus publishes, and it inherits attribution from the source
+// it was computed from — so an incomplete block there is the same violation.
+func TestFeatureService_RejectsIncompleteLicenseFromDeriver(t *testing.T) {
+	bad := domain.NewPointFeature(
+		domain.Coordinate{Lat: 1, Lon: 2},
+		map[string]any{"derived": 1.0},
+		domain.License{Name: "derived-thing", URL: "https://example.org/l"}, // no attribution
+	)
+	reg := NewRegistry()
+	svc := NewFeatureService(reg, []output.FeatureDeriver{
+		fakeDeriver{id: "bad-deriver", feat: &bad},
+	}, discard(), 5*time.Second)
+
+	res, err := svc.Query(context.Background(), domain.QueryRequest{})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(res.Features) != 0 {
+		t.Errorf("derived feature with an incomplete licence was served: %+v", res.Features)
+	}
+	if len(res.Providers) != 1 {
+		t.Fatalf("want 1 provider status, got %d", len(res.Providers))
+	}
+	if st := res.Providers[0]; st.Status != domain.StatusError || st.Retryable {
+		t.Errorf("status = %q retryable=%v, want %q non-retryable", st.Status, st.Retryable, domain.StatusError)
+	} else if !strings.Contains(st.Error, "attribution") {
+		t.Errorf("error %q should name the missing field", st.Error)
 	}
 }
