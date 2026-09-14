@@ -55,7 +55,12 @@ func (c *CachingProvider) Fetch(ctx context.Context, req domain.QueryRequest) (d
 
 	if raw, ok, err := c.cache.Get(ctx, key); err == nil && ok {
 		var f domain.Feature
-		if json.Unmarshal(raw, &f) == nil {
+		// A hit is only usable if it still satisfies the attribution contract.
+		// Entries written before that was enforced — or by a provider that has
+		// since been fixed — would otherwise be served (and rejected) until the
+		// TTL expires, which for mature data is a year. Treating such a hit as a
+		// miss lets a corrected provider recover on the very next request.
+		if json.Unmarshal(raw, &f) == nil && f.License.Validate() == nil {
 			return domain.ProviderResult{Feature: f, Cached: true}, nil
 		}
 	}
@@ -63,6 +68,14 @@ func (c *CachingProvider) Fetch(ctx context.Context, req domain.QueryRequest) (d
 	res, err := c.inner.Fetch(ctx, req)
 	if err != nil {
 		return domain.ProviderResult{}, err
+	}
+
+	// Validate BEFORE writing. Caching a malformed feature would outlive the
+	// bug that produced it: the entry keeps failing validation downstream long
+	// after the provider is fixed.
+	if lerr := res.Feature.License.Validate(); lerr != nil {
+		return domain.ProviderResult{}, output.NewPermanentError(
+			fmt.Errorf("provider %s: %w", c.inner.ID(), lerr))
 	}
 
 	if raw, mErr := json.Marshal(res.Feature); mErr == nil {

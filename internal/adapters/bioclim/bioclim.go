@@ -8,7 +8,6 @@ package bioclim
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -83,13 +82,8 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 	}
 
 	key := cacheKey(req.Coordinate, startY, endY)
-	if p.cache != nil {
-		if raw, ok, _ := p.cache.Get(ctx, key); ok {
-			var feat domain.Feature
-			if json.Unmarshal(raw, &feat) == nil {
-				return domain.ProviderResult{Feature: feat, Cached: true}, nil
-			}
-		}
+	if feat, ok := p.cachedFeature(ctx, key); ok {
+		return domain.ProviderResult{Feature: feat, Cached: true}, nil
 	}
 
 	u, err := p.buildURL(req.Coordinate, startY, endY)
@@ -107,11 +101,10 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 	}
 
 	feat := p.buildFeature(data, clim, startY, endY)
-	if p.cache != nil {
-		if raw, err := json.Marshal(feat); err == nil {
-			_ = p.cache.Set(ctx, key, raw, cacheTTL)
-		}
+	if lerr := feat.License.Validate(); lerr != nil {
+		return domain.ProviderResult{}, output.NewPermanentError(lerr)
 	}
+	p.cacheFeature(ctx, key, feat)
 	return domain.ProviderResult{Feature: feat}, nil
 }
 
@@ -221,14 +214,6 @@ func valueAt(s []*float64, i int) *float64 {
 		return s[i]
 	}
 	return nil
-}
-
-// cacheKey rounds the coordinate to ~10 m (4 decimals). This is far finer than
-// ERA5's native grid (~0.1–0.25°), so two coordinates that share a key resolve
-// to the same ERA5 cell and thus the same climate — no incorrect collisions —
-// while co-located records (same georeference) still share a cache entry.
-func cacheKey(coord domain.Coordinate, startY, endY int) string {
-	return fmt.Sprintf("%s|%s|%.4f|%.4f|%d-%d", providerID, cacheVersion, coord.Lat, coord.Lon, startY, endY)
 }
 
 func r1(v float64) float64  { return math.Round(v*10) / 10 }

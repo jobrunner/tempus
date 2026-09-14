@@ -202,3 +202,50 @@ func TestProviderIDKind(t *testing.T) {
 		t.Error("attribution empty")
 	}
 }
+
+// This provider keeps its OWN cache and is registered directly, not wrapped in
+// application.CachingProvider — so it needs the same attribution guard. A
+// poisoned entry lives for a year otherwise: it would be served as Cached, be
+// rejected downstream, and never refetch until the TTL runs out.
+func TestFetch_InvalidCachedFeatureIsRefetched(t *testing.T) {
+	calls := 0
+	body := berlinBody()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	cache := newMemCache()
+	p := New(Options{ArchiveBaseURL: srv.URL, Timeout: 2 * time.Second, Cache: cache})
+	r := req("")
+
+	// Poison the cache with a feature whose licence is incomplete.
+	startY, endY, err := domain.NormalPeriod(r.Instant, r.RefPeriod)
+	if err != nil {
+		t.Fatalf("NormalPeriod: %v", err)
+	}
+	bad := domain.NewPointFeature(r.Coordinate, map[string]any{"kind": "bioclim"},
+		domain.License{Name: "x", Attribution: "y"}) // no URL
+	raw, err := json.Marshal(bad)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := cache.Set(context.Background(), cacheKey(r.Coordinate, startY, endY), raw, time.Hour); err != nil {
+		t.Fatalf("seed cache: %v", err)
+	}
+
+	res, err := p.Fetch(context.Background(), r)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("upstream calls = %d, want 1 — the poisoned entry must not be served", calls)
+	}
+	if res.Cached {
+		t.Error("result reported as cached although the cached entry was rejected")
+	}
+	if err := res.Feature.License.Validate(); err != nil {
+		t.Errorf("served a feature that still fails validation: %v", err)
+	}
+}
