@@ -26,12 +26,12 @@ jobs:
     name: gremlins
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Builds PR code and does no git writes, so the token has no business
           # staying in .git/config (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Install gremlins
