@@ -3,5 +3,6 @@
 # Die letzte Nicht-Kommentarzeile ist die ZAEHLUNG. RATCHET: sie darf nur sinken.
 # Auslassen ist erlaubt — stillschweigend auslassen nicht.
 #
-go-version-file  # 11 Go-Pins (10 literal + GO_VERSION in codecharta.yml); wird in PR 3 entfernt, Waiver dort mit
-1
+# Derzeit keine. Der go-version-file-Waiver ist entfallen, weil dieser PR die
+# 11 Go-Pins beseitigt hat, fuer die er stand.
+0

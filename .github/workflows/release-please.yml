@@ -61,7 +61,7 @@ jobs:
       # scratch costs a minute; the release is worth it. (zizmor cache-poisoning)
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version-file: go.mod
           cache: false
       - uses: goreleaser/goreleaser-action@v6
         with:

@@ -1,8 +1,8 @@
 module github.com/jobrunner/tempus
 
-go 1.25.0
+go 1.26.0
 
-toolchain go1.25.12
+toolchain go1.26.6
 
 require (
 	github.com/gorilla/mux v1.8.1

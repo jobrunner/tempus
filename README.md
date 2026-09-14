@@ -94,7 +94,7 @@ make test     # nur Tests
 make docs     # Dokumentations-Site bauen
 ```
 
-Gebaut mit Go 1.25 in hexagonaler Architektur (Ports und Adapter); die
+Gebaut mit Go 1.26 in hexagonaler Architektur (Ports und Adapter); die
 Import-Grenzen werden per `depguard` erzwungen, Komplexität und Testabdeckung
 über Ratchet-Gates in CI gehalten.
 
