@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/jobrunner/tempus/compare/v0.24.0...v0.24.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* **cors:** reject origin patterns that widen the rule or never match ([#65](https://github.com/jobrunner/tempus/issues/65)) ([4595139](https://github.com/jobrunner/tempus/commit/4595139b5184a752b45908d03500eb7369b2cdf8))
+
 ## [0.24.0](https://github.com/jobrunner/tempus/compare/v0.23.0...v0.24.0) (2026-09-13)
 
 
