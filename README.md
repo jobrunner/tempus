@@ -96,3 +96,24 @@ make docs     # Dokumentations-Site bauen
 Gebaut mit Go 1.25 in hexagonaler Architektur (Ports und Adapter); die
 Import-Grenzen werden per `depguard` erzwungen, Komplexität und Testabdeckung
 über Ratchet-Gates in CI gehalten.
+
+## Lizenz
+
+Drei Ebenen, die nicht vermischt werden dürfen:
+
+| Ebene | Regelung |
+|---|---|
+| Der Dienst (dieser Go-Code) | [MIT](LICENSE) |
+| Die Algorithmen | Urheber-Attribution, keine Lizenz |
+| Die Daten | Lizenz der jeweiligen Quelle |
+
+MIT deckt **ausschließlich** den Code dieses Repositorys. Die verwendeten
+Verfahren und Daten gehören ihren Urhebern und Anbietern: Magnus-Tetens mit
+Sonntag-1990-Koeffizienten für den Taupunkt, die WorldClim-Definitionen und
+Köppen-Geiger für die BIO-Variablen, ERA5 über Copernicus/ECMWF und Open-Meteo
+für die Wetterdaten.
+
+Diese Zuschreibung ist nicht nur dokumentiert, sondern erzwungen: jedes Feature
+trägt einen `license`-Block (`name`, `url`, `attribution`), und ein Feature ohne
+vollständige Lizenz wird an der Port-Grenze abgewiesen. Wer tempus-Antworten
+weiterverwendet, übernimmt diese Angaben mit.
