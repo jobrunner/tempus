@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.2](https://github.com/jobrunner/tempus/compare/v0.24.1...v0.24.2) (2026-09-14)
+
+
+### Bug Fixes
+
+* reject features with an incomplete licence at the port boundary ([#76](https://github.com/jobrunner/tempus/issues/76)) ([5721de1](https://github.com/jobrunner/tempus/commit/5721de1c695680fc15f71b6048bbdfe79ee9847d))
+
 ## [0.24.1](https://github.com/jobrunner/tempus/compare/v0.24.0...v0.24.1) (2026-09-14)
 
 
