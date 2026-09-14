@@ -1,0 +1,31 @@
+#
+# zizmor policy for tempus. See https://docs.zizmor.sh/configuration/
+#
+# Pin strategy: actions referenced by tag (e.g. @v6), updates managed by
+# Dependabot. SHA-pinning is the gold standard for supply-chain security, but it
+# disables Dependabot's automatic update story for actions (Dependabot has
+# limited support for SHA-pinned refs). For a v0.x project that is not yet in
+# production, tag-pinning plus a weekly Dependabot bump is the chosen trade-off.
+# Revisit when the threat model warrants the maintenance cost — and when you do,
+# flip `unpinned-uses` below to require hash-pin.
+
+rules:
+  # Allow tag-pinning. Without this, every actions/checkout@v6 becomes a
+  # "high"-severity finding and gates every run.
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
+
+  # artipacked flags every checkout step that does not set
+  # persist-credentials:false. A useful audit, but workflows that legitimately
+  # need credentials (a release job's git push, a registry push) grant explicit
+  # permissions and do not leak artifacts. At v0.x the noise outweighs the
+  # signal; re-enable once the workflow set is stable.
+  artipacked:
+    disable: true
+
+  # Dependabot cooldown would slow the weekly update cycle. Not justified at
+  # v0.x, where staying current matters more than soaking new versions.
+  dependabot-cooldown:
+    disable: true
