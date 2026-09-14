@@ -1,0 +1,16 @@
+# Deklarierte Architektur-Ausnahmen. RATCHET: diese Liste darf nur schrumpfen.
+#
+# Format je Zeile:  <paket> -> <import>  # begruendung
+# Die letzte Nicht-Kommentarzeile ist die ZAEHLUNG und muss zur Anzahl passen.
+#
+# Ein Eintrag hier ist eine bewusste, reviewte Abweichung von den Schichtregeln
+# in internal/arch/arch_test.go — kein Freibrief. Zwei Dinge halten das ehrlich:
+#   - Eine Zeile hinzufuegen erfordert, die Zaehlung im selben Commit zu erhoehen.
+#   - Verschwindet der Import, meldet der Test den veralteten Eintrag. Eine
+#     behobene Verletzung kann hier also nicht als Altlast weiterleben.
+#
+# Beide Eintraege sind Setup-Code, der Konfiguration direkt liest statt sie
+# ueber einen Port zu bekommen. Billig zu ertragen, irgendwann zu beheben.
+internal/adapters/metrics -> internal/config    # OTel-Meter-Setup; gehoert hinter einen Port
+internal/adapters/telemetry -> internal/config  # dito, Tracer-Setup
+2

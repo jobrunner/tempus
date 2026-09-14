@@ -47,9 +47,15 @@ fmt-check: ## Check formatting without changing (CI/hook)
 	if [ -n "$$unformatted" ]; then echo "not formatted:"; echo "$$unformatted"; exit 1; fi
 
 ## Architecture fitness: import boundaries + module hygiene
-arch: ## depguard + gomodguard + go.mod tidiness
+arch: ## depguard + gomodguard + go.mod tidiness + the architecture fitness test
 	$(GOLINT) run --enable-only depguard,gomodguard_v2 ./...
 	$(GO) mod tidy -diff
+# -count=1 is NOT optional. The arch test reads a `go list` subprocess and
+# .arch-baseline, neither of which Go's test cache tracks — a forbidden import
+# added in another package leaves internal/arch unchanged, so a cached `ok` is
+# served while the violation sits in the tree. Measured: with a viper import
+# injected into internal/domain, the cached run passed and -count=1 failed.
+	$(GO) test -count=1 ./internal/arch/
 	@echo "arch ok."
 
 ## Debt ratchets
