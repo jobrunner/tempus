@@ -1,6 +1,16 @@
-# Template: mutation-testing CI gate. Copy to .github/workflows/mutation.yml.
-# Runs gremlins per-package with ratcheted efficacy/mcover thresholds. Ubuntu
-# only — gremlins panics on macOS. Raise the baselines as tests improve.
+# Mutation-testing gate. Runs gremlins per package against the ratcheted
+# thresholds in .mutation-thresholds, via scripts/mutation-gate.sh.
+#
+# The script is the SINGLE entrypoint — `make mutation` runs exactly the same
+# thing — so local and CI cannot drift apart. It also does the comparing itself
+# rather than trusting gremlins' exit code, which is load-bearing: gremlins
+# v0.5.1 exits 0 even at 0 % efficacy against a 99 % --threshold-efficacy flag.
+# The previous version of this workflow relied on that exit code and therefore
+# reported success on every run while both gated packages sat well below their
+# declared thresholds (domain: 55.95 % measured against a claimed 90 %).
+#
+# Runs on ubuntu here for speed, not out of necessity: gremlins does NOT panic
+# on macOS — that claim was in this file and is measured false on darwin/arm64.
 name: Mutation
 
 on:
@@ -17,22 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Builds PR code and does no git writes, so the token has no business
+          # staying in .git/config (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Install gremlins
         run: go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
       - name: Run mutation gate
-        run: |
-          fail=0
-          run_pkg() {
-            local pkg="$1" eff="$2" mcov="$3"
-            echo "===== gremlins: $pkg (min efficacy ${eff}%, min mutator-coverage ${mcov}%) ====="
-            if ! gremlins unleash --threshold-efficacy "$eff" --threshold-mcover "$mcov" "$pkg"; then
-              fail=1
-            fi
-          }
-          # Per-package baselines — ratchet UP as tests improve.
-          run_pkg ./internal/domain      90 95
-          run_pkg ./internal/application 77 94
-          exit $fail
+        run: bash scripts/mutation-gate.sh

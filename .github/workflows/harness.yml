@@ -1,0 +1,29 @@
+# MANDATORY. Fails when a mandatory component of the quality harness is missing
+# or not wired up. This is the gate that keeps the harness from quietly eroding:
+# every other gate protects the code, this one protects the gates.
+#
+# It is cheap (no toolchain, no build) so it can run on every push and PR.
+name: Harness
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    name: Harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # This job EXECUTES scripts/harness-check.sh from the checked-out PR,
+          # so PR-controlled code runs in the same workspace as the token. It
+          # needs the files, not the credential.
+          persist-credentials: false
+
+      - name: Harness completeness
+        run: bash scripts/harness-check.sh

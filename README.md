@@ -69,9 +69,10 @@ curl -X POST http://localhost:8080/api/v1/query/batch \
 - **HTTP 200 auch bei Provider-Fehlern.** Fehlschläge einzelner Provider stehen
   im Antwort-Envelope (`providers[].status`, `retryable`), nicht im Statuscode.
   Ein Client kann so die erfolgreichen Teile verwenden und gezielt nachfragen.
-- **Quellenangabe ist Pflicht.** Jedes Feature trägt einen `license`-Block; ein
-  Feature ohne vollständige Lizenz gilt als Vertragsverletzung und wird an der
-  Port-Grenze abgewiesen.
+- **Quellenangabe reist mit.** Jedes Feature trägt einen `license`-Block, den
+  jeder Provider setzt. Das ist eine Konvention, kein Gate: es gibt heute keine
+  Validierung, die ein Feature mit unvollständiger Lizenz abweist (s. Abschnitt
+  [Lizenz](#lizenz)).
 
 ## Dokumentation
 
@@ -96,3 +97,29 @@ make docs     # Dokumentations-Site bauen
 Gebaut mit Go 1.25 in hexagonaler Architektur (Ports und Adapter); die
 Import-Grenzen werden per `depguard` erzwungen, Komplexität und Testabdeckung
 über Ratchet-Gates in CI gehalten.
+
+## Lizenz
+
+Drei Ebenen, die nicht vermischt werden dürfen:
+
+| Ebene | Regelung |
+|---|---|
+| Der Dienst (dieser Go-Code) | [MIT](LICENSE) |
+| Die Algorithmen | Urheber-Attribution, keine Lizenz |
+| Die Daten | Lizenz der jeweiligen Quelle |
+
+MIT deckt **ausschließlich** den Code dieses Repositorys. Die verwendeten
+Verfahren und Daten gehören ihren Urhebern und Anbietern: Magnus-Tetens mit
+Sonntag-1990-Koeffizienten für den Taupunkt, die WorldClim-Definitionen und
+Köppen-Geiger für die BIO-Variablen, ERA5 über Copernicus/ECMWF und Open-Meteo
+für die Wetterdaten.
+
+Die Zuschreibung reist mit den Daten: jedes Feature trägt einen `license`-Block
+(`name`, `url`, `attribution`), den jeder Provider setzt. Wer tempus-Antworten
+weiterverwendet, bekommt diese Angaben mit und sollte sie mitführen.
+
+Einschränkung, die man kennen sollte: der Block ist **Konvention, nicht
+erzwungen**. `domain.NewPointFeature` speichert die Lizenz, ohne sie zu prüfen,
+und kein Port weist ein Feature mit unvollständiger Lizenz ab. Ein Provider, der
+den Block leer lässt, fällt heute niemandem auf. Eine Validierung an der
+Port-Grenze wäre die naheliegende Härtung.
