@@ -106,7 +106,7 @@ jobs:
       # SARIF is unreliable.
       - name: Upload SARIF to GitHub Security tab
         if: steps.scan.outputs.rc == '0' || steps.scan.outputs.rc == '14'
-        uses: github/codeql-action/upload-sarif@v4.37.9
+        uses: github/codeql-action/upload-sarif@v4.38.0
         with:
           sarif_file: zizmor.sarif
           category: zizmor
