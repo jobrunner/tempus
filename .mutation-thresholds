@@ -1,38 +1,61 @@
-# Per-Paket-Schwellen für gremlins. RATCHET: nur anheben.
+# Per-Paket-Schwellen für gremlins. RATCHET: nur anheben, nie senken ohne Grund.
 #
-# Erzwungen von scripts/mutation-gate.sh, das die eine Einsprungstelle ist —
-# `make mutation` und die CI rufen beide nur dieses Skript, damit lokal und CI
-# nicht divergieren können.
+# Erzwungen von scripts/mutation-gate.sh — der einen Einsprungstelle, die
+# `make mutation` und die CI beide aufrufen, damit lokal und CI nicht divergieren.
 #
 # WARUM DAS SKRIPT SELBST VERGLEICHT UND NICHT DEM EXIT-CODE TRAUT:
 # gremlins v0.5.1 exitet 0, auch wenn die Efficacy weit unter der per
-# --threshold-efficacy geforderten liegt. Gemessen: 25% und sogar 0% gegen
-# eine Schwelle von 99 ergaben rc=0, mit wie ohne .gremlins.yaml. Die frühere
-# CI-Konstruktion (`if ! gremlins unleash --threshold-... ; then fail=1; fi`)
-# hat deshalb nie gegatet und jeden Lauf grün gemeldet.
+# --threshold-efficacy geforderten liegt. Gemessen: 25 % und sogar 0 % gegen eine
+# Schwelle von 99 ergaben rc=0, mit wie ohne .gremlins.yaml. Die frühere
+# CI-Konstruktion (`if ! gremlins unleash --threshold-...; then fail=1; fi`) hat
+# deshalb nie gegatet und jeden Lauf grün gemeldet — bei domain 55,95 % gegen
+# eine behauptete Schwelle von 90.
 #
-# ZWISCHENSTAND: alle Werte stehen auf 0 0, um in einem CI-Lauf die echten
-# Zahlen für jedes Paket zu erheben. Sie werden im Folgecommit durch die
-# gemessenen Werte ersetzt. Ein Paket, das hier FEHLT, lässt das Gate
-# fehlschlagen — so kann kein neues Paket stillschweigend durchrutschen.
+# ALLE WERTE SIND GEMESSEN, KEINE WUNSCHZAHLEN. Erhoben am 2026-09-14 in einem
+# CI-Lauf (ubuntu, timeout-coefficient 60), dann um ~3 Punkte Luft nach unten
+# gerundet — dieselbe Begründung wie bei .coverage-floors: die Zählung schwankt
+# leicht zwischen Toolchain-Versionen, und ein Gate, das sporadisch falsch rot
+# wird, wird ignoriert. Aspirative Schwellen sind genau das, was den Zustand
+# oben erzeugt hat.
+#
+# NONE heißt: das Paket erzeugt überhaupt keine Mutanten (nur Deklarationen,
+# Interfaces, oder reine Testdateien). Das wird ASSERTIERT, nicht ignoriert —
+# wächst dort mutierbare Logik, schlägt das Gate fehl und verlangt echte Zahlen.
+#
+# Ein Paket, das hier FEHLT, lässt das Gate fehlschlagen. Kein neues Paket kann
+# stillschweigend durchrutschen; internal/arch wurde beim ersten Lauf genau so
+# gefangen.
+#
+# ZUM VERBESSERN, nach Dringlichkeit:
+#   internal/domain ist mit 55,95/59,15 das schwächste UND das wichtigste Paket
+#   — der reine Fachkern, in dem ein unentdeckter Fehler am teuersten ist. Die
+#   Luft nach oben ist hier am größten; jede Verbesserung sollte die Schwelle
+#   mitnehmen. Danach astronomy (12,50) und telemetry (20,00).
+#
+# cmd/tempus steht auf 0/0, weil das Paket ueberhaupt keine Tests hat: es
+# erzeugt Mutanten, keiner wird getoetet, keiner ist abgedeckt. 0/0 ist damit
+# ehrlich (es kann nicht darunter fallen), aber eben auch kein Gate. Der duenne
+# main() rechtfertigt das heute; sobald dort Logik landet, gehoeren Tests und
+# echte Zahlen her.
 #
 # paket                                 efficacy(%)  mcover(%)
-cmd/tempus                              0    0
-internal/adapters/aggregate             0    0
-internal/adapters/astronomy             0    0
-internal/adapters/bioclim               0    0
-internal/adapters/cache/bolt            0    0
-internal/adapters/cache/memory          0    0
-internal/adapters/clock                 0    0
-internal/adapters/dewpoint              0    0
-internal/adapters/http                  0    0
-internal/adapters/metrics               0    0
-internal/adapters/omhttp                0    0
-internal/adapters/openmeteo             0    0
-internal/adapters/telemetry             0    0
-internal/app                            0    0
-internal/application                    0    0
-internal/config                         0    0
-internal/domain                         0    0
-internal/ports/input                    0    0
-internal/ports/output                   0    0
+cmd/tempus                              0            0
+internal/adapters/aggregate             57           91
+internal/adapters/astronomy             10           97
+internal/adapters/bioclim               84           88
+internal/adapters/cache/bolt            69           88
+internal/adapters/cache/memory          97           97
+internal/adapters/clock                 NONE
+internal/adapters/dewpoint              80           82
+internal/adapters/http                  97           89
+internal/adapters/metrics               37           80
+internal/adapters/omhttp                82           93
+internal/adapters/openmeteo             66           76
+internal/adapters/telemetry             17           97
+internal/app                            37           88
+internal/application                    73           85
+internal/arch                           NONE
+internal/config                         60           88
+internal/domain                         52           56
+internal/ports/input                    NONE
+internal/ports/output                   NONE
