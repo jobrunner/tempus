@@ -1,0 +1,39 @@
+#
+# zizmor policy for tempus. See https://docs.zizmor.sh/configuration/
+#
+# Pin strategy: actions referenced by tag (e.g. @v6), updates managed by
+# Dependabot. SHA-pinning is the gold standard for supply-chain security, but it
+# disables Dependabot's automatic update story for actions (Dependabot has
+# limited support for SHA-pinned refs). For a v0.x project that is not yet in
+# production, tag-pinning plus a weekly Dependabot bump is the chosen trade-off.
+# Revisit when the threat model warrants the maintenance cost — and when you do,
+# flip `unpinned-uses` below to require hash-pin.
+
+rules:
+  # Allow tag-pinning. Without this, every actions/checkout@v6 becomes a
+  # "high"-severity finding and gates every run.
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
+
+  # artipacked flags every checkout that does not set persist-credentials:false.
+  #
+  # The audit is right in principle: a persisted token sits in .git/config where
+  # anything running later in the job can read it, and on a pull_request run that
+  # includes code from the PR itself. So ci.yml — the one workflow that both
+  # builds PR code and does no git writes — sets persist-credentials: false on
+  # every checkout.
+  #
+  # It stays disabled repo-wide only for the remaining workflows, which either
+  # need the credential (release-please tags and pushes) or never check out PR
+  # code at all (the scheduled scans). Re-evaluate if a workflow is ever added
+  # that runs untrusted code AND needs a writable token — that combination is
+  # the actual danger, and this suppression would hide it.
+  artipacked:
+    disable: true
+
+  # Dependabot cooldown would slow the weekly update cycle. Not justified at
+  # v0.x, where staying current matters more than soaking new versions.
+  dependabot-cooldown:
+    disable: true

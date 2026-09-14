@@ -1,0 +1,223 @@
+# MANDATORY. Weekly govulncheck + Trivy image scan, opening/updating a
+# security-labelled issue on findings.
+#
+# Weekly vulnerability scans on the default branch. The regular CI Security job runs
+# on every push and PR; these jobs run on a schedule so newly-disclosed
+# CVEs become visible even when there is no PR activity to trigger them.
+#
+# Two jobs:
+#   - scan (govulncheck)  — Go stdlib + module CVEs reachable from the code
+#   - image-scan (trivy)  — the PUBLISHED ghcr.io image at the newest release
+#     tag (resolved at run time; there is no :latest). Catches what
+#     govulncheck cannot: OS packages from the base image (openssl, curl, …) and unreachable-but-flagged Go module CVEs. A released
+#     image that was clean at release time rots as new CVEs are disclosed;
+#     this job is what surfaces that without waiting for the next release.
+#
+# Outcome handling distinguishes three cases (both jobs):
+#   - findings (govulncheck exit 3 / trivy JSON has fixable CRITICAL,HIGH)
+#       → open / comment on a `security`-labelled GitHub issue, fail the job
+#   - clean (exit 0)
+#       → succeed silently
+#   - scan error (build failed, network issue, unexpected exit)
+#       → fail the job WITHOUT opening an issue, so we don't spam "new CVEs"
+#         when really the scan was broken
+name: Vuln Scan
+
+on:
+  schedule:
+    # Monday 06:00 UTC, after the Go security team's typical Tuesday
+    # release cadence in the previous week.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+# Least privilege at the workflow level; the two scan jobs add `issues: write`
+# themselves, so nothing that does not open an issue ever carries that scope.
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # to open / comment on the security issue
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          # Pull the toolchain version from go.mod so we always scan
+          # against what the build actually uses.
+          go-version-file: go.mod
+
+      - name: Run govulncheck (JSON)
+        id: vuln
+        run: |
+          # Pinned, not @latest: this is a security gate, and a gate that
+          # silently changes tool version between runs cannot be reasoned about.
+          # Dependabot does not bump `go install` lines, so raise this by hand.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          # -json emits structured output even on findings. Exit codes:
+          #   0 — no vulnerabilities
+          #   3 — vulnerabilities found
+          #   other — scan failed (build error, network, etc.)
+          set +e
+          govulncheck -json ./... > vuln-report.json 2> vuln-stderr.txt
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # Also keep a human-readable text report for the issue body.
+          govulncheck ./... > vuln-report.txt 2>&1 || true
+
+      - name: Ensure `security` label exists
+        if: steps.vuln.outputs.rc == '3'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Idempotent: --force overwrites if it exists, creates otherwise.
+          gh label create security \
+            --color D93F0B \
+            --description "Security vulnerability or scan finding" \
+            --force
+
+      - name: Open or update security issue
+        if: steps.vuln.outputs.rc == '3'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          title="Weekly vuln scan: new CVEs detected"
+          existing=$(gh issue list \
+            --label security \
+            --state open \
+            --search "$title in:title" \
+            --json number --jq '.[0].number // ""')
+
+          body=$(printf 'govulncheck reports vulnerabilities on the default branch.\n\n```\n%s\n```\n\n## Fix\n\nUsually the right action is to bump the `toolchain` directive in `go.mod` to a Go patch version that fixes the listed CVEs. The workflows read `go-version-file: go.mod`, so nothing else needs editing — if you find yourself updating a version in a workflow, that workflow is hardcoding it and harness-check.sh should have caught it. Dependabot may already have an open PR.\n' "$(cat vuln-report.txt)")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "$title" \
+              --label security \
+              --body "$body"
+          fi
+
+      - name: Fail with scan-error context
+        if: steps.vuln.outputs.rc != '0' && steps.vuln.outputs.rc != '3'
+        env:
+          RC: ${{ steps.vuln.outputs.rc }}
+        run: |
+          echo "::error::govulncheck exited with $RC — not a CVE finding, likely a scan error. See log for details."
+          cat vuln-stderr.txt
+          exit 1
+
+      - name: Fail job if vulnerabilities found
+        if: steps.vuln.outputs.rc == '3'
+        run: exit 1
+
+  image-scan:
+    name: trivy (published image)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # to open / comment on the security issue
+    steps:
+      # Scans the newest published release image. If the service publishes
+      # several image variants, turn this job into a matrix over tags.
+      #
+      # ignore-unfixed: only CVEs with an AVAILABLE FIX create an issue — those
+      # are actionable via a base-image bump or `go get`. Unfixed CVEs are
+      # deliberately not reported anywhere: this repo runs no per-PR Trivy SARIF
+      # scan, so there is no second place they would surface. That is a
+      # conscious trade (an unactionable weekly issue trains people to ignore
+      # the label), not an oversight. Drop the flag if you want the full list.
+      #
+      # The image tag is RESOLVED, not hardcoded. docker-release.yml sets
+      # `flavor: latest=false` and publishes only semver + sha tags, so there is
+      # no `:latest` to scan — a hardcoded one fails every week with "unknown
+      # manifest" and looks like a broken scanner rather than a missing tag.
+      - name: Resolve the newest published image tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The release tag is vX.Y.Z; docker/metadata-action publishes X.Y.Z.
+          tag=$(gh release view --json tagName --jq '.tagName' | sed 's/^v//')
+          [ -n "$tag" ] || { echo "::error::no release found to scan"; exit 1; }
+          echo "image=ghcr.io/${GITHUB_REPOSITORY}:${tag}" >> "$GITHUB_OUTPUT"
+          echo "Scanning ghcr.io/${GITHUB_REPOSITORY}:${tag}"
+
+      - name: Run Trivy against ghcr.io image (JSON)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}
+          format: 'json'
+          output: 'trivy-report.json'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      # A trivy failure (registry unreachable, DB download broken) fails the
+      # step above → job fails WITHOUT opening an issue (scan error case).
+      - name: Count findings
+        id: findings
+        run: |
+          count=$(jq '[.Results[]?.Vulnerabilities[]?] | length' trivy-report.json)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Fixable CRITICAL/HIGH vulnerabilities: $count"
+
+      - name: Build human-readable report
+        if: steps.findings.outputs.count != '0'
+        run: |
+          jq -r '
+            [.Results[]? | .Target as $t | .Vulnerabilities[]?
+             | {sev: .Severity, id: .VulnerabilityID, pkg: .PkgName,
+                installed: .InstalledVersion, fixed: .FixedVersion, target: $t}]
+            | sort_by(.sev) | .[]
+            | "\(.sev)\t\(.id)\t\(.pkg) \(.installed) → \(.fixed)\t[\(.target)]"
+          ' trivy-report.json > trivy-report.txt
+          cat trivy-report.txt
+
+      - name: Ensure `security` label exists
+        if: steps.findings.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create security \
+            --color D93F0B \
+            --description "Security vulnerability or scan finding" \
+            --force
+
+      - name: Open or update security issue
+        if: steps.findings.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FINDING_COUNT: ${{ steps.findings.outputs.count }}
+          IMAGE: ${{ steps.tag.outputs.image }}
+        run: |
+          set -euo pipefail
+          title="Weekly image scan: new CVEs in published Docker image"
+          existing=$(gh issue list \
+            --label security \
+            --state open \
+            --search "$title in:title" \
+            --json number --jq '.[0].number // ""')
+
+          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages: bump the base-image FROM tag so the runtime picks up patched distro packages (Dependabot's docker ecosystem usually has a PR open already).\n- Go modules (gobinary): `go get <module>@<fixed version>`; Dependabot's gomod ecosystem may have a PR already.\n\nEither way the fix only reaches users with the next release.\n' "$FINDING_COUNT" "$IMAGE" "$(cat trivy-report.txt)")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "$title" \
+              --label security \
+              --body "$body"
+          fi
+
+      - name: Fail job if vulnerabilities found
+        if: steps.findings.outputs.count != '0'
+        run: exit 1

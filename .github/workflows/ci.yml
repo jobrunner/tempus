@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No git writes in this workflow, so the token has no business
+          # staying in .git/config where PR code can read it (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -27,6 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No git writes in this workflow, so the token has no business
+          # staying in .git/config where PR code can read it (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -44,6 +52,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No git writes in this workflow, so the token has no business
+          # staying in .git/config where PR code can read it (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -55,6 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No git writes in this workflow, so the token has no business
+          # staying in .git/config where PR code can read it (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -73,6 +89,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No git writes in this workflow, so the token has no business
+          # staying in .git/config where PR code can read it (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -85,6 +105,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No git writes in this workflow, so the token has no business
+          # staying in .git/config where PR code can read it (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
@@ -103,6 +127,10 @@ jobs:
     needs: [lint, test, vet, architecture, build]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No git writes in this workflow, so the token has no business
+          # staying in .git/config where PR code can read it (zizmor artipacked).
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'

@@ -1,8 +1,10 @@
 name: Security Scan
 
+# No schedule here on purpose. vuln-scan.yml owns the weekly govulncheck run —
+# it classifies scan errors separately and opens/updates a security issue, which
+# this job does not. Two jobs on the same cron produced duplicate work and could
+# fail twice for one finding.
 on:
-  schedule:
-    - cron: '0 6 * * 1'
   push:
     branches: [main, master]
   pull_request:

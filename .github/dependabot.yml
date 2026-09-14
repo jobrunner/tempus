@@ -1,0 +1,102 @@
+#
+# Dependabot configuration for tempus. See:
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Four ecosystems. The first two are ALWAYS required; the last two are required
+# whenever the repo has the thing they update:
+#
+#   1. github-actions — bumps actions/checkout, actions/setup-go, etc.
+#   2. gomod          — bumps Go modules AND the `toolchain` directive in
+#                       go.mod. This is what keeps the service off the next
+#                       round of stdlib CVEs without manual work.
+#   3. docker         — required if a Dockerfile exists. Bumps the FROM tags, so
+#                       base-image rebuilds with patched distro packages
+#                       actually reach the runtime image. Without it a pinned
+#                       tag just ages.
+#   4. gitsubmodule   — required if .gitmodules exists. Bumps each submodule
+#                       pin to the latest of its tracked branch as a reviewed
+#                       PR, so CI validates the new version before it lands.
+#
+# WHY THIS FILE IS MANDATORY: without it, go.mod only moves when a feature
+# happens to touch it. Measured in this service family: the one service that
+# shipped without a dependabot.yml sat on an old Go minor through three
+# releases while four siblings were bumped automatically.
+#
+# NOTE the load-bearing precondition: Dependabot bumps the `toolchain`
+# directive in go.mod, but it does NOT edit your workflows. The CI only follows
+# along if every workflow reads `go-version-file: go.mod` instead of a
+# hardcoded `go-version: '1.x'`. scripts/harness-check.sh enforces that.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      # All Actions bumps in ONE PR. They are independent, CI-only and low
+      # risk; a single PR avoids the per-file rebase churn that appears when
+      # several action bumps have to merge one by one.
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - go
+    groups:
+      # Lockstep ecosystems first — these release together and individual bumps
+      # break version compatibility between sibling packages. Add AWS/Azure SDK
+      # groups here too if the service uses them.
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
+      # Everything else: remaining minor/patch bumps in ONE PR per week, so
+      # go.mod/go.sum changes don't serialise into conflicting single-module
+      # PRs. A dependency lands in the FIRST matching group above, so the
+      # lockstep groups still capture their own bumps including majors
+      # (intentional — siblings must move together). Only a *major* bump of a
+      # dependency matching none of those groups falls outside this catch-all
+      # and gets its own PR for review.
+      go-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # tempus has a Dockerfile — bumps the golang:*-alpine FROM tag (SHA-pinned),
+  # so base-image rebuilds with patched Alpine packages reach the runtime image.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
+
+  # tempus vendors claude-skills at .claude/vendor/claude-skills. The submodule
+  # is PRIVATE; same-owner repos are reachable by default, otherwise the PR
+  # never appears. Manual run: Insights -> Dependency graph -> Dependabot.
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - skills
