@@ -48,9 +48,17 @@ jobs:
       - name: Run zizmor
         id: scan
         run: |
-          # zizmor exits non-zero on findings. We only fail on high-severity
-          # findings (template-injection, cache-poisoning etc.); informational
-          # and low findings show up in the SARIF upload but don't gate.
+          # zizmor exits non-zero on findings. We gate on high severity only
+          # (template-injection, cache-poisoning etc.).
+          #
+          # NOTE what --min-severity=high means here: it filters BOTH passes,
+          # the SARIF one included. Informational, low and medium findings are
+          # therefore not reported anywhere — not in the issue and not in the
+          # Security tab. That is deliberate for a v0.x project (the noise
+          # would train people to ignore the label), but it is a choice, not a
+          # safety net. Drop the flag on the SARIF pass if you want the full
+          # picture in code scanning while still gating only on high.
+          #
           # Project policy + ignored audits are encoded in .github/zizmor.yml.
           #
           # Exit-code split mirrors vuln-scan.yml:
@@ -80,8 +88,13 @@ jobs:
             fi
           } >> "$GITHUB_OUTPUT"
 
+      # Uploaded on CLEAN runs too, not just on findings. Code scanning only
+      # resolves an alert when a later scan of the same category no longer
+      # reports it; skipping the clean upload leaves fixed findings sitting in
+      # the Security tab forever. Skipped only on a real scan error, where the
+      # SARIF is unreliable.
       - name: Upload SARIF to GitHub Security tab
-        if: steps.scan.outputs.has_findings == 'true'
+        if: steps.scan.outputs.rc == '0' || steps.scan.outputs.rc == '14'
         uses: github/codeql-action/upload-sarif@v4.37.9
         with:
           sarif_file: zizmor.sarif
