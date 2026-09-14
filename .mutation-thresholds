@@ -1,0 +1,38 @@
+# Per-Paket-Schwellen für gremlins. RATCHET: nur anheben.
+#
+# Erzwungen von scripts/mutation-gate.sh, das die eine Einsprungstelle ist —
+# `make mutation` und die CI rufen beide nur dieses Skript, damit lokal und CI
+# nicht divergieren können.
+#
+# WARUM DAS SKRIPT SELBST VERGLEICHT UND NICHT DEM EXIT-CODE TRAUT:
+# gremlins v0.5.1 exitet 0, auch wenn die Efficacy weit unter der per
+# --threshold-efficacy geforderten liegt. Gemessen: 25% und sogar 0% gegen
+# eine Schwelle von 99 ergaben rc=0, mit wie ohne .gremlins.yaml. Die frühere
+# CI-Konstruktion (`if ! gremlins unleash --threshold-... ; then fail=1; fi`)
+# hat deshalb nie gegatet und jeden Lauf grün gemeldet.
+#
+# ZWISCHENSTAND: alle Werte stehen auf 0 0, um in einem CI-Lauf die echten
+# Zahlen für jedes Paket zu erheben. Sie werden im Folgecommit durch die
+# gemessenen Werte ersetzt. Ein Paket, das hier FEHLT, lässt das Gate
+# fehlschlagen — so kann kein neues Paket stillschweigend durchrutschen.
+#
+# paket                                 efficacy(%)  mcover(%)
+cmd/tempus                              0    0
+internal/adapters/aggregate             0    0
+internal/adapters/astronomy             0    0
+internal/adapters/bioclim               0    0
+internal/adapters/cache/bolt            0    0
+internal/adapters/cache/memory          0    0
+internal/adapters/clock                 0    0
+internal/adapters/dewpoint              0    0
+internal/adapters/http                  0    0
+internal/adapters/metrics               0    0
+internal/adapters/omhttp                0    0
+internal/adapters/openmeteo             0    0
+internal/adapters/telemetry             0    0
+internal/app                            0    0
+internal/application                    0    0
+internal/config                         0    0
+internal/domain                         0    0
+internal/ports/input                    0    0
+internal/ports/output                   0    0

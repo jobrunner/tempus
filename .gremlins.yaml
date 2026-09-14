@@ -10,11 +10,21 @@
 # bare, ad-hoc `gremlins unleash <pkg>` stays informational and never applies one
 # package's threshold to another.
 #
-# Per-package baselines the gate enforces (raise them as tests improve):
-#   internal/domain       efficacy >= 90 %, mutator-coverage >= 95 %
-#   internal/application  efficacy >= 77 %, mutator-coverage >= 94 %
+# Per-package baselines live in .mutation-thresholds and are enforced by
+# scripts/mutation-gate.sh — NOT by the flags below and NOT by gremlins itself.
+# Measured: gremlins v0.5.1 exits 0 even at 0 % efficacy against a 99 % flag, so
+# its exit code cannot gate anything. The script parses the reported numbers and
+# compares them itself.
 #
-# NOTE: gremlins panics on macOS — validate in CI (ubuntu), not locally.
+# gremlins does NOT panic on macOS. That claim sat in this file and in the CI
+# workflow; it was re-checked on darwin/arm64 and every package ran. Run the
+# gate locally — iterating on thresholds one CI round at a time is unaffordable.
 unleash:
   threshold-efficacy: 0
   threshold-mcover: 0
+  # Mutant timeouts are derived from the baseline test run. At the default
+  # coefficient a large share of mutants TIMED OUT on this codebase, and a
+  # timeout counts as KILLED — which inflates efficacy into a flattering number
+  # measured against nothing. Raised so verdicts are real; raise further if
+  # TIMED OUT reappears in the log.
+  timeout-coefficient: 60

@@ -59,6 +59,9 @@ arch: ## depguard + gomodguard + go.mod tidiness + the architecture fitness test
 	@echo "arch ok."
 
 ## Debt ratchets
+harness: ## Harness completeness — every mandatory gate present AND wired
+	@bash scripts/harness-check.sh
+
 debt: debt-guard debt-coverage ## Suppression budget + coverage floors
 
 debt-guard: ## Fast grep-based ratchet (suppression budget, debt markers)
@@ -69,13 +72,9 @@ debt-coverage: ## Per-package coverage floors (own test run)
 	@$(GO) test -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./... >/dev/null
 	@./scripts/coverage-gate.sh $(COVERAGE_DIR)/coverage.out
 
-mutation: ## Mutation testing (ubuntu only — gremlins panics on macOS)
+mutation: ## Mutation testing (runs locally too — gremlins does not panic on macOS)
 	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
-	@rc=0; \
-	 gremlins unleash --threshold-efficacy 90 --threshold-mcover 95 ./internal/domain || rc=1; \
-	 gremlins unleash --threshold-efficacy 77 --threshold-mcover 94 ./internal/application || rc=1; \
-	 exit $$rc
-
+	@bash scripts/mutation-gate.sh
 # Prefer an already-installed ccsh; otherwise run it through npx, which needs no
 # global install and no admin rights. Needs node and a JRE (ccsh is a JVM tool).
 CCSH_VERSION ?= 1.143.0
@@ -98,7 +97,7 @@ codecharta: ## CodeCharta map (structure+complexity+coverage+git) -> tempus.cc.j
 	@echo "-> tempus.cc.json.gz  (load in https://maibornwolff.github.io/codecharta/visualization/)"
 
 ## Canonical, non-mutating "is it green?" — mirror this in CI.
-verify: fmt-check vet lint test arch debt-guard ## Authoritative green check
+verify: fmt-check vet lint test arch debt-guard harness ## Authoritative green check
 	@echo "Compile-check (go build ./...)…"
 	@$(GO) build ./...
 	@echo "verify passed."
