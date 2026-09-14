@@ -17,8 +17,13 @@ fehlende Maschinerie:
   Feature, nie durch einen Dependency-Bump.
 - tempus hat **kein zizmor / keine Actions-Security-Prüfung**, obwohl der
   Skill `new-go-service` sie in seiner Workflow-Tabelle führt.
-- Die Go-Version steht in den tempus-Workflows **achtmal hartkodiert** als
-  `go-version: '1.25'`. Selbst ein `go.mod`-Bump hätte die CI nicht mitgezogen.
+- Die Go-Version ist in den tempus-Workflows **elfmal gepinnt** und zwar in zwei
+  Formen: zehnmal literal als `go-version: '1.25'` (ci.yml siebenmal, dazu
+  security.yml, openapi.yml, release-please.yml) und einmal indirekt in
+  codecharta.yml als `GO_VERSION: '1.25'` plus `go-version: ${{ env.GO_VERSION }}`.
+  Selbst ein `go.mod`-Bump hätte die CI nicht mitgezogen. Die indirekte Form ist
+  die gefährlichere: sie liest sich wie Konfiguration und wurde von der ersten
+  Fassung der Prüfung übersehen.
 
 Das ist kein tempus-Einzelfall, sondern ein Skill-Defekt: `reference/ci-and-release.md`
 beschreibt die Workflows als *„a representative set"* — eine Formulierung, die
@@ -81,7 +86,7 @@ Erhoben am 2026-09-14. Das geplante Gate hätte heute folgende Treffer:
 | `LICENSE` | **fehlt** — s.u. |
 | `.mutation-thresholds` | **fehlt** — Schwellen inline dupliziert |
 | `scripts/mutation-gate.sh` | **fehlt** — s.u. |
-| Workflows ohne hartkodierte Go-Version | **verletzt**, 8 Fundstellen |
+| Workflows ohne gepinnte Go-Version | **verletzt**, 11 Fundstellen (10 literal, 1 via `GO_VERSION`) |
 | `.commitlintrc.yml`, release-please-Konfig, `.goreleaser.yml` | vorhanden |
 | `.debt-budget`, `.coverage-floors`, `.codecharta-ratchet.json` + Skripte | vorhanden |
 | `.gremlins.yaml` | vorhanden |
@@ -113,6 +118,27 @@ Der Skill weist diese Behauptung als gemessen falsch aus (darwin/arm64,
 v0.6.0). Der Kommentar wird in PR 2 mitkorrigiert, da er Entwickler davon
 abhält, das Gate lokal zu fahren.
 
+## Befund 4 — Die `on: release`-Regel des Skills ist zu absolut
+
+Der Skill verbietet `on: release`-Workflows pauschal: sie feuerten bei einem
+release-please-Release nie, weil GitHubs Rekursionssperre greift. Am realen
+tempus widerlegt: `.github/workflows/docker-release.yml` ist `on: release` und
+**funktioniert** — alle Läufe erfolgreich bis v0.24.1.
+
+Der Grund: die Sperre gilt für den Default-`GITHUB_TOKEN`. tempus' release-please
+läuft unter einem **GitHub-App-Token** (`actions/create-github-app-token`), und
+damit lösen die erzeugten Events sehr wohl weitere Workflows aus.
+
+Für dieses Vorhaben folgt daraus zweierlei. Erstens hätte die ursprünglich
+geplante `no_on_release`-Prüfung einen funktionierenden Workflow rot gemacht —
+sie gilt jetzt nur im Default-Token-Fall. Zweitens ist die Skill-Referenz
+entsprechend qualifiziert worden.
+
+Nebenwirkung, die daran hängt: der **Release-PR bekommt in tempus sehr wohl
+CI-Checks**, anders als der Skill für den Default-Token-Fall beschreibt. Die
+lokale Vorab-Verifikation in Phase E bleibt trotzdem sinnvoll, ist aber kein
+Ersatz für fehlende Checks, sondern eine zusätzliche Kontrolle.
+
 ## Entwurf
 
 ### Teil 1 — Harness-Manifest und Gate
@@ -136,7 +162,7 @@ Das Manifest. Jede Zeile ist ein harter Fehler bei Fehlen:
 | Debt | `.debt-budget`, `scripts/debt-guard.sh` | in `make verify` verdrahtet |
 | Coverage | `.coverage-floors`, `scripts/coverage-gate.sh` | in `make debt` verdrahtet |
 | Commits | `.commitlintrc.yml`, `.github/workflows/commitlint.yml` | — |
-| Release | `release-please-config.json`, `.release-please-manifest.json`, `.goreleaser.yml`, `release-please.yml` | `bump-minor-pre-major` + `initial-version` gesetzt; **kein** `on: release`-Workflow |
+| Release | `release-please-config.json`, `.release-please-manifest.json`, `.goreleaser.yml`, `release-please.yml` | `on: release`-Workflow nur erlaubt, wenn release-please **nicht** den Default-Token nutzt (s.u.) |
 | Legal | `LICENSE` | — |
 | Architektur | depguard-Regeln, `arch_test.go`, `.arch-baseline` | s. Teil 2 |
 | OpenAPI | zwei Spec-Kopien | byte-identisch |
@@ -221,7 +247,7 @@ hält.
 |---|---|---|
 | **1 — Supply chain** | diese Spec, `.github/dependabot.yml` (gomod, github-actions, docker, gitsubmodule), `.github/zizmor.yml`, `actions-security.yml`, `dependabot-auto-merge.yml` | niedrig, reine Additionen |
 | **2 — Arch-Gate + Harness** | `internal/arch/arch_test.go`, `.arch-baseline`, depguard-Verschärfung, `scripts/harness-check.sh`, `.harness-waivers`, `make harness`, CI-Job; dazu die Manifest-Lücken aus Befund 3: `scripts/mutation-gate.sh` + `.mutation-thresholds` (Schwellen aus Makefile und Workflow dorthin zusammenführen), `LICENSE`, macOS-Kommentar korrigieren | mittel — die depguard-Verschärfung kann zunächst rot werden |
-| **3 — Go-Bump** | `go 1.26.0` / `toolchain go1.26.6`, `Dockerfile` auf `golang:1.26.x-alpine` mit neuem SHA-Pin, README Zeile 96, die acht `go-version: '1.25'` → `go-version-file: go.mod` | mittel — Toolchain-Bump, einzeln revertierbar |
+| **3 — Go-Bump** | `go 1.26.0` / `toolchain go1.26.6`, `Dockerfile` auf `golang:1.26.x-alpine` mit neuem SHA-Pin, README Zeile 96, alle 11 Go-Pins → `go-version-file: go.mod` | mittel — Toolchain-Bump, einzeln revertierbar |
 
 Reihenfolge ist bindend: PR 2 vor PR 3, damit das Harness-Gate den Bump bereits
 mitprüft — insbesondere die Toolchain-Hygiene-Regel, die die acht hartkodierten

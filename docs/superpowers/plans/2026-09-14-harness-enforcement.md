@@ -10,6 +10,16 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-14-harness-enforcement-design.md`
 
+> **Stand 2026-09-14, nach Phase A:** Die Code-Blöcke in Phase A sind der
+> *Entwurf*, mit dem gearbeitet wurde. Maßgeblich ist inzwischen der gemergte
+> Skill (`claude-skills` PR #11 und #12) — dort sind mehrere Defekte behoben,
+> die im Entwurf unten noch stehen: `no_hardcoded_go` erkennt jetzt auch
+> `GO_VERSION:`-Indirektion, `layerOf` matcht auf Pfadgrenze, `no_on_release`
+> gilt nur im Default-Token-Fall, und die Prüfungen für `.gremlins.yaml`,
+> `arch_test.go`, `release-please.yml`, `-count=1` sowie die Makefile-
+> Verdrahtung sind ergänzt. **Phase B–D kopieren aus den Templates, nicht aus
+> diesem Dokument.**
+
 ## Global Constraints
 
 - Modulpfad: `github.com/jobrunner/tempus`. Env-Prefix: `TEMPUS_`.
@@ -1078,8 +1088,10 @@ Den `// Copy to …`-Kopfkommentar entfernen.
 - [ ] **Step 3: Test laufen lassen — muss GRÜN sein**
 
 Run: `unset GOTOOLCHAIN && go test ./internal/arch/ -v`
-Expected: alle vier Tests PASS. Der Graph ist sauber; genau die zwei
-Baseline-Kanten existieren.
+Expected: alle **drei** Tests PASS (`TestEveryPackageHasALayer`,
+`TestImportsRespectLayerBoundaries`, `TestDomainImportsOnlyStdlib`; die
+Baseline-Zählung wird innerhalb des zweiten geprüft). Der Graph ist sauber;
+genau die zwei Baseline-Kanten existieren.
 
 - [ ] **Step 4: Den Test gegen eine echte Verletzung prüfen**
 
@@ -1157,9 +1169,10 @@ govulncheck in `security.yml` statt in `vuln-scan.yml` fährt.
 
 - [ ] **Step 3: `.harness-waivers` anlegen**
 
-Nur für das, was bewusst anders gelöst ist. Die Go-Version wird **nicht**
-gewaivert — sie wird in PR 3 gefixt; bis dahin ist der Job rot, was korrekt ist
-und in der PR-Beschreibung angekündigt wird.
+Die Go-Version **wird** hier temporär gewaivert, mit Ablaufvermerk. Alternative
+wäre, den Job bis PR 3 rot stehen zu lassen — das ist abgelehnt: ein rotes Gate,
+das „so gemeint" ist, trainiert genau die Gewöhnung ab, die das Gate erzeugen
+soll. Der Waiver ist sichtbar, begründet und wird in PR 3 wieder entfernt.
 
 ```
 # Bewusst ausgelassene Manifest-Punkte, mit Begründung.
@@ -1273,13 +1286,16 @@ grep -rlE "go-version: '1\.25'" .github/workflows/ \
   | xargs sed -i '' "s|go-version: '1\.25'|go-version-file: go.mod|"
 ```
 
-`codecharta.yml` nutzt `${{ env.GO_VERSION }}` — dort die Env-Variable entfernen
-und ebenfalls auf `go-version-file: go.mod` umstellen.
+`codecharta.yml` nutzt `GO_VERSION: '1.25'` plus `${{ env.GO_VERSION }}` — dort
+die Env-Variable **entfernen** und ebenfalls auf `go-version-file: go.mod`
+umstellen. Das ist die Fundstelle, die eine frühere Fassung des Gates übersehen
+hat; das korrigierte `no_hardcoded_go` erkennt beide Formen.
 
 - [ ] **Step 2: Prüfen, dass keine hartkodierte Version übrig ist**
 
-Run: `grep -rnE "go-version:\s*['\"]?[0-9]" .github/workflows/ ; echo "rc=$?"`
-Expected: keine Treffer (`rc=1`).
+Run: `grep -rnE "go-version:\s*['\"]?[0-9]|GO_VERSION:\s*['\"]?[0-9]" .github/workflows/ ; echo "rc=$?"`
+Expected: keine Treffer (`rc=1`). **Beide** Formen prüfen — die Env-Indirektion
+ist die, die durchrutscht.
 
 - [ ] **Step 3: Waiver entfernen**
 
@@ -1343,8 +1359,11 @@ Commits funktionieren **nicht** als Trigger.
 
 - [ ] **Step 3: Release-PR-Baum lokal verifizieren**
 
-Der Release-PR bekommt **keine CI-Checks** (release-please nutzt `GITHUB_TOKEN`).
-Deshalb lokal prüfen:
+Der Release-PR bekommt in tempus **sehr wohl CI-Checks**: release-please läuft
+hier unter einem GitHub-App-Token, nicht unter `GITHUB_TOKEN`, also greift die
+Rekursionssperre nicht (s. Befund 4 der Spec). Die lokale Prüfung ist deshalb
+eine *zusätzliche* Kontrolle, kein Ersatz — nützlich, weil sie schneller ist als
+ein CI-Durchlauf:
 
 ```bash
 git fetch origin release-please--branches--main
@@ -1353,8 +1372,15 @@ unset GOTOOLCHAIN && make verify
 bash scripts/openapi-mirror-check.sh
 ```
 
-Expected: grün, und die beiden OpenAPI-Kopien byte-identisch — release-please
-schreibt das `version:`-Feld in beiden um.
+Expected: grün und die beiden OpenAPI-Kopien byte-identisch.
+
+**Achtung, entgegen der Skill-Referenz:** `release-please-config.json` führt
+unter `extra-files` nur `VERSION`. Die OpenAPI-Kopien werden **nicht** von
+release-please angefasst, ihr `version:`-Feld bleibt also stehen. Der
+Mirror-Check prüft hier folglich nur, dass die beiden Kopien untereinander
+identisch sind — nicht, dass sie die Release-Version tragen. Wenn die
+Spec-Version mitlaufen soll, muss sie explizit in `extra-files` aufgenommen und
+der Effekt einmal verifiziert werden; das ist eine eigene Entscheidung.
 
 - [ ] **Step 4: Release-PR mergen und das Image verifizieren**
 

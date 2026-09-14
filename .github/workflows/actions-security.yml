@@ -68,11 +68,22 @@ jobs:
           set +e
           # SARIF report for the Security-tab upload. zizmor 1.x has no
           # --output flag, so SARIF is emitted on stdout — redirect it to
-          # the file. NOTE: with --format sarif zizmor always exits 0
-          # (gating is delegated to the code-scanning dashboard), so this
-          # run's exit code can't tell us whether findings exist.
+          # the file. With --format sarif zizmor always exits 0 when it RAN
+          # (gating is delegated to the code-scanning dashboard), so this pass
+          # cannot tell us whether findings exist — but a non-zero exit here
+          # still means the scan itself broke. Check it: otherwise a failed
+          # SARIF pass followed by a clean plain pass uploads a truncated or
+          # empty report as though it were a clean scan.
           zizmor --config .github/zizmor.yml --min-severity=high \
             --format sarif . > zizmor.sarif 2> zizmor.stderr
+          sarif_rc=$?
+          if [ "$sarif_rc" -ne 0 ]; then
+            echo "rc=$sarif_rc" >> "$GITHUB_OUTPUT"
+            echo "has_findings=false" >> "$GITHUB_OUTPUT"
+            echo "::error::zizmor SARIF pass failed with rc=$sarif_rc"
+            cat zizmor.stderr
+            exit 1
+          fi
           # Authoritative gating pass: the default (plain) format exits 14
           # on findings, 0 when clean, anything else on a real scan error.
           # Doubles as the human-readable issue body.

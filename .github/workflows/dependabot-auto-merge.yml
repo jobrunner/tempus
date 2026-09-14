@@ -33,11 +33,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Enable auto-merge for minor/patch (and grouped) updates. The ruleset
-      # allows only merge commits, so request --merge explicitly.
+      # Enable auto-merge for minor/patch (and grouped) updates.
+      # --squash, not --merge: the branch ruleset requires linear history, so a
+      # merge commit is rejected even though the repo setting permits one. This
+      # repo squash-merges everything except the release PR.
       - name: Enable auto-merge (non-major)
         if: ${{ steps.meta.outputs.update-type != 'version-update:semver-major' }}
-        run: gh pr merge --auto --merge "$PR_URL"
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

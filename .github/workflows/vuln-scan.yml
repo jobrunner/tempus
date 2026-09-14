@@ -55,7 +55,10 @@ jobs:
       - name: Run govulncheck (JSON)
         id: vuln
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Pinned, not @latest: this is a security gate, and a gate that
+          # silently changes tool version between runs cannot be reasoned about.
+          # Dependabot does not bump `go install` lines, so raise this by hand.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
           # -json emits structured output even on findings. Exit codes:
           #   0 — no vulnerabilities
           #   3 — vulnerabilities found
@@ -204,7 +207,7 @@ jobs:
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages: bump the base-image FROM tag so the runtime picks up patched distro packages (Dependabots docker ecosystem usually has a PR open already).\n- Go modules (gobinary): `go get <module>@<fixed version>`; Dependabots gomod ecosystem may have a PR already.\n\nEither way the fix only reaches users with the next release.\n' "$FINDING_COUNT" "$IMAGE" "$(cat trivy-report.txt)")
+          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages: bump the base-image FROM tag so the runtime picks up patched distro packages (Dependabot's docker ecosystem usually has a PR open already).\n- Go modules (gobinary): `go get <module>@<fixed version>`; Dependabot's gomod ecosystem may have a PR already.\n\nEither way the fix only reaches users with the next release.\n' "$FINDING_COUNT" "$IMAGE" "$(cat trivy-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
