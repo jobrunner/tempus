@@ -86,7 +86,13 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 	if p.cache != nil {
 		if raw, ok, _ := p.cache.Get(ctx, key); ok {
 			var feat domain.Feature
-			if json.Unmarshal(raw, &feat) == nil {
+			// A hit is only usable if it still carries complete attribution.
+			// This provider keeps its own cache (entries live a year) and is
+			// registered directly rather than wrapped in
+			// application.CachingProvider, so it needs the same guard: without
+			// it a poisoned entry is served, rejected downstream, and never
+			// refetched until the TTL expires.
+			if json.Unmarshal(raw, &feat) == nil && feat.License.Validate() == nil {
 				return domain.ProviderResult{Feature: feat, Cached: true}, nil
 			}
 		}
@@ -107,6 +113,12 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 	}
 
 	feat := p.buildFeature(data, clim, startY, endY)
+	// Validate before caching. An entry here lives for a year, so a malformed
+	// feature would outlive whatever produced it and keep failing downstream
+	// long after the cause was fixed.
+	if lerr := feat.License.Validate(); lerr != nil {
+		return domain.ProviderResult{}, output.NewPermanentError(lerr)
+	}
 	if p.cache != nil {
 		if raw, err := json.Marshal(feat); err == nil {
 			_ = p.cache.Set(ctx, key, raw, cacheTTL)

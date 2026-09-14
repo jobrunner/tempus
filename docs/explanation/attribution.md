@@ -29,13 +29,20 @@ client to try again would only postpone the problem.
 For a deriver, one incomplete block rejects that deriver's whole batch. A
 partially attributed batch is not a meaningful thing to publish.
 
-!!! note "No startup check"
+!!! note "What is validated where"
 
-    Validation happens at request time only. There is no startup pass that
-    inspects each provider's statically declared `Attribution()`, so a provider
-    whose licence is wrong is discovered on the first request that uses it, not
-    at boot. Earlier versions of this page claimed such a startup check existed;
-    it never did.
+    Request-time validation covers **`Feature.License`** — the block attached to
+    the data actually returned. It does not look at `Attribution()`, the static
+    block a provider declares and `/api/v1/providers` publishes; that one is
+    never checked at runtime and there is no startup pass that inspects it.
+    Earlier versions of this page claimed such a startup check existed; it never
+    did.
+
+    The static block is instead covered by a fitness test
+    (`TestEveryRegisteredProviderDeclaresACompleteLicense` in `internal/app`),
+    which asserts that every provider the composition root registers declares a
+    complete licence. A misconfigured provider is a programming error, and
+    failing CI is more useful than failing to boot in production.
 
 ## Why mandatory attribution?
 
@@ -65,9 +72,10 @@ All three strings must be non-empty. A `FeatureProvider` declares its static
 licence via `Attribution() domain.License` (see
 `internal/ports/output/provider.go`).
 
-The caching decorator carries the licence through the cache layer, so a cached
-feature is attributed exactly like a live one — and it validates in both
-directions. A feature with an incomplete block is never written to the cache,
+Caches validate in both directions, so a cached feature is attributed exactly
+like a live one. This applies to `application.CachingProvider` and to the
+bioclim provider's own one-year cache, which is registered directly rather than
+wrapped. A feature with an incomplete block is never written to the cache,
 because a mature entry lives for up to a year and would keep failing validation
 long after the provider itself was fixed. A cached entry that fails validation
 on read — one written before this was enforced, say — is treated as a miss and
