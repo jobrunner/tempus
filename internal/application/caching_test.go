@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -45,7 +46,15 @@ func (p *countingProvider) Kind() string                { return testProviderKin
 func (p *countingProvider) Attribution() domain.License { return domain.License{Name: "CC-BY 4.0"} }
 func (p *countingProvider) Fetch(context.Context, domain.QueryRequest) (domain.ProviderResult, error) {
 	p.calls++
-	return domain.ProviderResult{Feature: p.feat}, nil
+	f := p.feat
+	// Only an UNSET feature gets a default. Tests that do not care about
+	// attribution should still exercise what they are about, but a test that
+	// deliberately supplies a bad licence must get exactly that one back.
+	if f.Type == "" {
+		f = domain.NewPointFeature(domain.Coordinate{Lat: 1, Lon: 2},
+			map[string]any{"v": 1.0}, goodLicense())
+	}
+	return domain.ProviderResult{Feature: f}, nil
 }
 
 type fixedClock struct{ t time.Time }
@@ -63,7 +72,7 @@ func opts() CachingOptions {
 
 func TestCaching_MissThenHit(t *testing.T) {
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
-	inner := &countingProvider{feat: domain.NewPointFeature(domain.Coordinate{Lat: 49.79, Lon: 9.93}, map[string]any{"t": 1.0}, domain.License{Name: "x"})}
+	inner := &countingProvider{feat: domain.NewPointFeature(domain.Coordinate{Lat: 49.79, Lon: 9.93}, map[string]any{"t": 1.0}, goodLicense())}
 	cp := NewCachingProvider(inner, newFakeCache(), fixedClock{now}, opts())
 
 	old := req(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)) // well before archive delay
@@ -180,4 +189,61 @@ func (e errorProvider) Kind() string                { return testProviderKind }
 func (e errorProvider) Attribution() domain.License { return domain.License{} }
 func (e errorProvider) Fetch(context.Context, domain.QueryRequest) (domain.ProviderResult, error) {
 	return domain.ProviderResult{}, e.err
+}
+
+func goodLicense() domain.License {
+	return domain.License{Name: "CC-BY 4.0", URL: "https://example.org/l", Attribution: "Example"}
+}
+
+// A malformed feature must never enter the cache. Mature entries live for up to
+// a year, so caching one would keep the fault alive long after the provider was
+// fixed — the gate would go on rejecting a stale cached copy.
+func TestCachingProvider_DoesNotCacheIncompleteLicense(t *testing.T) {
+	bad := domain.NewPointFeature(domain.Coordinate{Lat: 1, Lon: 2},
+		map[string]any{"v": 1.0}, domain.License{Name: "x", Attribution: "y"}) // no URL
+	cache := newFakeCache()
+	cp := NewCachingProvider(&countingProvider{feat: bad}, cache, fixedClock{}, opts())
+
+	_, err := cp.Fetch(context.Background(), domain.QueryRequest{Instant: time.Unix(0, 0).UTC()})
+	if err == nil {
+		t.Fatal("Fetch must fail on an incomplete licence rather than pass it on")
+	}
+	if cache.sets != 0 {
+		t.Errorf("cache.Set called %d times; a malformed feature must not be stored", cache.sets)
+	}
+}
+
+// An entry stored before the rule was enforced must not be served forever. A
+// cache hit that fails validation is treated as a miss, so a corrected provider
+// recovers on the next request instead of after the TTL.
+func TestCachingProvider_TreatsInvalidCacheHitAsMiss(t *testing.T) {
+	bad := domain.NewPointFeature(domain.Coordinate{Lat: 1, Lon: 2},
+		map[string]any{"v": 1.0}, domain.License{Name: "x", Attribution: "y"})
+	raw, err := json.Marshal(bad)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	req := domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 1, Lon: 2}, Instant: time.Unix(0, 0).UTC()}
+
+	cache := newFakeCache()
+	good := domain.NewPointFeature(domain.Coordinate{Lat: 1, Lon: 2}, map[string]any{"v": 2.0}, goodLicense())
+	inner := &countingProvider{feat: good}
+	cp := NewCachingProvider(inner, cache, fixedClock{}, opts())
+
+	// Poison the cache under the key this request will use.
+	cache.store[CacheKey(testProviderID, "1", req, 2, "")] = raw
+
+	res, err := cp.Fetch(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if inner.calls != 1 {
+		t.Errorf("inner calls = %d, want 1 — the poisoned hit must fall through to a real fetch", inner.calls)
+	}
+	if res.Cached {
+		t.Error("result reported as cached although the cached entry was rejected")
+	}
+	if res.Feature.License.Validate() != nil {
+		t.Errorf("served a feature that still fails validation: %+v", res.Feature.License)
+	}
 }

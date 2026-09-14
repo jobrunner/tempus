@@ -62,6 +62,14 @@ type License struct {
 ```
 
 All three strings must be non-empty. A `FeatureProvider` declares its static
-license via `License() domain.License`. The caching decorator preserves the
-license through the cache layer, so cached features carry the same attribution
-as live ones.
+licence via `Attribution() domain.License` (see
+`internal/ports/output/provider.go`).
+
+The caching decorator carries the licence through the cache layer, so a cached
+feature is attributed exactly like a live one — and it validates in both
+directions. A feature with an incomplete block is never written to the cache,
+because a mature entry lives for up to a year and would keep failing validation
+long after the provider itself was fixed. A cached entry that fails validation
+on read — one written before this was enforced, say — is treated as a miss and
+refetched, so a corrected provider recovers on the next request rather than
+after the TTL.
