@@ -10,8 +10,7 @@
           "type": "generic",
           "path": "VERSION"
         }
-      ],
-      "release-as": "0.24.2"
+      ]
     }
   }
 }
