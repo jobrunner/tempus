@@ -96,8 +96,11 @@ no_wildcard_unleash() {
 # So this check only applies to the default-token case. Skip it when the release
 # workflow mints an app token or uses a PAT, or it flags a working setup.
 no_on_release() {
-  if grep -rqE "create-github-app-token|secrets\.(RELEASE_|.*_PAT|GH_PAT)" \
-       "$WORKFLOWS" 2>/dev/null; then
+  # Scope the exemption to the RELEASE workflow. Checking every workflow would
+  # let an unrelated one that happens to mint an app token silence this check
+  # while release-please still runs on the default token.
+  rp="$WORKFLOWS/release-please.yml"
+  if [ -f "$rp" ] && grep -qE "create-github-app-token|secrets\.(RELEASE_[A-Z_]*|[A-Z_]*_PAT|GH_PAT)" "$rp"; then
     return 0   # not the default token — `on: release` is fine here
   fi
   ! awk '

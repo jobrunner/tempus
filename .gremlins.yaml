@@ -1,14 +1,12 @@
-# Template: gremlins mutation-testing config. Copy to .gremlins.yaml.
+# gremlins mutation-testing config.
 #
-# The CI job (.github/workflows/mutation.yml) is a HARD GATE: it runs each
-# package with per-package --threshold-efficacy / --threshold-mcover flags and
-# FAILS the build when the mutation score regresses below the ratcheted baseline.
 # Coverage says a line ran; mutation says a test would have caught a bug in it.
 #
-# Keep these globals at 0 ON PURPOSE: the gate's thresholds are PER PACKAGE and
-# live in the CI workflow + `make mutation` (explicit flags). Globals at 0 mean a
-# bare, ad-hoc `gremlins unleash <pkg>` stays informational and never applies one
-# package's threshold to another.
+# The globals below stay at 0 and are NOT the gate. Nobody passes per-package
+# --threshold-* flags any more: `make mutation` and .github/workflows/mutation.yml
+# both call scripts/mutation-gate.sh, which reads .mutation-thresholds and does
+# the comparison itself. Zeros here mean an ad-hoc `gremlins unleash <pkg>` stays
+# informational and never applies one package's threshold to another.
 #
 # Per-package baselines live in .mutation-thresholds and are enforced by
 # scripts/mutation-gate.sh — NOT by the flags below and NOT by gremlins itself.

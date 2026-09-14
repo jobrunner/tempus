@@ -34,10 +34,27 @@ command -v "$GREMLINS" >/dev/null 2>&1 || { echo "mutation-gate: $GREMLINS not o
 if [ "$#" -gt 0 ]; then
   PACKAGES=("$@")
 else
+  # `go list` runs into a FILE, not a process substitution: inside `< <(...)`
+  # its exit status is lost, so a failed discovery would yield an empty package
+  # list, skip the loop entirely and report OK — a gate measuring nothing.
+  #
+  # -f skips packages with no production Go files (a test-only package such as
+  # internal/arch generates no mutants and would otherwise have to be declared
+  # NONE just to keep the gate quiet).
+  LIST="$(mktemp)"
+  trap 'rm -f "$LIST"' EXIT
+  if ! go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./... > "$LIST"; then
+    echo "mutation-gate: go list failed — refusing to run a gate over an unknown package set" >&2
+    exit 2
+  fi
   PACKAGES=()
   while IFS= read -r p; do
     [ -n "$p" ] && PACKAGES+=("$p")
-  done < <(go list ./... | sed "s|^${MODULE}/||;s|^${MODULE}\$|.|")
+  done < <(sed "s|^${MODULE}/||;s|^${MODULE}\$|.|" "$LIST")
+  if [ "${#PACKAGES[@]}" -eq 0 ]; then
+    echo "mutation-gate: no packages discovered — the gate would be vacuous" >&2
+    exit 2
+  fi
 fi
 
 OUT="$(mktemp)"
@@ -55,7 +72,18 @@ for pkg in "${PACKAGES[@]}"; do
     fail=1; continue
   fi
 
-  "$GREMLINS" unleash "./$pkg" >"$OUT" 2>&1 || true
+  # Keep the status. gremlins' THRESHOLD verdict is unusable (v0.5.1 exits 0
+  # below any threshold), which is why the numeric comparison below exists — but
+  # a non-zero exit still distinguishes "ran and reported" from "crashed after
+  # printing the banner", and the latter must not be parsed as a result.
+  "$GREMLINS" unleash "./$pkg" >"$OUT" 2>&1
+  grc=$?
+
+  if [ "$grc" -ne 0 ] && grep -q "Mutation testing completed" "$OUT"; then
+    printf "%-42s   ▼ gremlins exited %s after reporting — result not trusted\n" "$pkg" "$grc"
+    sed 's/^/      /' "$OUT"
+    fail=1; continue
+  fi
 
   if ! grep -q "Mutation testing completed" "$OUT"; then
     # Either gremlins errored, or it generated nothing at all. "No results to
@@ -77,6 +105,17 @@ for pkg in "${PACKAGES[@]}"; do
 
   if [ "$want" = "NONE" ]; then
     printf "%-42s   ▼ DECLARED NONE but generated mutants (%s) — give it real thresholds\n" "$pkg" "$counts"
+    fail=1; continue
+  fi
+
+  # A missing or non-numeric metric means the report format changed under us.
+  # Never let that reach the comparison: awk would coerce "" and the package
+  # would be judged against a value nobody measured.
+  case "$eff" in ''|*[!0-9.]*) eff="" ;; esac
+  case "$mcov" in ''|*[!0-9.]*) mcov="" ;; esac
+  if [ -z "$eff" ] || [ -z "$mcov" ]; then
+    printf "%-42s   ▼ could not read efficacy/mcover from the report — format changed?\n" "$pkg"
+    sed 's/^/      /' "$OUT"
     fail=1; continue
   fi
 

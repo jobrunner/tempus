@@ -69,9 +69,10 @@ curl -X POST http://localhost:8080/api/v1/query/batch \
 - **HTTP 200 auch bei Provider-Fehlern.** Fehlschläge einzelner Provider stehen
   im Antwort-Envelope (`providers[].status`, `retryable`), nicht im Statuscode.
   Ein Client kann so die erfolgreichen Teile verwenden und gezielt nachfragen.
-- **Quellenangabe ist Pflicht.** Jedes Feature trägt einen `license`-Block; ein
-  Feature ohne vollständige Lizenz gilt als Vertragsverletzung und wird an der
-  Port-Grenze abgewiesen.
+- **Quellenangabe reist mit.** Jedes Feature trägt einen `license`-Block, den
+  jeder Provider setzt. Das ist eine Konvention, kein Gate: es gibt heute keine
+  Validierung, die ein Feature mit unvollständiger Lizenz abweist (s. Abschnitt
+  [Lizenz](#lizenz)).
 
 ## Dokumentation
 
@@ -113,7 +114,12 @@ Sonntag-1990-Koeffizienten für den Taupunkt, die WorldClim-Definitionen und
 Köppen-Geiger für die BIO-Variablen, ERA5 über Copernicus/ECMWF und Open-Meteo
 für die Wetterdaten.
 
-Diese Zuschreibung ist nicht nur dokumentiert, sondern erzwungen: jedes Feature
-trägt einen `license`-Block (`name`, `url`, `attribution`), und ein Feature ohne
-vollständige Lizenz wird an der Port-Grenze abgewiesen. Wer tempus-Antworten
-weiterverwendet, übernimmt diese Angaben mit.
+Die Zuschreibung reist mit den Daten: jedes Feature trägt einen `license`-Block
+(`name`, `url`, `attribution`), den jeder Provider setzt. Wer tempus-Antworten
+weiterverwendet, bekommt diese Angaben mit und sollte sie mitführen.
+
+Einschränkung, die man kennen sollte: der Block ist **Konvention, nicht
+erzwungen**. `domain.NewPointFeature` speichert die Lizenz, ohne sie zu prüfen,
+und kein Port weist ein Feature mit unvollständiger Lizenz ab. Ein Provider, der
+den Block leer lässt, fällt heute niemandem auf. Eine Validierung an der
+Port-Grenze wäre die naheliegende Härtung.

@@ -1,6 +1,6 @@
 .PHONY: all build run test test-coverage lint vet fmt fmt-check arch debt \
         debt-guard debt-coverage mutation codecharta verify docs docs-serve docs-openapi-check \
-        doc-drift hooks security vuln licenses release-dry help
+        doc-drift hooks security vuln licenses release-dry harness help
 
 BINARY_NAME := tempus
 MODULE      := github.com/jobrunner/tempus

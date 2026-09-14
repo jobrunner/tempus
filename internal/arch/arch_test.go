@@ -186,7 +186,11 @@ func TestDomainImportsOnlyStdlib(t *testing.T) {
 			continue
 		}
 		for _, imp := range p.Imports {
-			if strings.HasPrefix(imp, modulePath) {
+			// Path-boundary aware: a sibling module such as
+			// <module>-plugins/foo starts with the module path but is a
+			// third-party dependency, and skipping it here would let it into
+			// the domain unnoticed.
+			if imp == modulePath || strings.HasPrefix(imp, modulePath+"/") {
 				continue // internal edges belong to the test above
 			}
 			// An import path whose first segment contains a dot is a module

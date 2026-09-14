@@ -24,7 +24,10 @@
 #
 # Ein Paket, das hier FEHLT, lässt das Gate fehlschlagen. Kein neues Paket kann
 # stillschweigend durchrutschen; internal/arch wurde beim ersten Lauf genau so
-# gefangen.
+# gefangen. Es steht hier trotzdem nicht mehr drin: die Paketerkennung filtert
+# inzwischen Pakete ohne Produktionscode heraus, und ein Eintrag fuer ein Paket,
+# das nie geprueft wird, waere nur irrefuehrend. Bekommt internal/arch je eine
+# Nicht-Testdatei, meldet das Gate es korrekt als fehlend.
 #
 # ZUM VERBESSERN, nach Dringlichkeit:
 #   internal/domain ist mit 55,95/59,15 das schwächste UND das wichtigste Paket
@@ -54,7 +57,6 @@ internal/adapters/openmeteo             66           76
 internal/adapters/telemetry             17           97
 internal/app                            37           88
 internal/application                    73           85
-internal/arch                           NONE
 internal/config                         60           88
 internal/domain                         52           56
 internal/ports/input                    NONE

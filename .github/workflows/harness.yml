@@ -19,6 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # This job EXECUTES scripts/harness-check.sh from the checked-out PR,
+          # so PR-controlled code runs in the same workspace as the token. It
+          # needs the files, not the credential.
+          persist-credentials: false
 
       - name: Harness completeness
         run: bash scripts/harness-check.sh
