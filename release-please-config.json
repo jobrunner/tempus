@@ -6,8 +6,12 @@
       "include-component-in-tag": false,
       "bump-minor-pre-major": true,
       "extra-files": [
-        { "type": "generic", "path": "VERSION" }
-      ]
+        {
+          "type": "generic",
+          "path": "VERSION"
+        }
+      ],
+      "release-as": "0.24.2"
     }
   }
 }
