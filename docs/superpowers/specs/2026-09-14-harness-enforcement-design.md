@@ -95,8 +95,9 @@ prüft, ist das der Unterschied zwischen einer offenen Lizenz und „alle Rechte
 vorbehalten". Anders als bei den Schwestern behauptet tempus allerdings auch
 nirgends eine Lizenz: weder README noch OpenAPI führen einen `license`-Eintrag
 für den Dienst selbst (die `license`-Blöcke in der OpenAPI beschreiben die
-*Datenquellen*, nicht tempus). Die Lizenzwahl ist eine Eigentümerentscheidung
-und kein Default, den dieser Entwurf setzt.
+*Datenquellen*, nicht tempus). Entschieden am 2026-09-14: **MIT für den
+Go-Code**; die Abgrenzung zu Algorithmen und Daten steht unter
+„Entscheidungen und Alternativen".
 
 **Das Mutation-Gate ist dupliziert statt geteilt.** Die Schwellen stehen
 inline an *zwei* Stellen — im `mutation`-Target des Makefiles und noch einmal
@@ -227,6 +228,34 @@ mitprüft — insbesondere die Toolchain-Hygiene-Regel, die die acht hartkodiert
 Versionen überhaupt erst als Fehler sichtbar macht.
 
 ## Entscheidungen und Alternativen
+
+**Lizenz: MIT für den Go-Code**, Rechteinhaber Jo Brunner. Entschieden am
+2026-09-14. `LICENSE` wird in PR 2 angelegt.
+
+Die Lizenzlage hat drei Ebenen, die nicht vermischt werden dürfen:
+
+| Ebene | Regelung | Ort |
+|---|---|---|
+| Der Dienst (Go-Code) | MIT | `LICENSE`, neu |
+| Die Algorithmen | Urheber-Attribution, keine Lizenz | bereits zur Laufzeit, s.u. |
+| Die Daten | Lizenz der jeweiligen Quelle | bereits zur Laufzeit, s.u. |
+
+Die unteren beiden Ebenen sind in tempus **bereits gelöst** und werden von
+diesem Entwurf nicht angefasst: `domain.License` (`Name`, `URL`, `Attribution`)
+hängt an jedem Feature, ein Feature ohne vollständige Lizenz wird an der
+Port-Grenze abgewiesen. Die Algorithmen-Herkunft steht dort konkret drin —
+Magnus-Tetens mit Sonntag-1990-Koeffizienten für den Taupunkt, die
+WorldClim-Definitionen und Köppen-Geiger für die BIO-Variablen, dazu ERA5 über
+Copernicus/ECMWF und Open-Meteo für die Daten.
+
+`LICENSE` bleibt deshalb ein **unveränderter MIT-Text ohne Zusatzklauseln**.
+Ein Ausnahme-Absatz für die Algorithmen würde MIT verwässern und dabei nichts
+gewinnen: Formeln und Verfahren als solche sind ohnehin nicht Gegenstand des
+Urheberrechts — geschuldet ist wissenschaftliche Zuschreibung, und genau die
+leistet der `license`-Block pro Feature bereits verbindlicher, als eine
+Textdatei es könnte. Stattdessen bekommt der README einen kurzen Abschnitt
+*Lizenz*, der die drei Ebenen benennt und auf den Laufzeit-Mechanismus
+verweist, damit niemand MIT auf Daten oder Fachliteratur bezieht.
 
 **Go-Zielversion `1.26.0` mit `toolchain go1.26.6`**, nicht die neueste
 Patch-Version. Begründung: Gleichstand mit ortus, situs und hostus wiegt
