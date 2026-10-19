@@ -29,14 +29,14 @@ jobs:
       # permission-* input the token inherits the App's full installation
       # permissions, which is far more than this workflow needs (zizmor's
       # github-app audit).
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
           permission-contents: write
           permission-pull-requests: write
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -52,18 +52,18 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # cache: false on purpose. This job publishes the release artifacts, and a
       # build cache is writable by any workflow run on the repo — a poisoned
       # cache entry would end up inside a signed release. Rebuilding from
       # scratch costs a minute; the release is worth it. (zizmor cache-poisoning)
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: false
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
