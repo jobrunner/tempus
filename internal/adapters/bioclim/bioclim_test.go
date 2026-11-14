@@ -170,6 +170,16 @@ func TestFetch_ComputesBioAndKoppen(t *testing.T) {
 	if belt, ok := ab["belt"].(map[string]any); !ok || belt["de"] == "" || belt["de"] == nil {
 		t.Errorf("altitudinalBelt.belt = %v, want bilingual name", ab["belt"])
 	}
+	if ind, ok := ab["indicators"].(map[string]any); !ok || ind["matC"] == nil {
+		t.Errorf("altitudinalBelt.indicators = %v, want matC", ab["indicators"])
+	}
+	checkBerlinRivasMartinez(t, ab)
+}
+
+// checkBerlinRivasMartinez checks the Rivas-Martínez part of the Berlin
+// pattern's altitudinal belt.
+func checkBerlinRivasMartinez(t *testing.T, ab map[string]any) {
+	t.Helper()
 	// Berlin pattern: Ic 18 (no compensation), It = (9.58 − 4 + 6)·10 = 115.8 <
 	// 120 → Tp = 1150 → supratemperate (WBCS08 Fig. 19: 800–1400).
 	tt, ok := ab["thermotype"].(map[string]any)
@@ -185,9 +195,6 @@ func TestFetch_ComputesBioAndKoppen(t *testing.T) {
 	}
 	if mb["elevationM"] != 34.0 {
 		t.Errorf("macrobioclimate.elevationM = %v, want 34 (from the archive response)", mb["elevationM"])
-	}
-	if ind, ok := ab["indicators"].(map[string]any); !ok || ind["matC"] == nil {
-		t.Errorf("altitudinalBelt.indicators = %v, want matC", ab["indicators"])
 	}
 }
 

@@ -215,12 +215,12 @@ var rmReferenceStations = []rmStation{
 		precip:    [12]float64{4.9, 4.4, 7.4, 8.2, 9.5, 15.7, 29.3, 32.7, 19, 15, 16.4, 6.7},
 		wantMacro: MacroPolar, wantThermotype: "suprapolar",
 	},
-	{ // Amundsen-Scott South Pole, 2835 m: NOT an official WMO normal. 1991–2020
+	{ // Amundsen-Scott South Pole: NOT an official WMO normal. 1991–2020
 		// mean of the BAS READER monthly means (legacy.bas.ac.uk/met/READER),
 		// which carry no Tmin/Tmax and no precipitation; Tmin = Tmax = Tmean and
 		// P = 0 stand in (polar thermotypes use Tp only, so neither matters).
 		// Step 11: lat −90 < −56 → polar. Tp = 0 → gelid (Fig. 19 "Gélido … 0").
-		name: "South Pole", wmo: "", lat: -90, lon: 0, elev: 2835,
+		name: "South Pole", wmo: "", lat: -90, lon: 0, elev: 0, // elevation unused: the latitude rule decides
 		tmean:     [12]float64{-28.1, -40.7, -53.6, -57.4, -57.7, -58.1, -60.2, -59.6, -58.9, -50.9, -37.2, -27.3},
 		tmin:      [12]float64{-28.1, -40.7, -53.6, -57.4, -57.7, -58.1, -60.2, -59.6, -58.9, -50.9, -37.2, -27.3},
 		tmax:      [12]float64{-28.1, -40.7, -53.6, -57.4, -57.7, -58.1, -60.2, -59.6, -58.9, -50.9, -37.2, -27.3},

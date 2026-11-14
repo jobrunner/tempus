@@ -28,8 +28,10 @@ const (
 	licenseURL   = "https://open-meteo.com/en/license"
 	// cacheVersion is part of every cache key. Bump it whenever the derived
 	// classification changes, or cached features keep the old result for up to
-	// cacheTTL. "2": Köppen-Geiger aligned with Beck et al. 2018.
-	cacheVersion = "2"
+	// cacheTTL. "2": Köppen-Geiger aligned with Beck et al. 2018. "3":
+	// Rivas-Martínez macrobioclimate and thermotype per the WBCS key, with the
+	// archive's elevation (new altitudinalBelt.macrobioclimate object).
+	cacheVersion = "3"
 	cacheTTL     = 365 * 24 * time.Hour
 )
 

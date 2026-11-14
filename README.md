@@ -17,7 +17,7 @@ Quellenangabe.
 | `dewpoint` | Taupunkt und Behaglichkeit (aus dem Wetter-Feature abgeleitet) |
 | `sun` / `moon` | Sonnen-/Mondstand, Auf- und Untergang, Dämmerung, Mondphase |
 | `aggregate` | Vorangegangener Niederschlag (24/72/120 h), Tages-Extrema, Wärmesummen (GDD) |
-| `bioclim` | 19 BIO-Variablen, Köppen-Geiger-Klimazone, Höhenstufe, Thermotyp |
+| `bioclim` | 19 BIO-Variablen, Köppen-Geiger-Klimazone, Höhenstufe, Rivas-Martínez-Makrobioklima und -Thermotyp |
 
 Dazu kommen ein **Batch-Endpunkt** für viele Punkte auf einmal (synchron oder
 als NDJSON-Stream) und ein eingebautes Web-Frontend unter `/`.

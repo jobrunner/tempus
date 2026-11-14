@@ -553,7 +553,9 @@ components:
                 (kollin … alpin … nival), isotherm-defined (treeline 6.4 °C, Paulsen
                 & Körner 2014) and Central-Europe-calibrated so the names are directly
                 comparable to FHL/Hegi belt statements — valid across all of Europe
-                and globally. No elevation input; temperature encodes altitude.
+                and globally. The belt takes no elevation input; temperature encodes
+                altitude. Only the Rivas-Martínez macrobioclimate key uses the
+                grid-cell elevation (see macrobioclimate).
               properties:
                 belt:
                   type: object
@@ -580,13 +582,36 @@ components:
                 thermotype:
                   type: object
                   description: >
-                    Rivas-Martínez thermotype (formal, cross-Europe): horizon from
-                    positive temperature Tp × macrobioclimate suffix, e.g.
-                    orotemperate vs oromediterranean.
+                    Rivas-Martínez thermotype (Worldwide Bioclimatic Classification
+                    System, 2008 online edition, Fig. 19): prefix (infra-, thermo-,
+                    meso-, supra-, oro-, cryoro-) on the ladder of the site's
+                    macrobioclimate, e.g. orotemperate vs oromediterranean, or
+                    "gelid" when Tp = 0. Polar has only thermo-, meso- and
+                    supra-; boreal has no infra-. Decided by the thermicity index
+                    It (Itc outside 23° N/S), or by the positive temperature Tp
+                    when It/Itc < 120, Ic ≥ 21, or the macrobioclimate is boreal
+                    or polar.
                   properties:
-                    code: {type: string}
+                    code: {type: string, description: "Canonical English code, e.g. supratemperate, inframediterranean, suprapolar, gelid."}
                     de: {type: string}
                     en: {type: string}
+                    index: {type: string, enum: [It, Itc, Tp], description: "The index that decided the thermotype."}
+                    value: {type: number, description: "Its value (tenths of °C), rounded."}
+                macrobioclimate:
+                  type: object
+                  description: >
+                    Rivas-Martínez macrobioclimate from the key of the Worldwide
+                    Bioclimatic Classification System (2008 online edition, key
+                    5.1): latitude belts, thermal limits reduced to 200 m with the
+                    grid-cell elevation, continentality and summer drought (Ios
+                    compensation after Rivas-Martínez et al. 2011). Without an
+                    elevation no altitude reduction is applied and elevationM is
+                    absent.
+                  properties:
+                    code: {type: string, enum: [tropical, mediterranean, temperate, boreal, polar]}
+                    de: {type: string, description: "tropisch, mediterran, temperat, boreal or polar."}
+                    en: {type: string}
+                    elevationM: {type: number, description: "Elevation (m) of the Open-Meteo grid cell the normals are downscaled to; used for the altitude reduction."}
                 source: {type: string, description: "Citation for the belt/thermotype computation."}
     QueryResult:
       type: object
