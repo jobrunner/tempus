@@ -4,7 +4,7 @@
 A runner image ships its own Go (and node, python, …), so a step that calls a
 tool outside the flake's dev shell silently uses the image's version. For each
 step whose `run:` calls go, make, a tool the flake provides, or a script that
-calls one, this checks that
+calls one (scripts/* are read and checked the same way), this checks that
 
   * its job has a step `uses: ./.github/actions/nix-shell` before it, and
   * its effective shell (step `shell:`, else job `defaults.run.shell`, else
@@ -21,18 +21,28 @@ Usage: check-workflow-shell.py <workflow.yml>...   Exit 0 ok, 1 violation.
 import re
 import sys
 
-# go, make, the tools of devShells.default in flake.nix, and the repo scripts
-# that call them, in command position (line start, after ; & | ( or $(, or as
-# the script of bash/sh), with an optional path. A tool named inside an echo
-# or a heredoc is prose, not a call. Extend the list together with flake.nix.
+# A command position: line start, after ; & | ( or $(, then any number of
+# VAR=value assignments and env/exec/time/command wrappers, then optionally
+# bash/sh with flags (the script it runs is the command), then a path.
+PREFIX = (
+    r"(?:^|[;&|(]|\$\()\s*"
+    r"(?:(?:env|exec|time|command|nice)(?:\s+-\S+)*\s+"
+    r"|[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\S*)\s+)*"
+    r"(?:(?:bash|sh)(?:\s+-\S+)*\s+)?"
+)
+END = r"(?=[\s;&|)'\"]|$)"
+# go, make and the tools of devShells.default in flake.nix. A tool named
+# inside an echo or a heredoc is prose, not a call. Extend with flake.nix.
 TOOL = re.compile(
-    r"(?:^|[;&|(]|\$\()\s*(?:(?:bash|sh)\s+)?(?:\S*/)?"
+    PREFIX + r"(?:\S*/)?"
     r"(go|make|golangci-lint|govulncheck|goimports|gremlins|oasdiff|gcov2lcov"
-    r"|zizmor|ccsh|node|npm|npx|java"
-    r"|mutation-gate\.sh|vuln-gate\.sh|vuln-autofix\.sh)"
-    r"(?=[\s;&|)]|$)",
+    r"|zizmor|ccsh|node|npm|npx|java)" + END,
     re.M,
 )
+# A repo script in command position. Its own text is checked for tool calls,
+# so a script that calls go (coverage-gate.sh: go list) counts without a list
+# of script names to keep in sync.
+SCRIPT = re.compile(PREFIX + r"((?:\./)?scripts/[\w.-]+)" + END, re.M)
 NIX_ACTION = "./.github/actions/nix-shell"
 
 
@@ -95,11 +105,55 @@ def parse(path):
                 if value[:1] in ("|", ">"):
                     block = (indent, step)
                 else:
-                    step["run"] += value + "\n"
+                    step["run"] += unquote(value) + "\n"
 
         stack.append((indent, key))
 
     return wf_shell, jobs
+
+
+def strip_comments(text):
+    return "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
+
+
+def strip_quoted(text):
+    """Drop quoted literals from a script, so a grep pattern like
+    "(go|node)" is not read as a call. Single quotes never run anything; a
+    double-quoted string is kept when it holds a $(…) command substitution."""
+    text = re.sub(r"'[^'\n]*'", "''", text)
+    return re.sub(r'"(?:[^"\\\n]|\\.)*"', lambda m: m.group(0) if "$(" in m.group(0) else '""', text)
+
+
+def calls_tool(text, seen=None, script=False):
+    """True if text (a run: body, or a script with script=True) calls a
+    toolchain command, directly or through a repo script it runs."""
+    seen = set() if seen is None else seen
+    text = strip_comments(text)
+    if script:
+        text = strip_quoted(text)
+    if TOOL.search(text):
+        return True
+    for m in SCRIPT.finditer(text):
+        script = m.group(1).removeprefix("./")
+        if script in seen:
+            continue
+        seen.add(script)
+        try:
+            with open(script, encoding="utf-8") as f:
+                if calls_tool(f.read(), seen, script=True):
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def unquote(value):
+    """Decode a single-line YAML scalar that is quoted as a whole."""
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return value
 
 
 def check(path):
@@ -110,7 +164,7 @@ def check(path):
         for n, step in enumerate(spec["steps"], 1):
             if step["uses"] == NIX_ACTION:
                 have_nix = True
-            if not TOOL.search(step["run"]):
+            if not calls_tool(step["run"]):
                 continue
             shell = step["shell"] or spec["shell"] or wf_shell or "bash"
             if not have_nix:
