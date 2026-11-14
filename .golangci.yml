@@ -25,6 +25,14 @@ linters:
     - unparam
     - whitespace
   settings:
+    goconst:
+      # Köppen-Geiger codes (Af … EF) are data — the keys of
+      # koppenDescriptions and the expected values of the reference-station
+      # tests — not magic strings; 30 named constants would only rename them.
+      # goconst counts test-file occurrences too, so the station table alone
+      # pushes most codes past the threshold.
+      ignore-string-values:
+        - '^(A[fmw]|B[SW][hk]|[CD][sfw][abcd]|E[FT])$'
     sloglint:
       # Only the trace-correlation rule: a log call with a context in scope
       # must pass it (InfoContext, ErrorContext, …), or SpanContextHandler
