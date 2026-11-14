@@ -141,17 +141,17 @@ func seasonLetter(summer, winter halfYearPrecip) string {
 	}
 }
 
-// heatLetter returns the temperature sub-type: a/b/c, plus d for very cold
-// winters (D climates only).
+// heatLetter returns the temperature sub-type per Beck et al. 2018, Table 2:
+// a "Thot≥22", b "Not (a) & Tmon10≥4", d (D climates only) "Not (a or b) &
+// Tcold<-38", else c. a and b take precedence over d.
 func heatLetter(thot float64, tmon10 int, tcold float64, allowD bool) string {
-	if allowD && tcold < -38 {
-		return "d"
-	}
 	switch {
 	case thot >= 22:
 		return "a"
 	case tmon10 >= 4:
 		return "b"
+	case allowD && tcold < -38:
+		return "d"
 	default:
 		return "c"
 	}
