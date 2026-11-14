@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
 
 	"github.com/jobrunner/tempus/internal/adapters/aggregate"
@@ -30,8 +31,9 @@ type omClients struct {
 
 // buildOpenMeteoClients wires the shared throttling transport. The limiter and
 // budget are shared across all Open-Meteo traffic; weights differ per call
-// type because Open-Meteo weighs long archive ranges as multiple calls.
-func buildOpenMeteoClients(cfg *config.Config, clk output.Clock) omClients {
+// type because Open-Meteo weighs long archive ranges as multiple calls. tp is
+// nil when tracing is disabled; the transports then stay untraced.
+func buildOpenMeteoClients(cfg *config.Config, clk output.Clock, tp trace.TracerProvider) omClients {
 	om := cfg.Providers.OpenMeteo
 	if !om.Enabled {
 		return omClients{}
@@ -44,10 +46,11 @@ func buildOpenMeteoClients(cfg *config.Config, clk output.Clock) omClients {
 		return &http.Client{
 			Timeout: timeout,
 			Transport: omhttp.NewTransport(omhttp.Options{
-				Limiter:       limiter,
-				Budget:        budget,
-				Weight:        weight,
-				RetryAttempts: om.RetryAttempts,
+				Limiter:        limiter,
+				Budget:         budget,
+				Weight:         weight,
+				RetryAttempts:  om.RetryAttempts,
+				TracerProvider: tp,
 			}),
 		}
 	}

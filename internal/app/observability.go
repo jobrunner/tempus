@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 
 	httpapi "github.com/jobrunner/tempus/internal/adapters/http"
 	"github.com/jobrunner/tempus/internal/adapters/metrics"
@@ -18,14 +19,29 @@ const metricsShutdownTimeout = 5 * time.Second
 // omhttpMeterName is the instrumentation scope for the daily-budget gauges.
 const omhttpMeterName = "tempus/omhttp"
 
-// wireObservability sets up tracing and the metrics server as configured and
-// returns the server options carrying the tracer. Both are optional: with
-// tracing disabled the options carry no TracerProvider at all, and the HTTP
-// server skips the tracing middleware when it is nil (see setupRoutes). budget
-// is nil when Open-Meteo is disabled; the budget gauges are then skipped.
-// Anything that needs closing is appended to the app's closers, which is why
-// this is a method rather than a free function.
-func (a *App) wireObservability(version string, budget *omhttp.Budget) (httpapi.Options, error) {
+// startTracing builds the TracerProvider when tracing is enabled and registers
+// its shutdown. It returns a nil interface (never a typed nil) when tracing is
+// disabled, so every consumer's "tp != nil" check means what it says. It runs
+// before the Open-Meteo clients are built, which trace their outbound calls.
+func (a *App) startTracing() (trace.TracerProvider, error) {
+	if !a.cfg.Tracing.Enabled {
+		return nil, nil
+	}
+	tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), a.cfg.Tracing, "tempus")
+	if err != nil {
+		return nil, err
+	}
+	a.closers = append(a.closers, func() error { return shutdown(context.Background()) })
+	return tp, nil
+}
+
+// wireObservability starts the metrics server as configured and returns the
+// server options carrying the tracer. Both are optional: tp is nil with
+// tracing disabled, and the HTTP server skips the tracing middleware then (see
+// setupRoutes). budget is nil when Open-Meteo is disabled; the budget gauges
+// are then skipped. Anything that needs closing is appended to the app's
+// closers, which is why this is a method rather than a free function.
+func (a *App) wireObservability(version string, tp trace.TracerProvider, budget *omhttp.Budget) (httpapi.Options, error) {
 	opts := httpapi.Options{ServiceName: "tempus", Version: version}
 	opts.Batch = httpapi.BatchLimits{
 		MaxPoints:     a.cfg.Query.Batch.MaxPoints,
@@ -40,14 +56,7 @@ func (a *App) wireObservability(version string, budget *omhttp.Budget) (httpapi.
 		TrustedProxies: a.cfg.Server.RateLimit.TrustedProxies,
 	}
 
-	if a.cfg.Tracing.Enabled {
-		tp, shutdown, err := telemetry.NewTracerProvider(context.Background(), a.cfg.Tracing, "tempus")
-		if err != nil {
-			return httpapi.Options{}, err
-		}
-		opts.TracerProvider = tp
-		a.closers = append(a.closers, func() error { return shutdown(context.Background()) })
-	}
+	opts.TracerProvider = tp
 
 	if a.cfg.Metrics.Enabled {
 		if err := a.startMetricsServer(budget); err != nil {

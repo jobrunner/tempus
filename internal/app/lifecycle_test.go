@@ -170,7 +170,7 @@ func TestBuildRegistry_RespectsConfiguration(t *testing.T) {
 
 	kinds := func(cfg *config.Config) map[string]bool {
 		out := map[string]bool{}
-		clients := buildOpenMeteoClients(cfg, stoppedClock{})
+		clients := buildOpenMeteoClients(cfg, stoppedClock{}, nil)
 		for _, p := range buildRegistry(cfg, cache, stoppedClock{}, clients).Providers(context.Background()) {
 			out[p.Kind] = true
 		}
