@@ -38,28 +38,42 @@ func (c *memCache) Set(_ context.Context, k string, v []byte, _ time.Duration) e
 }
 
 // berlinBody returns a canned archive response: one day per month for two
-// years, following a Berlin-like temperate pattern (→ Cfb), precip 50 mm/month.
+// years, following a Berlin-like temperate pattern (→ Cfb), precip 50 mm/month,
+// with the grid-cell elevation Open-Meteo reports (34 m).
 func berlinBody() []byte {
-	pattern := []float64{1, 2, 5, 9, 14, 17, 19, 18, 14, 9, 5, 2}
+	pattern := [12]float64{1, 2, 5, 9, 14, 17, 19, 18, 14, 9, 5, 2}
+	var tmin, tmax, precip [12]float64
+	for m, v := range pattern {
+		tmin[m], tmax[m], precip[m] = v-5, v+5, 50
+	}
+	return cannedBody(52.5, 13.4, 34.0, pattern, tmin, tmax, precip)
+}
+
+// cannedBody builds an archive response from monthly normals: one day per
+// month for two years. elev is the top-level "elevation" field; nil omits it.
+func cannedBody(lat, lon float64, elev any, tmean, tmin, tmax, precip [12]float64) []byte {
 	var times []string
-	var tmax, tmin, tmean, precip []float64
+	var dmax, dmin, dmean, dprecip []float64
 	for _, y := range []int{1991, 1992} {
 		for m := 1; m <= 12; m++ {
 			times = append(times, fmt.Sprintf("%d-%02d-15", y, m))
-			v := pattern[m-1]
-			tmean = append(tmean, v)
-			tmin = append(tmin, v-5)
-			tmax = append(tmax, v+5)
-			precip = append(precip, 50)
+			dmean = append(dmean, tmean[m-1])
+			dmin = append(dmin, tmin[m-1])
+			dmax = append(dmax, tmax[m-1])
+			dprecip = append(dprecip, precip[m-1])
 		}
 	}
-	body, _ := json.Marshal(map[string]any{
-		"latitude": 52.5, "longitude": 13.4,
+	resp := map[string]any{
+		"latitude": lat, "longitude": lon,
 		"daily": map[string]any{
-			"time": times, "temperature_2m_max": tmax, "temperature_2m_min": tmin,
-			"temperature_2m_mean": tmean, "precipitation_sum": precip,
+			"time": times, "temperature_2m_max": dmax, "temperature_2m_min": dmin,
+			"temperature_2m_mean": dmean, "precipitation_sum": dprecip,
 		},
-	})
+	}
+	if elev != nil {
+		resp["elevation"] = elev
+	}
+	body, _ := json.Marshal(resp)
 	return body
 }
 
@@ -156,8 +170,21 @@ func TestFetch_ComputesBioAndKoppen(t *testing.T) {
 	if belt, ok := ab["belt"].(map[string]any); !ok || belt["de"] == "" || belt["de"] == nil {
 		t.Errorf("altitudinalBelt.belt = %v, want bilingual name", ab["belt"])
 	}
-	if tt, ok := ab["thermotype"].(map[string]any); !ok || tt[keyCode] == "" || tt[keyCode] == nil {
-		t.Errorf("altitudinalBelt.thermotype = %v, want a code", ab["thermotype"])
+	// Berlin pattern: Ic 18 (no compensation), It = (9.58 − 4 + 6)·10 = 115.8 <
+	// 120 → Tp = 1150 → supratemperate (WBCS08 Fig. 19: 800–1400).
+	tt, ok := ab["thermotype"].(map[string]any)
+	if !ok || tt[keyCode] != "supratemperate" || tt["de"] != "supratemperat" || tt["en"] != "supratemperate" {
+		t.Errorf("altitudinalBelt.thermotype = %v, want supratemperate", ab["thermotype"])
+	}
+	if tt["index"] != "Tp" || tt["value"] != 1150.0 {
+		t.Errorf("thermotype index/value = %v/%v, want Tp/1150", tt["index"], tt["value"])
+	}
+	mb, ok := ab["macrobioclimate"].(map[string]any)
+	if !ok || mb[keyCode] != "temperate" || mb["de"] != "temperat" || mb["en"] != "temperate" {
+		t.Errorf("altitudinalBelt.macrobioclimate = %v, want temperate", ab["macrobioclimate"])
+	}
+	if mb["elevationM"] != 34.0 {
+		t.Errorf("macrobioclimate.elevationM = %v, want 34 (from the archive response)", mb["elevationM"])
 	}
 	if ind, ok := ab["indicators"].(map[string]any); !ok || ind["matC"] == nil {
 		t.Errorf("altitudinalBelt.indicators = %v, want matC", ab["indicators"])

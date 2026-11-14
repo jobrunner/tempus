@@ -68,6 +68,9 @@ func (p *Provider) Attribution() domain.License {
 type dailyResponse struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
+	// Elevation is the grid-cell elevation (m) Open-Meteo downscales the
+	// temperatures to (90 m DEM by default); nil when the response lacks it.
+	Elevation *float64 `json:"elevation"`
 	Daily     struct {
 		Time   []string   `json:"time"`
 		TMax   []*float64 `json:"temperature_2m_max"`
@@ -144,7 +147,7 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 			"bio18": rmm(b.Bio18), "bio19": rmm(b.Bio19),
 		},
 		"koppen":          koppen,
-		"altitudinalBelt": altitudinalBeltProps(clim, data.Latitude),
+		"altitudinalBelt": altitudinalBeltProps(clim, rmSite(data)),
 		"units": map[string]string{
 			"temperature": "°C", "precipitation": "mm",
 			"bio3": "%", "bio4": "°C×100 (Std.abw.)", "bio15": "% (Variationskoeffizient)",
@@ -223,12 +226,33 @@ func valueAt(s []*float64, i int) *float64 {
 func r1(v float64) float64  { return math.Round(v*10) / 10 }
 func rmm(v float64) float64 { return math.Round(v) }
 
+// rmSite is the Rivas-Martínez site of the archive response: the resolved grid
+// cell and its elevation. The archive's temperatures are downscaled to exactly
+// that elevation, so it is the one the WBCS altitude reduction must start from.
+// Without it the key runs unreduced (documented fallback, see
+// docs/research/rivas-martinez-reference.md).
+func rmSite(data dailyResponse) domain.RivasMartinezSite {
+	s := domain.RivasMartinezSite{Lat: data.Latitude, Lon: data.Longitude}
+	if data.Elevation != nil && !math.IsNaN(*data.Elevation) {
+		s.ElevationM, s.ElevationKnown = *data.Elevation, true
+	}
+	return s
+}
+
 // altitudinalBeltProps builds the climate-derived altitudinal belt object: the
 // classic belt name (source of truth for FHL comparison), the deciding
-// indicators, a borderline flag, and the Rivas-Martínez thermotype.
-func altitudinalBeltProps(clim domain.MonthlyClimate, latDeg float64) map[string]any {
+// indicators, a borderline flag, and the Rivas-Martínez macrobioclimate and
+// thermotype.
+func altitudinalBeltProps(clim domain.MonthlyClimate, site domain.RivasMartinezSite) map[string]any {
 	belt := domain.AltitudinalBelt(clim)
-	tCode, tDe, tEn := domain.RivasMartinezThermotype(clim, latDeg)
+	rm := domain.RivasMartinez(clim, site)
+	tt := rm.Thermotype
+	macro := map[string]any{
+		keyCode: string(rm.Macrobioclimate), "de": rm.Macrobioclimate.De(), "en": string(rm.Macrobioclimate),
+	}
+	if site.ElevationKnown {
+		macro["elevationM"] = rmm(site.ElevationM)
+	}
 
 	out := map[string]any{
 		"belt":       map[string]any{"de": belt.De, "en": belt.En},
@@ -240,8 +264,11 @@ func altitudinalBeltProps(clim domain.MonthlyClimate, latDeg float64) map[string
 			"matC":            r1(belt.MATC),
 			"biotemperatureC": r1(belt.BiotemperatureC),
 		},
-		"thermotype": map[string]any{keyCode: tCode, "de": tDe, "en": tEn},
-		"source":     domain.BeltSource,
+		"thermotype": map[string]any{
+			keyCode: tt.Code, "de": tt.De, "en": tt.En, "index": tt.Index, "value": rmm(tt.Value),
+		},
+		"macrobioclimate": macro,
+		"source":          domain.BeltSource,
 	}
 	if belt.Borderline {
 		out["adjacentBelt"] = map[string]any{"de": belt.AdjDe, "en": belt.AdjEn}
