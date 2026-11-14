@@ -43,11 +43,16 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 		a.closers = append(a.closers, closer)
 	}
 
+	tp, err := a.startTracing()
+	if err != nil {
+		return nil, err
+	}
+
 	clk := clock.System{}
-	clients := buildOpenMeteoClients(cfg, clk)
+	clients := buildOpenMeteoClients(cfg, clk, tp)
 	registry := buildRegistry(cfg, cache, clk, clients)
 
-	serverOpts, err := a.wireObservability(version, clients.budget)
+	serverOpts, err := a.wireObservability(version, tp, clients.budget)
 	if err != nil {
 		return nil, err
 	}

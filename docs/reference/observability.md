@@ -36,9 +36,16 @@ to your OTLP collector. Spans are exported via gRPC (default) or HTTP.
 Trace structure for a typical query:
 
 ```
-tempus.query                       (root span, route: /api/v1/query)
-  └── provider.fetch open-meteo   (per-provider upstream fetch or cache read)
+GET /api/v1/query        (server span, one per inbound request)
+  ├── HTTP GET           (client span, one per Open-Meteo attempt)
+  └── HTTP GET           (a retry gets its own client span)
 ```
 
-Span attributes include `lat`, `lon`, `datetime`, `provider_id`, and
-`cache_hit`.
+Every call to Open-Meteo that actually goes over the wire becomes a client
+span (with `http.response.status_code`) under the inbound request's span; cache
+hits make none. The waits around them are recorded as events on the inbound
+span: `open-meteo.retry` (`retry.attempt`, `retry.wait_ms`, and the status code
+or error that triggered it) and `open-meteo.budget_exhausted` when a batch
+request is rejected locally for lack of daily budget. Trace context is **not**
+propagated to Open-Meteo: it is a third party, so no `traceparent` header is
+sent upstream.
