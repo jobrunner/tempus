@@ -84,9 +84,9 @@ func warmColdHalfPrecip(c MonthlyClimate) (pss, psw float64) {
 // on a tie), of the four months after it (Cm2) and of the four before it (Cm3)
 // (WBCS08 ch. 2a).
 func fourMonthPrecip(c MonthlyClimate) (pcm1, pcm2, pcm3 float64) {
-	start, best := 0, math.Inf(-1)
-	for i := range 12 {
-		if t := sum4(c.Tmean, i); t > best {
+	start, best := 0, sum4(c.Tmean, 0)
+	for i := 1; i < 12; i++ {
+		if t := sum4(c.Tmean, i); above(t, best) {
 			start, best = i, t
 		}
 	}

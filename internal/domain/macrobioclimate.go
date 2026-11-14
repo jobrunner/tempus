@@ -94,17 +94,17 @@ func subtropicalKey(ix rmIndices, s RivasMartinezSite) Macrobioclimate {
 	if inHighAsia(s) { // step 3 → 10
 		return temperateOrMediterranean(ix)
 	}
-	if countTrue(ix.T >= step4T, ix.m >= step4m, ix.Itc >= step4Itc) >= 2 { // step 4
+	if countTrue(atLeast(ix.T, step4T), atLeast(ix.m, step4m), atLeast(ix.Itc, step4Itc)) >= 2 { // step 4
 		return MacroTropical
 	}
 	e := hundredsAbove200m(s)
-	if countTrue(ix.T+reduceT*e > step5T, ix.M+reduceM*e > step5M, ix.Itc+reduceItc*e >= step5Itc) < 2 { // step 5
+	if countTrue(above(ix.T+reduceT*e, step5T), above(ix.M+reduceM*e, step5M), atLeast(ix.Itc+reduceItc*e, step5Itc)) < 2 { // step 5
 		return temperateOrMediterranean(ix) // step 8
 	}
-	if ix.Pss > ix.Psw || !mediterraneanSummer(ix.Io, ix.Ios2, ix.Ios3, ix.Ios4) { // steps 6, 7
+	if above(ix.Pss, ix.Psw) || !mediterraneanSummer(ix.Io, ix.Ios2, ix.Ios3, ix.Ios4) { // steps 6, 7
 		return MacroTropical
 	}
-	if ix.Pcm1 > ix.Pcm3 && ix.Pcm1 > ix.Pcm2 { // step 9: "Pcm3 < Pcm1 > Pcm2"
+	if above(ix.Pcm1, ix.Pcm3) && above(ix.Pcm1, ix.Pcm2) { // step 9: "Pcm3 < Pcm1 > Pcm2"
 		return MacroTropical
 	}
 	return MacroMediterranean

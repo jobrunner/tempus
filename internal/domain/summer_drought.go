@@ -17,25 +17,28 @@ func temperateOrMediterranean(ix rmIndices) Macrobioclimate {
 }
 
 // iosCompensation is P14 Table 2 ("Compensation threshold values derived from
-// Rivas-Martínez et al. (2011)"): per upper bound of the annual Io, the Ios2
+// Rivas-Martínez et al. (2011)"): per (inclusive) upper bound of the annual Io, the Ios2
 // and Ios3 limits; the Ios4 limit is 2.0 in every row. WBCS08 Fig. 6 has the
 // same values from Io 2.0 up. "–" cells (Io ≤ 2.8 for Ios3, Io ≤ 2.0 for both)
 // are taken as the uncompensated 2.0.
 var iosCompensation = []struct{ ioMax, ios2, ios3 float64 }{
 	{2.0, 2.0, 2.0}, {2.8, 1.9, 2.0}, {3.6, 1.8, 1.9}, {4.8, 1.8, 1.9},
 	{6.0, 1.7, 1.9}, {7.0, 1.5, 1.8}, {8.0, 1.4, 1.8}, {9.0, 1.3, 1.8},
-	{10.0, 1.2, 1.8}, {11.0, 1.1, 1.7}, {12.0, 1.0, 1.7}, {math.Inf(1), 0.9, 1.7},
+	{10.0, 1.2, 1.8}, {11.0, 1.1, 1.7}, {12.0, 1.0, 1.7},
 }
+
+// iosAbove12 is the last row of P14 Table 2, "> 12.0".
+var iosAbove12 = struct{ ios2, ios3 float64 }{0.9, 1.7}
 
 // iosLimits returns the Ios2 and Ios3 limits for the annual Io. P14 writes the
 // rows as "2.01–2.8", so each upper bound is inclusive.
 func iosLimits(io float64) (lim2, lim3 float64) {
 	for _, r := range iosCompensation {
-		if io <= r.ioMax {
+		if atMost(io, r.ioMax) { // a NaN Io takes the first, uncompensated row
 			return r.ios2, r.ios3
 		}
 	}
-	return 2, 2 // only a NaN Io gets here: no compensation
+	return iosAbove12.ios2, iosAbove12.ios3
 }
 
 // mediterraneanSummer reports a Mediterranean summer drought, following the
@@ -47,14 +50,14 @@ func iosLimits(io float64) (lim2, lim3 float64) {
 func mediterraneanSummer(io, ios2, ios3, ios4 float64) bool {
 	lim2, lim3 := iosLimits(io)
 	switch {
-	case ios2 > 2:
+	case above(ios2, 2):
 		return false
-	case ios2 < lim2, ios3 < lim3:
+	case below(ios2, lim2), below(ios3, lim3):
 		return true
-	case ios3 > 2:
+	case above(ios3, 2):
 		return false
 	default:
-		return ios4 < 2
+		return below(ios4, 2)
 	}
 }
 
@@ -102,7 +105,7 @@ func summerIndices(c MonthlyClimate, latDeg float64, ix *rmIndices) {
 		pre, q = 10, [3]int{11, 0, 1}
 	}
 	a, b := q[0], q[1]
-	if c.Tmean[q[1]]+c.Tmean[q[2]] > c.Tmean[q[0]]+c.Tmean[q[1]] {
+	if above(c.Tmean[q[1]]+c.Tmean[q[2]], c.Tmean[q[0]]+c.Tmean[q[1]]) {
 		a, b = q[1], q[2]
 	}
 	ix.Ios2 = ombrothermic(c, a, b)

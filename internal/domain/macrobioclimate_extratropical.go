@@ -10,10 +10,10 @@ func extratropicalKey(ix rmIndices, s RivasMartinezSite) Macrobioclimate {
 		return MacroPolar
 	}
 	t, tp := reducedTTp(ix, s)
-	if tp < polarTp { // step 11, Tp at 200 m; Tp = 380 goes on to step 12
+	if below(tp, polarTp) { // step 11, Tp at 200 m; Tp = 380 goes on to step 12
 		return MacroPolar
 	}
-	if ix.Ic < step12Ic && ix.Tps <= step12Tps && ix.Tmax <= step12Tmax { // step 12
+	if below(ix.Ic, step12Ic) && atMost(ix.Tps, step12Tps) && atMost(ix.Tmax, step12Tmax) { // step 12
 		return MacroBoreal
 	}
 	if borealByContinentality(ix.Ic, t, tp) { // step 13
@@ -26,12 +26,12 @@ func extratropicalKey(ix rmIndices, s RivasMartinezSite) Macrobioclimate {
 // Tp < 720; … Ic = 21-28, T < 4.8º y Tp < 740; … Ic > 28, T < 3.8º y Tp < 800".
 func borealByContinentality(ic, t, tp float64) bool {
 	switch {
-	case ic < 21:
-		return t < 5.3 && tp < 720
-	case ic <= 28:
-		return t < 4.8 && tp < 740
+	case below(ic, 21):
+		return below(t, 5.3) && below(tp, 720)
+	case atMost(ic, 28):
+		return below(t, 4.8) && below(tp, 740)
 	default:
-		return t < 3.8 && tp < 800
+		return below(t, 3.8) && below(tp, 800)
 	}
 }
 

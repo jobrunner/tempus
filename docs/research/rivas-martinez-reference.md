@@ -272,13 +272,25 @@ It/Tp switch at 21, Tp 1383 vs 1400), Perth (It 455 vs 450; dossier).
 
 **Cross-check over all 4,339 WMO 1991–2020 stations with T, Tmin, Tmax, P and
 elevation:** the Go implementation and an independent Python implementation of
-this document agree at 4,338 stations; the one difference (Craiova, 15450: Tp is
-exactly 1400 in decimal, and the two implementations round the binary sum to
-opposite sides of the meso/supra bound) is a floating-point tie, not a rule
-difference. Distribution: temperate 1,920, tropical 1,078,
-mediterranean 991, boreal 322, polar 28. The thermotype code differs at 2,264 of
+this document agree at all 4,339 stations. Distribution: temperate 1,920,
+tropical 1,078, mediterranean 991, boreal 322, polar 28. Before the roundoff
+fix below they differed at one station, Craiova (15450): its Tp is exactly 1400
+in decimal, but the Go float sum was 1400.0000000000002 and landed on the
+mesotemperate side. The thermotype code differs at 2,265 of
 the 4,339 stations from the output of the code before both the Köppen and this
 fix (tempus `main` @ d9213d9).
+
+**Values exactly on a bound.** Normals carry one decimal, so indices built
+from sums and means (T, Tp, Tps, Ic, It/Itc, Io, Ios, Pss/Psw, Pcm) are exact
+in decimal but not in binary, and a value that sits on a bound can land on
+either side of it. tempus compares them with `above`/`atLeast`/`below`/`atMost`
+(`internal/domain/roundoff.go`): a value within 1e-9 (relative to the bound,
+at least absolute) of the bound counts as on it, and the source's strict or
+non-strict inequality decides, as for the exact decimal. Pinned by
+`rm_roundoff_test.go` (Craiova, plus one-decimal inputs exactly on the Tp
+ladder bound, It = 120, Ic = 21 and step 13's T < 3.8). The Köppen 70 % share
+and the warmer-half-year choice use the same helpers. The Itc compensation is
+continuous in Ic, so its piecewise bounds are left as plain comparisons.
 
 ## Open gaps
 

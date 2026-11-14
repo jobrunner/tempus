@@ -5,7 +5,7 @@ import "testing"
 // Regression tests for float roundoff at the Rivas-Martínez bounds. Monthly
 // normals carry one decimal; their sums and means are exact in decimal but not
 // in binary, so a value that sits exactly on a bound can land on either side
-// of it (the same class as the Köppen 70 % case, see shareTolerance). Each
+// of it (the same class as the Köppen 70 % case; see roundoffTolerance). Each
 // input below is exactly on its bound in decimal and was picked so that the
 // naive float computation lands on the wrong side. The expected class is the
 // one the source's inequality gives for the exact decimal value.

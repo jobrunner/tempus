@@ -39,11 +39,12 @@ type thermoBound struct {
 
 // itLadders are the It/Itc columns of Fig. 19. Boreal and polar have none
 // ("-"): their thermotype always comes from Tp. The lowest rung is the
-// thermotype that reaches down to It/Itc 120, below which Tp takes over.
+// thermotype that reaches down to It/Itc 120, below which Tp takes over; its
+// bound 0 only closes the ladder (the It ladder is entered at It/Itc ≥ 120).
 var itLadders = map[Macrobioclimate][]thermoBound{
-	MacroTropical:      {{710, prefixInfra}, {490, prefixThermo}, {320, prefixMeso}, {160, prefixSupra}, {math.Inf(-1), prefixOro}},
-	MacroMediterranean: {{450, prefixInfra}, {350, prefixThermo}, {220, prefixMeso}, {math.Inf(-1), prefixSupra}},
-	MacroTemperate:     {{410, prefixInfra}, {290, prefixThermo}, {190, prefixMeso}, {math.Inf(-1), prefixSupra}},
+	MacroTropical:      {{710, prefixInfra}, {490, prefixThermo}, {320, prefixMeso}, {160, prefixSupra}, {0, prefixOro}},
+	MacroMediterranean: {{450, prefixInfra}, {350, prefixThermo}, {220, prefixMeso}, {0, prefixSupra}},
+	MacroTemperate:     {{410, prefixInfra}, {290, prefixThermo}, {190, prefixMeso}, {0, prefixSupra}},
 }
 
 // tpLadders are the Tp columns of Fig. 19; every ladder ends with Tp > 0, and
@@ -107,12 +108,12 @@ func thermotypeFor(ix rmIndices, mb Macrobioclimate, latDeg float64) Thermotype 
 		index, value = indexItc, ix.Itc
 	}
 	ladder, hasIt := itLadders[mb]
-	if !hasIt || value < thermotypeTpIt || ix.Ic >= thermotypeTpIc {
+	if !hasIt || below(value, thermotypeTpIt) || atLeast(ix.Ic, thermotypeTpIc) {
 		index, value, ladder = indexTp, ix.Tp, tpLadders[mb]
 	}
 	t := Thermotype{Code: gelid, De: gelid, En: gelid, Index: index, Value: value}
 	for _, b := range ladder {
-		if value > b.lower {
+		if above(value, b.lower) {
 			t.Code, t.De, t.En = b.prefix+string(mb), b.prefix+mb.De(), b.prefix+string(mb)
 			break
 		}

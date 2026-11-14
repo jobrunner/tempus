@@ -94,18 +94,12 @@ func KoppenGeiger(c MonthlyClimate, _ float64) (code, de, en string) {
 	return code, desc.de, desc.en
 }
 
-// shareTolerance is the relative slack for comparing a seasonal precipitation
-// sum with a fraction of the annual one. Both are float sums of monthly values
-// that round differently (one-decimal normals totalling 404 mm sum to
-// 403.99999999999994), so an exact 70 % could otherwise count as more. 1e-9 of
-// the annual total is far below any real difference (0.1 mm on 400 mm is 2.5e-4).
-const shareTolerance = 1e-9
-
 // moreThan70Percent reports whether part is strictly more than 70 % of total
 // (Beck et al. 2018, Table 2: ">70%"), compared as 10·part > 7·total so the
-// inexact 0.7 never enters, and only beyond summation roundoff.
+// inexact 0.7 never enters, and only beyond summation roundoff: both are
+// float sums of monthly values that round differently (see roundoffTolerance).
 func moreThan70Percent(part, total float64) bool {
-	return 10*part-7*total > shareTolerance*total
+	return above(10*part, 7*total)
 }
 
 func koppenB(mapp, pth, mat float64) string {
@@ -191,7 +185,7 @@ func halfYears(tmean [12]float64) (summer, winter [6]int) {
 		tAMJJAS += tmean[amjjas[i]]
 		tONDJFM += tmean[ondjfm[i]]
 	}
-	if tONDJFM > tAMJJAS {
+	if above(tONDJFM, tAMJJAS) {
 		return ondjfm, amjjas
 	}
 	return amjjas, ondjfm
