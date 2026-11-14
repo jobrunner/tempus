@@ -56,10 +56,20 @@
             jq
           ];
 
-          # The go binary from nixpkgs only bootstraps: with GOTOOLCHAIN=auto
-          # the toolchain directive in go.mod picks the Go that builds, tests
-          # and gets scanned by govulncheck, the same one the Dockerfile pins.
-          GOTOOLCHAIN = "auto";
+          # The go binary from nixpkgs only bootstraps. The Go that builds,
+          # tests and gets scanned by govulncheck is exactly go.mod's toolchain
+          # directive, the one the Dockerfile pins. Not GOTOOLCHAIN=auto: that
+          # only ever switches UP, so once nixpkgs ships a newer patch release
+          # than go.mod names, the scan would see a newer stdlib than the
+          # release binary. Same rule as scripts/vuln-gate.sh; read when the
+          # shell starts (direnv reloads on go.mod changes, see .envrc).
+          shellHook = ''
+            if [ -f go.mod ]; then
+              GOTOOLCHAIN=$(awk '$1 == "toolchain" { print $2 }' go.mod)
+              [ -n "$GOTOOLCHAIN" ] || GOTOOLCHAIN="go$(awk '$1 == "go" { print $2 }' go.mod)"
+              export GOTOOLCHAIN
+            fi
+          '';
           # The release binary is static (Dockerfile, .goreleaser.yml), and
           # mkShellNoCC brings no C compiler.
           CGO_ENABLED = "0";
