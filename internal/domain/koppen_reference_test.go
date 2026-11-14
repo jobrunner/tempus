@@ -292,6 +292,10 @@ func TestKoppenGeiger_Beck2018Thresholds(t *testing.T) {
 		// at a southern latitude.
 		{"half-years follow temperature, not latitude sign", temp16,
 			[12]float64{5, 5, 20, 10, 100, 200, 200, 150, 100, 60, 20, 5}, -30, "Cwa"},
+		// Beck 2018 leaves a temperature tie between the halves open; tempus
+		// takes April–September as summer, so the dry June makes it "s".
+		{"equal half-year temperatures take April–September as summer", constPrecip(15),
+			[12]float64{100, 100, 100, 50, 50, 10, 50, 50, 50, 100, 100, 100}, 45, "Csb"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

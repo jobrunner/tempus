@@ -35,9 +35,15 @@ func KoppenBorderline(c MonthlyClimate, latDeg float64) (borderline bool, adjCod
 }
 
 // KoppenGeiger classifies the Köppen-Geiger climate from the monthly climate
-// normals and latitude, following the criteria of Beck et al. (2018). It
-// returns the code (e.g. "Cfb") and a bilingual description.
-func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
+// normals, following Beck et al. (2018), Sci. Data 5:180214, Table 2 and its
+// Methods text (sources and reference stations:
+// docs/research/koppen-reference.md). It returns the code (e.g. "Cfb") and a
+// bilingual description.
+//
+// The second argument (latitude, degrees) is ignored: Beck et al. define the
+// summer/winter half-years by temperature, not by hemisphere. It stays in the
+// signature so the bioclim adapter and the thermotype code keep their call.
+func KoppenGeiger(c MonthlyClimate, _ float64) (code, de, en string) {
 	mat := mean12(c.Tmean)
 	mapp := sum12(c.Precip)
 	thot := max12(c.Tmean)
@@ -53,8 +59,7 @@ func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
 		}
 	}
 
-	// Summer is the warm half-year (Apr–Sep north, Oct–Mar south).
-	summer, winter := halfYears(latDeg)
+	summer, winter := halfYears(c.Tmean)
 	ps := seasonStats(c.Precip, summer)
 	pw := seasonStats(c.Precip, winter)
 
@@ -157,15 +162,22 @@ func heatLetter(thot float64, tmon10 int, tcold float64, allowD bool) string {
 	}
 }
 
-// halfYears returns the summer and winter month indices (0=Jan) for the
-// hemisphere. Northern summer is Apr–Sep; southern summer is Oct–Mar.
-func halfYears(latDeg float64) (summer, winter [6]int) {
-	north := [6]int{3, 4, 5, 6, 7, 8}
-	south := [6]int{9, 10, 11, 0, 1, 2}
-	if latDeg < 0 {
-		return south, north
+// halfYears returns the summer and winter month indices (0=Jan). Beck et al.
+// 2018, Table 2 footnote: "Summer (winter) is the six-month period that is
+// warmer (colder) between April-September and October-March." The source
+// leaves an exact tie open; tempus then takes April–September as summer.
+func halfYears(tmean [12]float64) (summer, winter [6]int) {
+	amjjas := [6]int{3, 4, 5, 6, 7, 8}
+	ondjfm := [6]int{9, 10, 11, 0, 1, 2}
+	var tAMJJAS, tONDJFM float64
+	for i := range amjjas {
+		tAMJJAS += tmean[amjjas[i]]
+		tONDJFM += tmean[ondjfm[i]]
 	}
-	return north, south
+	if tONDJFM > tAMJJAS {
+		return ondjfm, amjjas
+	}
+	return amjjas, ondjfm
 }
 
 // halfYearPrecip is the precipitation total, driest and wettest month of a
