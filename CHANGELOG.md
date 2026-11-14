@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.3](https://github.com/jobrunner/tempus/compare/v0.24.2...v0.24.3) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deps:** close the reachable CVEs govulncheck reports on main ([#84](https://github.com/jobrunner/tempus/issues/84)) ([4b87bb2](https://github.com/jobrunner/tempus/commit/4b87bb2847de6365113615e6dd796ed6380a4a86))
+
 ## [0.24.2](https://github.com/jobrunner/tempus/compare/v0.24.1...v0.24.2) (2026-09-14)
 
 
