@@ -276,6 +276,33 @@ func TestKoppenGeiger_Beck2018Thresholds(t *testing.T) {
 		{"exactly 70 % summer precipitation uses the even threshold", temp15,
 			[12]float64{25, 25, 25, 60, 60, 60, 60, 55, 55, 25, 25, 25}, 40, "Cfa"},
 
+		// Above 70 % the seasonal thresholds apply: 360 of 500 mm in summer
+		// gives Pth = 2·15+28 = 58 and MAP 500 < 580 (arid); 290 of 400 mm in
+		// winter gives Pth = 2·15 = 30 and MAP 400 ≥ 300 (not arid).
+		{"72 % summer precipitation uses 2·MAT+28", temp15,
+			[12]float64{25, 25, 20, 60, 60, 60, 60, 60, 60, 25, 25, 20}, 40, "BSk"},
+		{"72.5 % winter precipitation uses 2·MAT", temp15,
+			[12]float64{50, 50, 40, 20, 20, 20, 20, 15, 15, 50, 50, 50}, 40, "Csa"},
+		// B "MAP<10×Pthreshold": MAT 15, even split, Pth 44, MAP exactly 440.
+		{"MAP exactly 10·Pth is not B", temp15,
+			[12]float64{35, 40, 40, 40, 40, 35, 35, 35, 35, 35, 35, 35}, 40, "Cfa"},
+		// BS "MAP≥5×Pthreshold", h "MAT≥18": MAT exactly 18, even split, so
+		// Pth = 50 and MAP exactly 250 = 5·Pth.
+		{"MAP exactly 5·Pth with MAT exactly 18 is BSh", [12]float64{10, 12, 15, 18, 21, 24, 26, 25, 22, 18, 14, 11},
+			[12]float64{20, 20, 20, 20, 20, 20, 20, 20, 25, 20, 20, 25}, 30, "BSh"},
+
+		// A "Tcold≥18"; C "0<Tcold<18"; D "Tcold≤0".
+		{"Tcold exactly 18 is A", [12]float64{18, 19, 20, 21, 22, 23, 23, 22, 21, 20, 19, 18}, constPrecip(100), 10, "Af"},
+		{"Tcold exactly 0 is D", [12]float64{0, 1, 4, 8, 12, 16, 18, 17, 13, 8, 4, 1}, constPrecip(60), 50, "Dfb"},
+
+		// s "Psdry<40 & Psdry<Pwwet/3" and w "Pwdry<Pswet/10" are strict.
+		{"Psdry exactly 40 is not s", temp16,
+			[12]float64{100, 100, 100, 40, 60, 60, 60, 60, 60, 150, 100, 100}, 30, "Cfa"},
+		{"Psdry exactly Pwwet/3 is not s", temp16,
+			[12]float64{80, 80, 80, 30, 50, 50, 50, 50, 50, 90, 80, 80}, 30, "Cfa"},
+		{"Pwdry exactly Pswet/10 is not w", temp16,
+			[12]float64{50, 50, 50, 100, 80, 80, 80, 80, 80, 10, 50, 50}, 30, "Cfa"},
+
 		// s "Psdry<40 & Psdry<Pwwet/3" and w "Pwdry<Pswet/10" both hold here.
 		// Beck 2018 Methods: "assigning s when more precipitation falls in
 		// winter than in summer and assigning w otherwise" (D3).
