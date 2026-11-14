@@ -113,14 +113,12 @@ tools_from_flake() {
       "$WORKFLOWS"/*.yml 2>/dev/null | grep -v '/release-please\.yml$' | grep -q .
 }
 
-# A runner image ships its own Go, so dropping setup-go is not enough: a
-# workflow that runs go or make must enter the dev shell, or it silently uses
-# the image's toolchain.
+# A runner image ships its own Go, so dropping setup-go is not enough: every
+# step that runs go, make or a flake tool must run in the dev shell, or it
+# silently uses the image's toolchain. Checked per job and step on the
+# workflow structure, comments ignored (scripts/check-workflow-shell.py).
 toolchain_jobs_use_flake() {
-  for wf in "$WORKFLOWS"/*.yml; do
-    grep -qE "^[[:space:]]*(-[[:space:]]+)?run:.*(^|[[:space:]|;&])(go|make)[[:space:]]|^[[:space:]]+(go|make)[[:space:]][a-z]" "$wf" || continue
-    grep -q 'actions/nix-shell' "$wf" || return 1
-  done
+  python3 scripts/check-workflow-shell.py "$WORKFLOWS"/*.yml
 }
 
 # The Makefile calls tools by name from the dev shell; a `go run …@v` or
@@ -221,7 +219,7 @@ echo "— Toolchain hygiene"
 check go-version-file      "no hardcoded go-version"         no_hardcoded_go
 check docker-go-toolchain  "Dockerfile golang = go.mod"      docker_go_matches_toolchain
 check tools-from-flake     "workflows install no own tools"  tools_from_flake
-check toolchain-in-flake   "go/make steps run in the flake"  toolchain_jobs_use_flake
+check toolchain-in-flake   "tool steps run in the flake"     toolchain_jobs_use_flake
 check makefile-tools       "Makefile fetches no own tools"   makefile_tools_from_flake
 
 # Waiver ratchet.
