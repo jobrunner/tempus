@@ -28,14 +28,11 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(wrapped, r)
-		fields := []any{
+		// trace_id/span_id come from the logger's SpanContextHandler via the
+		// request context — appending them here too would emit the key twice.
+		s.logger.InfoContext(r.Context(), "request",
 			"method", r.Method, "path", r.URL.Path,
-			keyStatus, wrapped.statusCode, "duration", time.Since(start),
-		}
-		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
-			fields = append(fields, "trace_id", sc.TraceID().String())
-		}
-		s.logger.Info("request", fields...)
+			keyStatus, wrapped.statusCode, "duration", time.Since(start))
 	})
 }
 
@@ -47,7 +44,7 @@ func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
 					span.RecordError(fmt.Errorf("panic: %v", err), trace.WithStackTrace(true))
 					span.SetStatus(otelcodes.Error, "panic recovered")
 				}
-				s.logger.Error("panic recovered", "error", err, "path", r.URL.Path)
+				s.logger.ErrorContext(r.Context(), "panic recovered", "error", err, "path", r.URL.Path)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		}()

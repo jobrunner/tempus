@@ -35,33 +35,43 @@ func KoppenBorderline(c MonthlyClimate, latDeg float64) (borderline bool, adjCod
 }
 
 // KoppenGeiger classifies the Köppen-Geiger climate from the monthly climate
-// normals and latitude, following the criteria of Beck et al. (2018). It
-// returns the code (e.g. "Cfb") and a bilingual description.
-func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
+// normals, following Beck et al. (2018), Sci. Data 5:180214, Table 2 and its
+// Methods text (sources and reference stations:
+// docs/research/koppen-reference.md). It returns the code (e.g. "Cfb") and a
+// bilingual description.
+//
+// The second argument (latitude, degrees) is ignored: Beck et al. define the
+// summer/winter half-years by temperature, not by hemisphere. It stays in the
+// signature so the bioclim adapter and the thermotype code keep their call.
+func KoppenGeiger(c MonthlyClimate, _ float64) (code, de, en string) {
 	mat := mean12(c.Tmean)
 	mapp := sum12(c.Precip)
 	thot := max12(c.Tmean)
 	tcold := min12(c.Tmean)
 	pdry := min12(c.Precip)
 
+	// Beck et al. 2018, Table 2 footnote: "Tmon10 = the number of months with
+	// air temperature >10 °C" (strict; Kottek 2006 uses ≥ 10).
 	tmon10 := 0
 	for _, t := range c.Tmean {
-		if t >= 10 {
+		if t > 10 {
 			tmon10++
 		}
 	}
 
-	// Summer is the warm half-year (Apr–Sep north, Oct–Mar south).
-	summer, winter := halfYears(latDeg)
-	pSummer, pSummerMin, pSummerMax := seasonStats(c.Precip, summer)
-	pWinter, pWinterMin, pWinterMax := seasonStats(c.Precip, winter)
+	summer, winter := halfYears(c.Tmean)
+	ps := seasonStats(c.Precip, summer)
+	pw := seasonStats(c.Precip, winter)
 
-	// Aridity threshold for B climates.
+	// Aridity threshold for B climates. Beck et al. 2018, Table 2 footnote:
+	// "Pthreshold=2×MAT if >70% of precipitation falls in winter,
+	// Pthreshold=2×MAT+28 if >70% of precipitation falls in summer, otherwise
+	// Pthreshold=2×MAT+14". Strictly greater, see moreThan70Percent.
 	var pth float64
 	switch {
-	case pWinter >= 0.7*mapp:
+	case moreThan70Percent(pw.total, mapp):
 		pth = 2 * mat
-	case pSummer >= 0.7*mapp:
+	case moreThan70Percent(ps.total, mapp):
 		pth = 2*mat + 28
 	default:
 		pth = 2*mat + 14
@@ -70,18 +80,32 @@ func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
 	switch {
 	case mapp < 10*pth:
 		code = koppenB(mapp, pth, mat)
-	case thot < 10:
+	case thot <= 10: // Beck et al. 2018, Table 2: E "Not (B) & Thot≤10"
 		code = koppenE(thot)
 	case tcold >= 18:
-		code = koppenA(pdry, mapp, c.Precip, summer)
+		code = koppenA(pdry, mapp)
 	case tcold > 0:
-		code = "C" + seasonLetter(pSummerMin, pSummerMax, pWinterMin, pWinterMax) + heatLetter(thot, tmon10, tcold, false)
+		code = "C" + seasonLetter(ps, pw) + heatLetter(thot, tmon10, tcold, false)
 	default:
-		code = "D" + seasonLetter(pSummerMin, pSummerMax, pWinterMin, pWinterMax) + heatLetter(thot, tmon10, tcold, true)
+		code = "D" + seasonLetter(ps, pw) + heatLetter(thot, tmon10, tcold, true)
 	}
 
 	desc := koppenDescriptions[code]
 	return code, desc.de, desc.en
+}
+
+// shareTolerance is the relative slack for comparing a seasonal precipitation
+// sum with a fraction of the annual one. Both are float sums of monthly values
+// that round differently (one-decimal normals totalling 404 mm sum to
+// 403.99999999999994), so an exact 70 % could otherwise count as more. 1e-9 of
+// the annual total is far below any real difference (0.1 mm on 400 mm is 2.5e-4).
+const shareTolerance = 1e-9
+
+// moreThan70Percent reports whether part is strictly more than 70 % of total
+// (Beck et al. 2018, Table 2: ">70%"), compared as 10·part > 7·total so the
+// inexact 0.7 never enters, and only beyond summation roundoff.
+func moreThan70Percent(part, total float64) bool {
+	return 10*part-7*total > shareTolerance*total
 }
 
 func koppenB(mapp, pth, mat float64) string {
@@ -102,82 +126,90 @@ func koppenE(thot float64) string {
 	return "EF"
 }
 
-func koppenA(pdry, mapp float64, precip [12]float64, summer [6]int) string {
+// koppenA returns the tropical sub-type. Beck et al. 2018, Table 2 defines only
+// Af ("Pdry≥60"), Am ("Not (Af) & Pdry≥100-MAP/25") and Aw ("Not (Af) &
+// Pdry<100-MAP/25"); the As of Kottek et al. 2006 is not part of it.
+func koppenA(pdry, mapp float64) string {
 	switch {
 	case pdry >= 60:
 		return "Af"
 	case pdry >= 100-mapp/25:
 		return "Am"
 	default:
-		// Dry season: As if the driest month is in the summer half, else Aw.
-		if inSeason(argMin12(precip), summer) {
-			return "As"
-		}
 		return "Aw"
 	}
 }
 
-// seasonLetter returns the precipitation sub-type: s (dry summer), w (dry
-// winter) or f (no dry season).
-func seasonLetter(pSummerMin, pSummerMax, pWinterMin, pWinterMax float64) string {
-	if pSummerMin < 40 && pSummerMin < pWinterMax/3 {
-		return "s"
-	}
-	if pWinterMin < pSummerMax/10 {
+// seasonLetter returns the C/D precipitation sub-type per Beck et al. 2018,
+// Table 2: s (dry summer) "Psdry<40 & Psdry<Pwwet/3", w (dry winter)
+// "Pwdry<Pswet/10", else f. When both criteria hold, the Methods text decides:
+// s and w "were made mutually exclusive by assigning s when more
+// precipitation falls in winter than in summer and assigning w otherwise".
+func seasonLetter(summer, winter halfYearPrecip) string {
+	s := summer.min < 40 && summer.min < winter.max/3
+	w := winter.min < summer.max/10
+	switch {
+	case s && w:
+		if winter.total > summer.total {
+			return "s"
+		}
 		return "w"
+	case s:
+		return "s"
+	case w:
+		return "w"
+	default:
+		return "f"
 	}
-	return "f"
 }
 
-// heatLetter returns the temperature sub-type: a/b/c, plus d for very cold
-// winters (D climates only).
+// heatLetter returns the temperature sub-type per Beck et al. 2018, Table 2:
+// a "Thot≥22", b "Not (a) & Tmon10≥4", d (D climates only) "Not (a or b) &
+// Tcold<-38", else c. a and b take precedence over d.
 func heatLetter(thot float64, tmon10 int, tcold float64, allowD bool) string {
-	if allowD && tcold < -38 {
-		return "d"
-	}
 	switch {
 	case thot >= 22:
 		return "a"
 	case tmon10 >= 4:
 		return "b"
+	case allowD && tcold < -38:
+		return "d"
 	default:
 		return "c"
 	}
 }
 
-// halfYears returns the summer and winter month indices (0=Jan) for the
-// hemisphere. Northern summer is Apr–Sep; southern summer is Oct–Mar.
-func halfYears(latDeg float64) (summer, winter [6]int) {
-	north := [6]int{3, 4, 5, 6, 7, 8}
-	south := [6]int{9, 10, 11, 0, 1, 2}
-	if latDeg < 0 {
-		return south, north
+// halfYears returns the summer and winter month indices (0=Jan). Beck et al.
+// 2018, Table 2 footnote: "Summer (winter) is the six-month period that is
+// warmer (colder) between April-September and October-March." The source
+// leaves an exact tie open; tempus then takes April–September as summer.
+func halfYears(tmean [12]float64) (summer, winter [6]int) {
+	amjjas := [6]int{3, 4, 5, 6, 7, 8}
+	ondjfm := [6]int{9, 10, 11, 0, 1, 2}
+	var tAMJJAS, tONDJFM float64
+	for i := range amjjas {
+		tAMJJAS += tmean[amjjas[i]]
+		tONDJFM += tmean[ondjfm[i]]
 	}
-	return north, south
+	if tONDJFM > tAMJJAS {
+		return ondjfm, amjjas
+	}
+	return amjjas, ondjfm
 }
 
-func seasonStats(precip [12]float64, months [6]int) (total, minVal, maxVal float64) {
-	minVal, maxVal = precip[months[0]], precip[months[0]]
+// halfYearPrecip is the precipitation total, driest and wettest month of a
+// six-month half-year (mm).
+type halfYearPrecip struct{ total, min, max float64 }
+
+func seasonStats(precip [12]float64, months [6]int) halfYearPrecip {
+	h := halfYearPrecip{min: precip[months[0]], max: precip[months[0]]}
 	for _, m := range months {
 		v := precip[m]
-		total += v
-		if v < minVal {
-			minVal = v
-		}
-		if v > maxVal {
-			maxVal = v
-		}
+		h.total += v
+		h.min = min(h.min, v)
+		h.max = max(h.max, v)
 	}
-	return total, minVal, maxVal
-}
-
-func inSeason(month int, months [6]int) bool {
-	for _, m := range months {
-		if m == month {
-			return true
-		}
-	}
-	return false
+	return h
 }
 
 type koppenDesc struct{ de, en string }
@@ -186,8 +218,7 @@ type koppenDesc struct{ de, en string }
 var koppenDescriptions = map[string]koppenDesc{
 	"Af":  {"tropisches Regenwaldklima", "tropical rainforest"},
 	"Am":  {"tropisches Monsunklima", "tropical monsoon"},
-	"Aw":  {"tropisches Savannenklima (Wintertrocken)", "tropical savanna, dry winter"},
-	"As":  {"tropisches Savannenklima (Sommertrocken)", "tropical savanna, dry summer"},
+	"Aw":  {"tropisches Savannenklima (mit Trockenzeit)", "tropical savanna (with a dry season)"},
 	"BWh": {"heißes Wüstenklima", "hot desert"},
 	"BWk": {"kaltes Wüstenklima", "cold desert"},
 	"BSh": {"heißes Steppenklima", "hot semi-arid (steppe)"},

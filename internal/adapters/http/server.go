@@ -198,7 +198,7 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	result, err := s.features.Query(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			s.logger.Debug("query canceled by client")
+			s.logger.DebugContext(r.Context(), "query canceled by client")
 			return
 		}
 		s.writeError(w, http.StatusInternalServerError, "query failed")

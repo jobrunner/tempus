@@ -534,7 +534,7 @@ components:
                 Köppen raster) could yield the adjacent class — the classic reason a
                 Cfb here can read as Dfb elsewhere.
               properties:
-                code: {type: string, description: "Köppen-Geiger code, e.g. Cfb."}
+                code: {type: string, description: "Köppen-Geiger code, e.g. Cfb. One of the 30 classes of Beck et al. 2018, Table 2 (tropical Af/Am/Aw only, no As); summer is the warmer of April–September and October–March."}
                 de: {type: string, description: German description.}
                 en: {type: string, description: English description.}
                 coldestMonthMeanC: {type: number, description: "Mean temperature of the coldest month (°C)."}

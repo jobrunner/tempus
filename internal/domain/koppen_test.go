@@ -98,8 +98,9 @@ func TestKoppenGeiger(t *testing.T) {
 // Every description must be bilingual, and the table must cover the full set of
 // Köppen-Geiger codes the classifier can emit.
 func TestKoppenDescriptionsComplete(t *testing.T) {
-	if len(koppenDescriptions) != 31 {
-		t.Errorf("koppenDescriptions has %d entries, want 31", len(koppenDescriptions))
+	// 30 = Af/Am/Aw + 4 B + 9 C + 12 D + 2 E (Beck et al. 2018, Table 2).
+	if len(koppenDescriptions) != 30 {
+		t.Errorf("koppenDescriptions has %d entries, want 30", len(koppenDescriptions))
 	}
 	for code, d := range koppenDescriptions {
 		if d.de == "" || d.en == "" {

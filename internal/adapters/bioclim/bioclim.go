@@ -26,7 +26,10 @@ const (
 	providerKind = "bioclim"
 	licenseName  = "CC-BY 4.0"
 	licenseURL   = "https://open-meteo.com/en/license"
-	cacheVersion = "1"
+	// cacheVersion is part of every cache key. Bump it whenever the derived
+	// classification changes, or cached features keep the old result for up to
+	// cacheTTL. "2": Köppen-Geiger aligned with Beck et al. 2018.
+	cacheVersion = "2"
 	cacheTTL     = 365 * 24 * time.Hour
 )
 

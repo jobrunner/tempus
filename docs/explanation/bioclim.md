@@ -17,6 +17,28 @@ temperature per calendar month; mean monthly precipitation total), then:
 - **Köppen-Geiger** via the decision tree of Beck et al. (2018), from the same
   monthly temperature and precipitation normals.
 
+## Köppen-Geiger rules
+
+tempus follows Beck et al. (2018), *Sci. Data* 5:180214, **Table 2** and its
+Methods text, with the inequalities exactly as written there. Where this differs
+from the older Kottek et al. (2006) key that many maps use:
+
+- **Half-years by temperature.** Summer is whichever of April–September and
+  October–March is *warmer*, not the hemisphere's nominal summer. This matters
+  near the equator.
+- **No `As`.** The tropical sub-types are only `Af`, `Am` and `Aw`; `Aw` covers
+  a dry season in either half-year.
+- **s vs. w.** When both the dry-summer and the dry-winter criterion hold, the
+  wetter half-year decides: `s` if winter gets more precipitation, else `w`.
+- **Strict thresholds.** E is `Thot ≤ 10 °C`; `Tmon10` counts months
+  *above* 10 °C; the B threshold switches only at *more than* 70 % seasonal
+  precipitation; `d` applies only when neither `a` nor `b` does.
+- **C/D at 0 °C** (Kottek uses −3 °C), and B takes precedence over E.
+
+The sourced criteria, the reference stations (WMO 1991–2020 normals) that pin
+the classifier, and the earlier deviations are documented in the
+[Köppen-Geiger reference dossier](../research/koppen-reference.md).
+
 The values are **time-independent** for a location and period, so the provider
 **caches per coordinate + period** with a long TTL. The first query for a
 location triggers a ~30-year fetch; subsequent queries (e.g. many records at the
