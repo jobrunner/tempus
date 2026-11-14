@@ -275,6 +275,13 @@ func TestKoppenGeiger_Beck2018Thresholds(t *testing.T) {
 		// AMJJAS) gives Pth 44, and MAP 500 ≥ 10·44 is not arid.
 		{"exactly 70 % summer precipitation uses the even threshold", temp15,
 			[12]float64{25, 25, 25, 60, 60, 60, 60, 55, 55, 25, 25, 25}, 40, "Cfa"},
+		// The same two boundaries with one-decimal values, as station normals
+		// carry them. Their float sums round differently (MAP 404 sums to
+		// 403.99999999999994), which made an exact 70 % look like more.
+		{"exactly 70 % winter precipitation in decimals (282.8 of 404 mm)", temp15,
+			[12]float64{50.5, 40.4, 40.4, 20.2, 20.2, 20.2, 20.2, 20.2, 20.2, 50.5, 50.5, 50.5}, 40, "BSk"},
+		{"exactly 70 % summer precipitation in decimals (357 of 510 mm)", temp15,
+			[12]float64{25.5, 25.5, 25.5, 61.2, 61.2, 61.2, 61.2, 56.1, 56.1, 25.5, 25.5, 25.5}, 40, "Cfa"},
 
 		// Above 70 % the seasonal thresholds apply: 360 of 500 mm in summer
 		// gives Pth = 2·15+28 = 58 and MAP 500 < 580 (arid); 290 of 400 mm in
