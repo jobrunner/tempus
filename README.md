@@ -98,8 +98,10 @@ CI-Ergebnisse stimmen deshalb überein. Go selbst folgt der
 nix develop   # Shell betreten (oder direnv: `direnv allow`, .envrc enthält `use flake`)
 ```
 
-Werkzeuge aktualisieren: `nix flake update`, als eigener PR. Ein neuer Linter
-oder Scanner kann Befunde melden, die der alte nicht kannte.
+Werkzeuge aktualisieren: Jeden Montag öffnet `flake-update.yml` einen PR mit
+`nix flake update` und listet darin die Tools, deren Version sich ändert. Er
+wird nicht automatisch gemergt, denn ein neuer Linter oder Scanner kann Befunde
+melden, die der alte nicht kannte. Von Hand: `nix flake update`, als eigener PR.
 
 ```bash
 make verify   # fmt, vet, lint, Tests, Architektur- und Debt-Gates
