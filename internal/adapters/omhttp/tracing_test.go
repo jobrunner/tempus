@@ -57,14 +57,19 @@ func (s *tracedSetup) finish(t *testing.T) (sdktrace.ReadOnlySpan, []sdktrace.Re
 	return parent, clients
 }
 
-func (s *tracedSetup) get(t *testing.T, ctx context.Context, opts Options, url string) (*http.Response, error) {
+// get issues one traced GET and closes the body; only the error matters here.
+func (s *tracedSetup) get(ctx context.Context, t *testing.T, opts Options, url string) error {
 	t.Helper()
 	opts.TracerProvider = s.tp
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return newClient(t, opts).Do(req)
+	resp, err := newClient(t, opts).Do(req)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
 }
 
 func statusAttr(sp sdktrace.ReadOnlySpan) (int64, bool) {
@@ -102,11 +107,9 @@ func TestTransport_TracesOneClientSpanPerCall(t *testing.T) {
 	defer srv.Close()
 
 	s := newTracedSetup(t)
-	resp, err := s.get(t, s.ctx, Options{RetryAttempts: 2}, srv.URL)
-	if err != nil {
+	if err := s.get(s.ctx, t, Options{RetryAttempts: 2}, srv.URL); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	resp.Body.Close()
 
 	parent, clients := s.finish(t)
 	if len(clients) != 1 {
@@ -133,11 +136,9 @@ func TestTransport_TracesEachRetryAttempt(t *testing.T) {
 	defer srv.Close()
 
 	s := newTracedSetup(t)
-	resp, err := s.get(t, s.ctx, Options{RetryAttempts: 1}, srv.URL)
-	if err != nil {
+	if err := s.get(s.ctx, t, Options{RetryAttempts: 1}, srv.URL); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	resp.Body.Close()
 
 	parent, clients := s.finish(t)
 	if len(clients) != 2 {
@@ -169,7 +170,7 @@ func TestTransport_RetryEventCarriesNetworkError(t *testing.T) {
 	// recorded before the wait starts.
 	ctx, cancel := context.WithTimeout(s.ctx, 50*time.Millisecond)
 	defer cancel()
-	if _, err := s.get(t, ctx, opts, "http://open-meteo.invalid/"); err == nil {
+	if err := s.get(ctx, t, opts, "http://open-meteo.invalid/"); err == nil {
 		t.Fatal("want an error")
 	}
 
@@ -197,7 +198,7 @@ func TestTransport_BudgetExhaustedRecordsEventWithoutClientSpan(t *testing.T) {
 	s := newTracedSetup(t)
 	clk := &fakeClock{now: time.Date(2026, 9, 6, 10, 0, 0, 0, time.UTC)}
 	opts := Options{Budget: NewBudget(0, clk), Weight: 1}
-	_, err := s.get(t, output.WithBatchOrigin(s.ctx), opts, srv.URL)
+	err := s.get(output.WithBatchOrigin(s.ctx), t, opts, srv.URL)
 	if !errors.Is(err, ErrBudgetExhausted) {
 		t.Fatalf("err = %v, want ErrBudgetExhausted", err)
 	}
@@ -257,11 +258,9 @@ func TestTransport_DoesNotPropagateTraceContext(t *testing.T) {
 	t.Cleanup(func() { otel.SetTextMapPropagator(prev) })
 
 	s := newTracedSetup(t)
-	resp, err := s.get(t, s.ctx, Options{}, srv.URL)
-	if err != nil {
+	if err := s.get(s.ctx, t, Options{}, srv.URL); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	resp.Body.Close()
 	if v := leaked.Load(); v != nil {
 		t.Fatalf("trace context leaked upstream: %v", v)
 	}
