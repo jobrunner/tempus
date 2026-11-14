@@ -63,12 +63,16 @@ func KoppenGeiger(c MonthlyClimate, _ float64) (code, de, en string) {
 	ps := seasonStats(c.Precip, summer)
 	pw := seasonStats(c.Precip, winter)
 
-	// Aridity threshold for B climates.
+	// Aridity threshold for B climates. Beck et al. 2018, Table 2 footnote:
+	// "Pthreshold=2×MAT if >70% of precipitation falls in winter,
+	// Pthreshold=2×MAT+28 if >70% of precipitation falls in summer, otherwise
+	// Pthreshold=2×MAT+14". Strictly greater; compared as 10·P > 7·MAP so an
+	// exact 70 % share is not lost to the rounding of 0.7.
 	var pth float64
 	switch {
-	case pw.total >= 0.7*mapp:
+	case 10*pw.total > 7*mapp:
 		pth = 2 * mat
-	case ps.total >= 0.7*mapp:
+	case 10*ps.total > 7*mapp:
 		pth = 2*mat + 28
 	default:
 		pth = 2*mat + 14
