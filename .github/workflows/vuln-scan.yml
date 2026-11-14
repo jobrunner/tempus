@@ -56,21 +56,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          # Pull the toolchain version from go.mod so we always scan
-          # against what the build actually uses.
-          go-version-file: go.mod
+      # govulncheck from flake.lock, not @latest: a security gate that silently
+      # changes tool version between runs cannot be reasoned about. Go itself
+      # follows go.mod's toolchain directive (GOTOOLCHAIN=auto), so the scan
+      # sees the stdlib the build actually uses.
+      - uses: ./.github/actions/nix-shell
 
       - name: Run govulncheck
         id: vuln
+        # The flake's dev shell: govulncheck and Go as in ci.yml and locally.
+        shell: nix develop --command bash -e {0}
         run: |
-          # Pinned, not @latest: this is a security gate, and a gate that
-          # silently changes tool version between runs cannot be reasoned about.
-          # Dependabot does not bump `go install` lines, so raise this by hand
-          # (same version in ci.yml).
-          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           # Text mode is the only mode whose exit code reports findings:
           #   0 — no vulnerabilities
           #   3 — vulnerabilities found
@@ -154,15 +150,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      - uses: ./.github/actions/nix-shell
 
       - name: Apply fixes
         id: fix
+        # The flake's dev shell: govulncheck and Go as in ci.yml and locally.
+        shell: nix develop --command bash -e {0}
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           set +e
           scripts/vuln-autofix.sh "$RUNNER_TEMP/fixes.md"
           rc=$?

@@ -21,6 +21,11 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    # The flake's dev shell (.github/actions/nix-shell), as in ci.yml.
+    shell: nix develop --command bash -eo pipefail {0}
+
 jobs:
   mutation:
     name: gremlins
@@ -31,10 +36,7 @@ jobs:
           # Builds PR code and does no git writes, so the token has no business
           # staying in .git/config (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Install gremlins
-        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
+      # gremlins v0.5.1 comes from the dev shell (built in flake.nix).
+      - uses: ./.github/actions/nix-shell
       - name: Run mutation gate
         run: bash scripts/mutation-gate.sh

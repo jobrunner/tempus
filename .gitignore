@@ -35,3 +35,6 @@ coverage.txt
 
 # Local agent worktrees (full repo copies), never committed.
 .claude/worktrees/
+
+# direnv's cache of the Nix dev shell (.envrc: use flake).
+.direnv/

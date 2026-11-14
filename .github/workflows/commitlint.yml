@@ -15,13 +15,14 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '20'
+      # node from the dev shell (flake.lock), as everywhere else.
+      - uses: ./.github/actions/nix-shell
       - name: Install commitlint
+        shell: nix develop --command bash -eo pipefail {0}
         run: |
           npm install --save-dev @commitlint/cli @commitlint/config-conventional
       - name: Validate commits
+        shell: nix develop --command bash -eo pipefail {0}
         run: |
           npx commitlint --from ${{ github.event.pull_request.base.sha }} \
                           --to   ${{ github.event.pull_request.head.sha }} \

@@ -88,6 +88,19 @@ Die vollständige Dokumentation liegt in [`docs/`](docs/index.md) und ist nach
 
 ## Entwicklung
 
+Alle Werkzeuge (Go, golangci-lint, govulncheck, gremlins, oasdiff, zizmor,
+CodeCharta-Laufzeit) kommen aus der Nix-Dev-Shell in `flake.nix`, deren
+Versionen `flake.lock` festhält. Dieselbe Shell nutzt jeder CI-Job, lokale und
+CI-Ergebnisse stimmen deshalb überein. Go selbst folgt der
+`toolchain`-Direktive in `go.mod`.
+
+```bash
+nix develop   # Shell betreten (oder direnv: `direnv allow`, .envrc enthält `use flake`)
+```
+
+Werkzeuge aktualisieren: `nix flake update`, als eigener PR. Ein neuer Linter
+oder Scanner kann Befunde melden, die der alte nicht kannte.
+
 ```bash
 make verify   # fmt, vet, lint, Tests, Architektur- und Debt-Gates
 make test     # nur Tests

@@ -39,16 +39,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.13'
-
-      - name: Install zizmor
-        run: pip install --no-cache-dir zizmor==1.25.2
+      # zizmor from flake.lock, the same version a local `zizmor .` in the
+      # dev shell runs. A newer zizmor can add audits, so bumping flake.lock
+      # is a reviewed change.
+      - uses: ./.github/actions/nix-shell
 
       - name: Run zizmor
         id: scan
+        shell: nix develop --command bash -eo pipefail {0}
         # Without a token zizmor silently skips its online audits
         # (impostor-commit, known-vulnerable-actions, ref-confusion,
         # stale-action-refs) — exactly the ones that check our SHA pins.

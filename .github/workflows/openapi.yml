@@ -12,10 +12,15 @@ permissions:
   contents: read
 
 env:
-  # Pinned deliberately: this is a required gate, and a new oasdiff release can
-  # reclassify what counts as breaking. Bump it as its own reviewed change.
-  OASDIFF_VERSION: v1.29.1
+  # oasdiff comes from the dev shell, pinned by flake.lock. A new oasdiff
+  # release can reclassify what counts as breaking, so a flake.lock bump is a
+  # reviewed change.
   SPEC: internal/adapters/http/openapi.yaml
+
+defaults:
+  run:
+    # The flake's dev shell (.github/actions/nix-shell), as in ci.yml.
+    shell: nix develop --command bash -eo pipefail {0}
 
 jobs:
   spec:
@@ -26,16 +31,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: ./.github/actions/nix-shell
+
       - name: Spec copies byte-identical
         run: ./scripts/openapi-mirror-check.sh
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Install oasdiff
-        run: go install github.com/oasdiff/oasdiff@${OASDIFF_VERSION}
 
       - name: Fetch the base branch's spec
         run: |
