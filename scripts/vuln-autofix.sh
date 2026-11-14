@@ -97,7 +97,6 @@ cut -f1 "$TMP/fixes.tsv" | sort -u | while read -r module; do
     if [ "$module" = "stdlib" ]; then
         current=$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')
         go mod edit -toolchain="go${target#v}"
-        bump_docker_builder "${target#v}"
         echo "- Go toolchain ${current} → go${target#v} (${ids})" >> "$SUMMARY"
     else
         current=$(go list -m -f '{{.Version}}' "$module")
@@ -106,6 +105,19 @@ cut -f1 "$TMP/fixes.tsv" | sort -u | while read -r module; do
     fi
 done
 go mod tidy
+
+# Sync the Docker builder with the Go version go.mod ends up with — after all
+# module updates, not only in the stdlib branch: a fixed module can itself
+# require a newer Go, and `go get` then raises the go/toolchain directives
+# without any stdlib finding.
+if [ -f Dockerfile ]; then
+    want=$(go mod edit -json | jq -r '(.Toolchain // ("go" + .Go)) | ltrimstr("go")')
+    have=$(grep -oE "golang:[0-9][0-9.]*" Dockerfile | head -1 | cut -d: -f2)
+    if [ "$have" != "$want" ]; then
+        bump_docker_builder "$want"
+        echo "- Docker builder golang:${have}-alpine → golang:${want}-alpine" >> "$SUMMARY"
+    fi
+fi
 
 # Re-scan: a later go get or the tidy can move a module back below its fix,
 # and the fix PR's ratchet gate would not notice (the finding is on main

@@ -200,7 +200,9 @@ jobs:
           git config user.email "${bot_id}+${bot}@users.noreply.github.com"
 
           fixes="$RUNNER_TEMP/fixes.md"
-          if [ "$(wc -l < "$fixes")" -eq 1 ] && grep -q '^- Go toolchain' "$fixes"; then
+          # The Docker builder line only follows the toolchain, it is not a fix
+          # of its own and does not count for the title.
+          if [ "$(grep -vc '^- Docker builder' "$fixes")" -eq 1 ] && grep -q '^- Go toolchain' "$fixes"; then
             title="fix(deps): bump Go toolchain to $(sed -E 's/.* → (go[0-9.]+).*/\1/' "$fixes")"
           else
             title="fix(deps): apply govulncheck fixes"
