@@ -7,7 +7,7 @@
 # is nothing unpinnable fetched at build time.
 
 # ---- builder: runs natively on $BUILDPLATFORM, cross-compiles to the target ----
-FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.11-alpine@sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb AS builder
 
 # Use the toolchain shipped in the image; never fetch one over the network.
 ENV GOTOOLCHAIN=local
