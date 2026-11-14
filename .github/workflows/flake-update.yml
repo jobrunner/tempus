@@ -91,6 +91,20 @@ jobs:
           git config user.name "$bot"
           git config user.email "${bot_id}+${bot}@users.noreply.github.com"
 
+          # The PR asks for fixes to be committed on its branch. Once it holds
+          # a commit not made by this workflow, a refresh from main would
+          # force-push them away, so the branch is left alone until the PR
+          # is merged or closed.
+          if gh api "repos/${REPO}/branches/${PR_BRANCH}" --silent 2>/dev/null; then
+            foreign=$(gh api "repos/${REPO}/compare/main...${PR_BRANCH}" \
+              --jq '.commits[].commit.author.email' \
+              | grep -cvFx "${bot_id}+${bot}@users.noreply.github.com" || true)
+            if [ "$foreign" -gt 0 ]; then
+              echo "::notice::${PR_BRANCH} holds ${foreign} commit(s) not made by this workflow; not refreshing it. Merge or close the open update PR to get the next update."
+              exit 0
+            fi
+          fi
+
           title="chore(deps): update the Nix dev shell (flake.lock)"
           git checkout -b "$PR_BRANCH"
           git commit -a -m "$title" -m "Tool versions that change:" -m "$(cat "$RUNNER_TEMP/versions.md")"

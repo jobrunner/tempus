@@ -22,11 +22,13 @@ import re
 import sys
 
 # A command position: line start, after ; & | ( or $(, then any number of
-# VAR=value assignments and env/exec/time/command wrappers, then optionally
-# bash/sh with flags (the script it runs is the command), then a path.
+# compound-command keywords (if ! go test …; then …), negations, VAR=value
+# assignments and env/exec/time/command wrappers, then optionally bash/sh
+# with flags (the script it runs is the command), then a path.
 PREFIX = (
     r"(?:^|[;&|(]|\$\()\s*"
-    r"(?:(?:env|exec|time|command|nice)(?:\s+-\S+)*\s+"
+    r"(?:(?:if|elif|then|else|while|until|do|!|\{)\s+"
+    r"|(?:env|exec|time|command|nice)(?:\s+-\S+)*\s+"
     r"|[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\S*)\s+)*"
     r"(?:(?:bash|sh)(?:\s+-\S+)*\s+)?"
 )

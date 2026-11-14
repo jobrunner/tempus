@@ -87,10 +87,12 @@ CCSH ?= $(shell command -v ccsh 2>/dev/null || echo "npx --yes codecharta-analys
 # Without one, go/build cannot resolve module packages: it warns per file,
 # writes an empty coverage.info and still exits 0, and ccsh merge then waits
 # forever on a prompt about the empty coverage map. Hence the explicit GOROOT.
+# set -e: a failed conversion, import or merge fails the target; only the test
+# run is best effort (a failing test still leaves a usable coverage.out).
 codecharta: ## CodeCharta map (structure+complexity+coverage+git) -> tempus.cc.json.gz, then the ratchet gate (needs node+java)
 	$(CCSH) unifiedparser . -fe=go -e='_test\.go,third_party,\.claude' -nc -o base.cc.json
 	$(CCSH) gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
-	@$(GO) test -coverprofile=coverage.out ./... || true; \
+	@set -e; $(GO) test -coverprofile=coverage.out ./... || true; \
 	 inputs="base.cc.json git.cc.json"; \
 	 if [ -s coverage.out ]; then \
 	   GOROOT=$$($(GO) env GOROOT) gcov2lcov -infile=coverage.out -outfile=coverage.info; \
