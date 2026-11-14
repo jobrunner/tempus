@@ -25,6 +25,7 @@
 # Exit: 0 green, 1 gap, 2 setup error.
 
 set -uo pipefail
+. "$(dirname "$0")/require-devshell.sh"
 export LC_ALL=C
 
 WAIVERS="${WAIVERS:-.harness-waivers}"
@@ -104,21 +105,15 @@ docker_go_matches_toolchain() {
 # in CI). A linter, scanner or diff tool installed on its own drifts: a
 # different local golangci-lint once reported 0 issues where CI found 11.
 #
-# So no workflow sets up a language or installs a tool itself. The one
-# exemption is release-please.yml: its release job builds without any cache
-# (zizmor cache-poisoning), and the Nix store cache would bring one back.
-tools_from_flake() {
+# So every job runs in that shell, deny by default: a job outside it must be
+# listed with its reason in .github/nix-exempt-jobs (the release build, the
+# pull_request_target auto-merge, …). Checked on the workflow structure with
+# a YAML parser, never on what the run: scripts say (check-workflow-jobs.sh).
+# Make and the gate scripts back this at run time: under CI they refuse to
+# run outside the dev shell (scripts/require-devshell.sh).
+jobs_in_flake() {
   [ -f flake.nix ] && [ -f flake.lock ] || return 1
-  ! grep -lE "uses:[[:space:]]*['\"]?(actions/setup-(go|node|java|python)|golangci/golangci-lint-action)@|go install |pip install " \
-      "$WORKFLOWS"/*.yml 2>/dev/null | grep -v '/release-please\.yml$' | grep -q .
-}
-
-# A runner image ships its own Go, so dropping setup-go is not enough: every
-# step that runs go, make or a flake tool must run in the dev shell, or it
-# silently uses the image's toolchain. Checked per job and step on the
-# workflow structure, comments ignored (scripts/check-workflow-shell.py).
-toolchain_jobs_use_flake() {
-  python3 scripts/check-workflow-shell.py "$WORKFLOWS"/*.yml
+  bash scripts/check-workflow-jobs.sh "$WORKFLOWS" .github/nix-exempt-jobs
 }
 
 # The Makefile calls tools by name from the dev shell; a `go run …@v` or
@@ -218,8 +213,7 @@ check license              "LICENSE"                         has_file LICENSE
 echo "— Toolchain hygiene"
 check go-version-file      "no hardcoded go-version"         no_hardcoded_go
 check docker-go-toolchain  "Dockerfile golang = go.mod"      docker_go_matches_toolchain
-check tools-from-flake     "workflows install no own tools"  tools_from_flake
-check toolchain-in-flake   "tool steps run in the flake"     toolchain_jobs_use_flake
+check jobs-in-flake        "every job in the dev shell"      jobs_in_flake
 check makefile-tools       "Makefile fetches no own tools"   makefile_tools_from_flake
 
 # Waiver ratchet.

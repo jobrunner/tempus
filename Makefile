@@ -8,6 +8,13 @@ VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo 
 BUILD_TIME  := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS     := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 
+# In CI only inside the dev shell; see scripts/require-devshell.sh.
+ifneq ($(CI),)
+ifeq ($(IN_NIX_SHELL),)
+$(error CI runs make only in the flake's dev shell (.github/actions/nix-shell))
+endif
+endif
+
 GO       := go
 # Tools come from the dev shell (flake.nix, `nix develop` or direnv), the same
 # one every CI job runs in, so local and CI use identical versions from

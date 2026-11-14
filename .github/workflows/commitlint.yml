@@ -10,6 +10,9 @@ jobs:
   commitlint:
     name: Commit Lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: nix develop --command bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -18,11 +21,9 @@ jobs:
       # node from the dev shell (flake.lock), as everywhere else.
       - uses: ./.github/actions/nix-shell
       - name: Install commitlint
-        shell: nix develop --command bash -eo pipefail {0}
         run: |
           npm install --save-dev @commitlint/cli @commitlint/config-conventional
       - name: Validate commits
-        shell: nix develop --command bash -eo pipefail {0}
         run: |
           npx commitlint --from ${{ github.event.pull_request.base.sha }} \
                           --to   ${{ github.event.pull_request.head.sha }} \

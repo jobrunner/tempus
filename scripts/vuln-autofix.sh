@@ -17,6 +17,7 @@
 # Usage: scripts/vuln-autofix.sh <summary-file>
 # Exit:  0 fixes applied, 3 nothing to fix, 2 scan/fix error
 set -euo pipefail
+. "$(dirname "$0")/require-devshell.sh"
 
 SUMMARY=$1
 # Scan with the toolchain go.mod declares, the Go of the release binary (the

@@ -54,6 +54,7 @@
             gnumake
             git
             jq
+            yq-go # scripts/check-workflow-jobs.sh
           ];
 
           # The go binary from nixpkgs only bootstraps. The Go that builds,

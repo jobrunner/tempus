@@ -1,0 +1,22 @@
+# Jobs that do NOT run in the flake's dev shell (.github/actions/nix-shell).
+# Every other job must: scripts/check-workflow-jobs.sh fails on a job that is
+# neither in the dev shell nor listed here, and on a listed job that is gone or
+# runs in the dev shell after all. One line per job, <workflow file>:<job id>,
+# with the reason. Adding a line is a reviewed decision, like a waiver.
+
+# Builds the release binaries with setup-go and no cache at all: zizmor's
+# cache-poisoning audit, and the Nix store cache would bring a cache back.
+release-please.yml:goreleaser
+# Runs release-please only; no checkout, no code, no tools.
+release-please.yml:release-please
+# pull_request_target with a write token: it must never evaluate the PR's
+# flake.nix, which `nix develop` would do. Reads metadata, calls the API.
+dependabot-auto-merge.yml:auto-merge
+# Builds the image from the Dockerfile; Go comes from its golang base image,
+# which harness-check (docker-go-toolchain) keeps equal to go.mod.
+docker-release.yml:docker
+# Scans the published image with Trivy; no checkout, no Go.
+vuln-scan.yml:image-scan
+# Updates flake.lock itself, so it installs Nix only and evaluates the
+# shell instead of entering it; it holds a write token and takes no cache.
+flake-update.yml:update

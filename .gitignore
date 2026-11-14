@@ -38,3 +38,4 @@ coverage.txt
 
 # direnv's cache of the Nix dev shell (.envrc: use flake).
 .direnv/
+__pycache__/

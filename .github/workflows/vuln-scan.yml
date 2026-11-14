@@ -51,6 +51,11 @@ jobs:
       issues: write   # to open / comment on the security issue
     outputs:
       rc: ${{ steps.vuln.outputs.rc }}
+    defaults:
+      run:
+        # The flake's dev shell, for every step: govulncheck and Go as in
+        # ci.yml and locally. bash -e as for a step without shell:.
+        shell: nix develop --command bash -e {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,8 +69,6 @@ jobs:
 
       - name: Run govulncheck
         id: vuln
-        # The flake's dev shell: govulncheck and Go as in ci.yml and locally.
-        shell: nix develop --command bash -e {0}
         run: |
           # Text mode is the only mode whose exit code reports findings:
           #   0 — no vulnerabilities
@@ -145,6 +148,11 @@ jobs:
       contents: read
     env:
       PR_BRANCH: security/govulncheck-fix
+    defaults:
+      run:
+        # The flake's dev shell, for every step: govulncheck and Go as in
+        # ci.yml and locally. bash -e as for a step without shell:.
+        shell: nix develop --command bash -e {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -154,8 +162,6 @@ jobs:
 
       - name: Apply fixes
         id: fix
-        # The flake's dev shell: govulncheck and Go as in ci.yml and locally.
-        shell: nix develop --command bash -e {0}
         run: |
           set +e
           scripts/vuln-autofix.sh "$RUNNER_TEMP/fixes.md"
