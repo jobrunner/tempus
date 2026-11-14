@@ -223,3 +223,46 @@ func TestProviderIDKind(t *testing.T) {
 		t.Error("attribution empty")
 	}
 }
+
+func TestFetch_PrecipWindowModeFollowsArchiveDelay(t *testing.T) {
+	// The hourly precipitation request switches from the forecast's rolling
+	// past_days window to an explicit start/end date range once the instant is
+	// at least ArchiveDelay old — inclusive at exactly ArchiveDelay.
+	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	const delay = 5 * 24 * time.Hour
+	for _, tc := range []struct {
+		name      string
+		instant   time.Time
+		wantRange bool
+	}{
+		{"recent instant uses past_days", now.Add(-time.Hour), false},
+		{"exactly ArchiveDelay old uses a date range", now.Add(-delay), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotRange, gotPastDays bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				q := r.URL.Query()
+				if q.Get("daily") != "" {
+					_, _ = w.Write([]byte(dailyJSON))
+					return
+				}
+				gotRange = q.Get("start_date") != ""
+				gotPastDays = q.Get("past_days") != ""
+				_, _ = w.Write([]byte(hourlyJSON))
+			}))
+			defer srv.Close()
+			p := New(Options{
+				ArchiveBaseURL:  srv.URL,
+				ForecastBaseURL: srv.URL,
+				Timeout:         2 * time.Second,
+				ArchiveDelay:    delay,
+				Clock:           fixedClock{now},
+			})
+
+			_, _ = p.Fetch(context.Background(), req(tc.instant, nil))
+			if gotRange != tc.wantRange || gotPastDays == tc.wantRange {
+				t.Errorf("start_date=%v past_days=%v, want date range %v", gotRange, gotPastDays, tc.wantRange)
+			}
+		})
+	}
+}

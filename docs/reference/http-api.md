@@ -312,6 +312,11 @@ The spec lives twice in the repository — `internal/adapters/http/openapi.yaml`
 `OpenAPI Spec` workflow checks on every pull request that the two are
 byte-identical.
 
+The `/docs` page loads Swagger UI's script and stylesheet from unpkg.com, pinned
+to one exact `swagger-ui-dist` release with Subresource Integrity hashes
+(`internal/adapters/http/openapi.go`). The browser viewing it therefore needs
+internet access; the spec itself is always served by tempus.
+
 ### Breaking-change policy
 
 The same workflow runs `oasdiff breaking` against the base branch's spec and

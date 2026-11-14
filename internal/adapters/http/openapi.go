@@ -3,6 +3,7 @@ package httpapi
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -80,15 +81,38 @@ func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// handleSwaggerUI serves a minimal Swagger UI page pointing at /openapi.json.
-// (Swap for your preferred renderer; kept tiny here on purpose.)
-func (s *Server) handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
-	const page = `<!doctype html><html><head><meta charset="utf-8"><title>tempus API</title>
-<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css"></head>
+// Swagger UI is loaded from unpkg, pinned to one exact swagger-ui-dist release
+// and guarded by Subresource Integrity, so neither a new upstream release nor
+// a tampered CDN file changes what /docs runs. A bump changes the version AND
+// both hashes (they are per-release); recompute each with
+//
+//	curl -sL https://unpkg.com/swagger-ui-dist@<version>/<file> |
+//	  openssl dgst -sha384 -binary | openssl base64 -A
+//
+// Pick a release that has been out for about two weeks: SRI freezes whatever
+// the pinned version contains, so a just-published (possibly bad) release
+// should get time to be yanked first. Check that unpkg and jsDelivr serve
+// identical hashes.
+const (
+	swaggerUIVersion      = "5.34.1"
+	swaggerUICSSIntegrity = "sha384-4c3vsE5f+trhFyHrFrLM1fFGUn531NIaC7dcqEWIJdoRQJ5CkJbSuSCwXLpaS1KF"
+	swaggerUIJSIntegrity  = "sha384-XFYN47VzPiDY6qPtxYKg0nqUeW/upo20xf1j2SUE7gT/i35FJB4cuS/71Iegzk8Z"
+)
+
+// swaggerUIPage is a minimal Swagger UI page pointing at /openapi.json.
+// (Swap for your preferred renderer; kept tiny here on purpose.) It is
+// formatted rather than concatenated: gremlins mutates every `+` in a const
+// expression, and coverage cannot reach a const, so each one would count as an
+// uncovered mutant.
+var swaggerUIPage = fmt.Sprintf(`<!doctype html><html><head><meta charset="utf-8"><title>tempus API</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@%[1]s/swagger-ui.css" integrity="%[2]s" crossorigin="anonymous"></head>
 <body><div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+<script src="https://unpkg.com/swagger-ui-dist@%[1]s/swagger-ui-bundle.js" integrity="%[3]s" crossorigin="anonymous"></script>
 <script>window.onload=()=>SwaggerUIBundle({url:"/openapi.json",dom_id:"#swagger-ui"})</script>
-</body></html>`
+</body></html>`, swaggerUIVersion, swaggerUICSSIntegrity, swaggerUIJSIntegrity)
+
+// handleSwaggerUI serves the Swagger UI page.
+func (s *Server) handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(page))
+	_, _ = w.Write([]byte(swaggerUIPage))
 }
