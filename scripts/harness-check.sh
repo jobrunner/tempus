@@ -75,6 +75,30 @@ no_hardcoded_go() {
       "$WORKFLOWS" 2>/dev/null | grep -q .
 }
 
+# Every `uses:` is pinned to a full 40-hex commit SHA. A tag is mutable, and
+# Dependabot PRs are auto-merged here, so a moved tag would reach main without
+# a human look. zizmor's unpinned-uses audit says the same, but only weekly;
+# this runs on every PR. Local actions (`./…`) and docker:// refs are exempt.
+actions_sha_pinned() {
+  ! grep -rhE "^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]" "$WORKFLOWS" 2>/dev/null \
+    | grep -vE "uses:[[:space:]]*['\"]?(\./|docker://)" \
+    | grep -vE "uses:[[:space:]]*['\"]?[^@[:space:]]+@[0-9a-f]{40}([[:space:]'\"]|\$)" \
+    | grep -q .
+}
+
+# The Docker builder compiles with GOTOOLCHAIN=local, i.e. with whatever Go
+# its golang image ships. If that drifts from go.mod's toolchain directive, CI
+# tests one Go and the release binary is built with another — and a toolchain
+# bump that fixes stdlib CVEs never reaches the image. vuln-autofix.sh moves
+# both together; this catches a hand edit or a Dependabot bump of only one.
+docker_go_matches_toolchain() {
+  [ -f Dockerfile ] || return 0
+  want=$(awk '$1 == "toolchain" { sub(/^go/, "", $2); print $2 }' go.mod)
+  [ -n "$want" ] || want=$(awk '$1 == "go" { print $2 }' go.mod)
+  have=$(grep -oE "golang:[0-9][0-9.]*" Dockerfile | head -1 | cut -d: -f2)
+  [ -n "$have" ] && [ "$have" = "$want" ]
+}
+
 # gremlins must never be handed a `...` wildcard — it does not expand it and
 # generates zero mutants while exiting 0.
 #
@@ -130,6 +154,9 @@ check zizmor-config        "zizmor.yml policy"               has_file .github/zi
 check zizmor-workflow      "actions-security.yml"            has_file "$WORKFLOWS/actions-security.yml"
 check zizmor-wired         "workflow uses the policy"        greps "$WORKFLOWS/actions-security.yml" 'config[= ]\.github/zizmor\.yml'
 check vuln-scan            "scheduled vulnerability scan"    greps "$WORKFLOWS/vuln-scan.yml" 'govulncheck'
+check vuln-autofix         "scan opens a fix PR"             greps "$WORKFLOWS/vuln-scan.yml" 'vuln-autofix\.sh'
+check vuln-gate            "CI Security uses the ratchet"    greps "$WORKFLOWS/ci.yml" 'vuln-gate\.sh'
+check actions-sha-pinned   "every uses: pinned to a SHA"     actions_sha_pinned
 
 echo "— Ratchets"
 check debt-budget          ".debt-budget"                    has_file .debt-budget
@@ -162,6 +189,7 @@ check license              "LICENSE"                         has_file LICENSE
 
 echo "— Toolchain hygiene"
 check go-version-file      "no hardcoded go-version"         no_hardcoded_go
+check docker-go-toolchain  "Dockerfile golang = go.mod"      docker_go_matches_toolchain
 
 # Waiver ratchet.
 echo

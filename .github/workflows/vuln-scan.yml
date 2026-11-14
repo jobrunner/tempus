@@ -1,20 +1,26 @@
-# MANDATORY. Weekly govulncheck + Trivy image scan, opening/updating a
-# security-labelled issue on findings.
+# MANDATORY. Scheduled govulncheck + Trivy image scan, opening/updating a
+# security-labelled issue on findings, and an unattended fix PR for Go CVEs.
 #
-# Weekly vulnerability scans on the default branch. The regular CI Security job runs
-# on every push and PR; these jobs run on a schedule so newly-disclosed
-# CVEs become visible even when there is no PR activity to trigger them.
+# The regular CI Security job runs on every push and PR; these jobs run on a
+# schedule so newly-disclosed CVEs become visible even when there is no PR
+# activity to trigger them.
 #
-# Two jobs:
-#   - scan (govulncheck)  — Go stdlib + module CVEs reachable from the code
-#   - image-scan (trivy)  — the PUBLISHED ghcr.io image at the newest release
-#     tag (resolved at run time; there is no :latest). Catches what
-#     govulncheck cannot: OS packages from the base image (openssl, curl, …) and unreachable-but-flagged Go module CVEs. A released
-#     image that was clean at release time rots as new CVEs are disclosed;
-#     this job is what surfaces that without waiting for the next release.
+# Three jobs:
+#   - scan (govulncheck, daily) — Go stdlib + module CVEs reachable from the code
+#   - autofix (after scan, on findings) — applies the fixed versions govulncheck
+#     names (scripts/vuln-autofix.sh: Go toolchain directive + Docker builder
+#     image, `go get`) and opens a `fix(deps)` PR as the release GitHub App
+#     with auto-merge. The PR's CI is the proof. Unattended path for Go CVEs,
+#     which Dependabot does not cover reliably.
+#   - image-scan (trivy, weekly) — the PUBLISHED ghcr.io image at the newest
+#     release tag (resolved at run time; there is no :latest). Catches what
+#     govulncheck cannot: OS packages from the base image (openssl, curl, …)
+#     and unreachable-but-flagged Go module CVEs. A released image that was
+#     clean at release time rots as new CVEs are disclosed; this job is what
+#     surfaces that without waiting for the next release.
 #
-# Outcome handling distinguishes three cases (both jobs):
-#   - findings (govulncheck exit 3 / trivy JSON has fixable CRITICAL,HIGH)
+# Outcome handling distinguishes three cases (scan and image-scan):
+#   - findings (govulncheck exit 3 / trivy JSON has fixable CRITICAL..LOW)
 #       → open / comment on a `security`-labelled GitHub issue, fail the job
 #   - clean (exit 0)
 #       → succeed silently
@@ -25,13 +31,14 @@ name: Vuln Scan
 
 on:
   schedule:
-    # Monday 06:00 UTC, after the Go security team's typical Tuesday
-    # release cadence in the previous week.
+    # Daily 06:00 UTC, so a Go security release is picked up within a day.
+    # Two entries only so image-scan can keep its weekly (Monday) cadence:
+    # its findings need a base-image release, not a daily issue comment.
     - cron: '0 6 * * 1'
+    - cron: '0 6 * * 0,2-6'
   workflow_dispatch:
 
-# Least privilege at the workflow level; the two scan jobs add `issues: write`
-# themselves, so nothing that does not open an issue ever carries that scope.
+# Least privilege at the workflow level; every job adds what it needs itself.
 permissions:
   contents: read
 
@@ -42,34 +49,40 @@ jobs:
     permissions:
       contents: read
       issues: write   # to open / comment on the security issue
+    outputs:
+      rc: ${{ steps.vuln.outputs.rc }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # Pull the toolchain version from go.mod so we always scan
           # against what the build actually uses.
           go-version-file: go.mod
 
-      - name: Run govulncheck (JSON)
+      - name: Run govulncheck
         id: vuln
         run: |
           # Pinned, not @latest: this is a security gate, and a gate that
           # silently changes tool version between runs cannot be reasoned about.
-          # Dependabot does not bump `go install` lines, so raise this by hand.
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          # -json emits structured output even on findings. Exit codes:
+          # Dependabot does not bump `go install` lines, so raise this by hand
+          # (same version in ci.yml).
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          # Text mode is the only mode whose exit code reports findings:
           #   0 — no vulnerabilities
           #   3 — vulnerabilities found
           #   other — scan failed (build error, network, etc.)
+          # Do NOT switch back to -json: it exits 0 even with findings, which
+          # kept this job green through 2026-11 while main carried 15
+          # reachable CVEs.
           set +e
-          govulncheck -json ./... > vuln-report.json 2> vuln-stderr.txt
+          govulncheck ./... > vuln-report.txt 2>&1
           rc=$?
           set -e
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          # Also keep a human-readable text report for the issue body.
-          govulncheck ./... > vuln-report.txt 2>&1 || true
 
       - name: Ensure `security` label exists
         if: steps.vuln.outputs.rc == '3'
@@ -95,7 +108,7 @@ jobs:
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'govulncheck reports vulnerabilities on the default branch.\n\n```\n%s\n```\n\n## Fix\n\nUsually the right action is to bump the `toolchain` directive in `go.mod` to a Go patch version that fixes the listed CVEs. The workflows read `go-version-file: go.mod`, so nothing else needs editing — if you find yourself updating a version in a workflow, that workflow is hardcoding it and harness-check.sh should have caught it. Dependabot may already have an open PR.\n' "$(cat vuln-report.txt)")
+          body=$(printf 'govulncheck reports vulnerabilities on main.\n\n```\n%s\n```\n\n## Fix\n\nThe autofix job of this workflow opens a `fix(deps)` PR with the fixed versions (Go `toolchain` directive in `go.mod` plus the Docker builder image, `go get` for modules) and enables auto-merge. If no such PR appears, no fix is released yet, or the PR needs a human (check its CI).\n' "$(cat vuln-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
@@ -112,23 +125,138 @@ jobs:
           RC: ${{ steps.vuln.outputs.rc }}
         run: |
           echo "::error::govulncheck exited with $RC — not a CVE finding, likely a scan error. See log for details."
-          cat vuln-stderr.txt
+          cat vuln-report.txt
           exit 1
 
       - name: Fail job if vulnerabilities found
         if: steps.vuln.outputs.rc == '3'
         run: exit 1
 
+  autofix:
+    name: govulncheck autofix
+    needs: scan
+    # Only when the scan found something (exit 3); a scan error stays a
+    # failed scan job and never turns into a PR. Only on main: a manual run
+    # on another branch would carry that branch's commits into the
+    # auto-merging fix PR.
+    if: ${{ !cancelled() && needs.scan.outputs.rc == '3' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    # A manual run next to the scheduled one must not race on the PR branch.
+    concurrency:
+      group: vuln-autofix
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      PR_BRANCH: security/govulncheck-fix
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Apply fixes
+        id: fix
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          set +e
+          scripts/vuln-autofix.sh "$RUNNER_TEMP/fixes.md"
+          rc=$?
+          set -e
+          case "$rc" in
+            0) echo "changed=true" >> "$GITHUB_OUTPUT" ;;
+            3) echo "changed=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::vuln-autofix.sh failed (rc=$rc)"; exit "$rc" ;;
+          esac
+
+      # The app token, not GITHUB_TOKEN: a PR opened with GITHUB_TOKEN runs
+      # no CI, so its required checks would never report.
+      # Only go.mod/go.sum/Dockerfile change, so no `workflows` permission.
+      - name: Mint GitHub App installation token
+        id: app-token
+        if: steps.fix.outputs.changed == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+          permission-contents: write      # push the fix branch
+          permission-pull-requests: write # open the PR, enable auto-merge
+
+      - name: Open or refresh the fix PR
+        if: steps.fix.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bot="${APP_SLUG}[bot]"
+          bot_id=$(gh api "/users/${bot}" --jq .id)
+          git config user.name "$bot"
+          git config user.email "${bot_id}+${bot}@users.noreply.github.com"
+
+          fixes="$RUNNER_TEMP/fixes.md"
+          # The Docker builder line only follows the toolchain, it is not a fix
+          # of its own and does not count for the title.
+          if [ "$(grep -vc '^- Docker builder' "$fixes")" -eq 1 ] && grep -q '^- Go toolchain' "$fixes"; then
+            title="fix(deps): bump Go toolchain to $(sed -E 's/.* → (go[0-9.]+).*/\1/' "$fixes")"
+          else
+            title="fix(deps): apply govulncheck fixes"
+          fi
+          git checkout -b "$PR_BRANCH"
+          git commit -a -m "$title" -m "Reachable vulnerabilities reported by govulncheck on main:" -m "$(cat "$fixes")"
+
+          # Unchanged since the last run: skip the push, so the open PR's CI
+          # is not restarted. The PR and auto-merge below are still
+          # reconciled, in case a previous run failed after its push.
+          if git fetch --quiet origin "$PR_BRANCH" 2>/dev/null \
+            && git diff --quiet FETCH_HEAD HEAD; then
+            echo "Fix PR branch is up to date."
+          else
+            git push --force "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${PR_BRANCH}"
+          fi
+
+          {
+            echo "Automated fix, opened by \`vuln-scan.yml\` (refreshed against main on every scan while open)."
+            echo
+            echo "govulncheck reports reachable vulnerabilities on main. This PR applies the fixed versions it names:"
+            echo
+            cat "$fixes"
+            echo
+            echo "Auto-merge is on: the PR merges once CI is green. **If CI stays red**, the fix needs a human (e.g. an API change in the bumped module)."
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          pr=$(gh pr list --repo "$REPO" --head "$PR_BRANCH" --state open --json url --jq '.[0].url // ""')
+          if [ -n "$pr" ]; then
+            # REST, not `gh pr edit`: that one also queries the deprecated
+            # Projects (classic) API and fails on it.
+            gh api -X PATCH "repos/${REPO}/pulls/${pr##*/}" -f title="$title" \
+              -F body=@"$RUNNER_TEMP/pr-body.md" --silent
+          else
+            pr=$(gh pr create --repo "$REPO" --base main --head "$PR_BRANCH" \
+              --title "$title" --body-file "$RUNNER_TEMP/pr-body.md" --label security)
+          fi
+          # --squash: the ruleset requires linear history.
+          gh pr merge "$pr" --repo "$REPO" --auto --squash
+
   image-scan:
     name: trivy (published image)
+    # Weekly: on the Monday schedule and on manual runs.
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * 1'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write   # to open / comment on the security issue
+    env:
+      # This job has no checkout, so `gh` cannot infer the repository from
+      # a git remote and fails with "not a git repository". That failed the
+      # job before it ever scanned (2026-11-09) — ported fix from ortus.
+      GH_REPO: ${{ github.repository }}
     steps:
-      # Scans the newest published release image. If the service publishes
-      # several image variants, turn this job into a matrix over tags.
-      #
       # ignore-unfixed: only CVEs with an AVAILABLE FIX create an issue — those
       # are actionable via a base-image bump or `go get`. Unfixed CVEs are
       # deliberately not reported anywhere: this repo runs no per-PR Trivy SARIF
@@ -153,12 +281,12 @@ jobs:
           echo "Scanning ghcr.io/${GITHUB_REPOSITORY}:${tag}"
 
       - name: Run Trivy against ghcr.io image (JSON)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.tag.outputs.image }}
           format: 'json'
           output: 'trivy-report.json'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           ignore-unfixed: true
 
       # A trivy failure (registry unreachable, DB download broken) fails the
@@ -168,7 +296,7 @@ jobs:
         run: |
           count=$(jq '[.Results[]?.Vulnerabilities[]?] | length' trivy-report.json)
           echo "count=$count" >> "$GITHUB_OUTPUT"
-          echo "Fixable CRITICAL/HIGH vulnerabilities: $count"
+          echo "Fixable CRITICAL/HIGH/MEDIUM/LOW vulnerabilities: $count"
 
       - name: Build human-readable report
         if: steps.findings.outputs.count != '0'
@@ -207,7 +335,7 @@ jobs:
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages: bump the base-image FROM tag so the runtime picks up patched distro packages (Dependabot's docker ecosystem usually has a PR open already).\n- Go modules (gobinary): `go get <module>@<fixed version>`; Dependabot's gomod ecosystem may have a PR already.\n\nEither way the fix only reaches users with the next release.\n' "$FINDING_COUNT" "$IMAGE" "$(cat trivy-report.txt)")
+          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH/MEDIUM/LOW vulnerabilities in `%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages: bump the base-image FROM tag so the runtime picks up patched distro packages (Dependabot'"'"'s docker ecosystem usually has a PR open already).\n- Go modules (gobinary): `go get <module>@<fixed version>`; Dependabot'"'"'s gomod ecosystem may have a PR already.\n\nEither way the fix only reaches users with the next release.\n' "$FINDING_COUNT" "$IMAGE" "$(cat trivy-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"

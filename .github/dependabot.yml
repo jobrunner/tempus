@@ -87,6 +87,18 @@ updates:
     labels:
       - dependencies
       - docker
+    # The golang builder tag follows go.mod's toolchain directive, not the
+    # other way round: the builder runs with GOTOOLCHAIN=local, so its Go is
+    # the Go of the release binary, and harness-check.sh (docker-go-toolchain)
+    # fails any PR where the two differ. A builder-only bump (e.g. #83, golang
+    # 1.26 → 1.27) could therefore never go green. vuln-autofix.sh moves both
+    # together. Digest-only rebuilds of the current tag still come through.
+    ignore:
+      - dependency-name: golang
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
 
   # tempus vendors claude-skills at .claude/vendor/claude-skills. The submodule
   # is PRIVATE; same-owner repos are reachable by default, otherwise the PR
