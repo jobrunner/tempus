@@ -26,7 +26,7 @@ func (s *Server) writeBatchSync(w http.ResponseWriter, r *http.Request, points [
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			s.logger.Debug("batch query canceled by client")
+			s.logger.DebugContext(r.Context(), "batch query canceled by client")
 			return
 		}
 		s.writeError(w, http.StatusInternalServerError, "batch query failed")
@@ -62,6 +62,6 @@ func (s *Server) streamBatchNDJSON(w http.ResponseWriter, r *http.Request, point
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {
 		// Headers are sent; all we can do is log and abort the stream.
-		s.logger.Warn("batch stream aborted", "error", err)
+		s.logger.WarnContext(r.Context(), "batch stream aborted", "error", err)
 	}
 }

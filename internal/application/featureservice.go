@@ -69,7 +69,7 @@ func (s *FeatureService) Query(ctx context.Context, req domain.QueryRequest) (do
 	for _, d := range s.derivers {
 		derived, err := d.Derive(ctx, req, res.Features)
 		if err != nil {
-			res.Providers = append(res.Providers, s.statusFor(d, err))
+			res.Providers = append(res.Providers, s.statusFor(ctx, d, err))
 			continue
 		}
 		// Same contract as a provider: a derived feature is still a feature
@@ -77,9 +77,9 @@ func (s *FeatureService) Query(ctx context.Context, req domain.QueryRequest) (do
 		// computed from. One incomplete block rejects the deriver's whole batch
 		// — a partially attributed batch is not a meaningful thing to serve.
 		if lerr := firstIncompleteLicense(derived); lerr != nil {
-			s.logger.Error("deriver returned a feature without complete attribution",
+			s.logger.ErrorContext(ctx, "deriver returned a feature without complete attribution",
 				"deriver", d.ID(), "kind", d.Kind(), "error", lerr)
-			res.Providers = append(res.Providers, s.statusFor(d, output.NewPermanentError(lerr)))
+			res.Providers = append(res.Providers, s.statusFor(ctx, d, output.NewPermanentError(lerr)))
 			continue
 		}
 		res.Features = append(res.Features, derived...)
@@ -122,9 +122,9 @@ func (s *FeatureService) fetchOne(ctx context.Context, p output.FeatureProvider,
 		// empty block. The caller still gets HTTP 200 with a per-provider
 		// status, like every other provider fault in this service.
 		if lerr := res.Feature.License.Validate(); lerr != nil {
-			s.logger.Error("provider returned a feature without complete attribution",
+			s.logger.ErrorContext(ctx, "provider returned a feature without complete attribution",
 				"provider", p.ID(), "kind", p.Kind(), "error", lerr)
-			o.status = s.statusFor(p, output.NewPermanentError(lerr))
+			o.status = s.statusFor(ctx, p, output.NewPermanentError(lerr))
 			return o
 		}
 		f := res.Feature
@@ -132,16 +132,16 @@ func (s *FeatureService) fetchOne(ctx context.Context, p output.FeatureProvider,
 		o.status = domain.ProviderStatus{ID: p.ID(), Kind: p.Kind(), Status: domain.StatusOK, Cached: res.Cached}
 		return o
 	}
-	o.status = s.statusFor(p, err)
+	o.status = s.statusFor(ctx, p, err)
 	return o
 }
 
-func (s *FeatureService) statusFor(p providerIdentifier, err error) domain.ProviderStatus {
+func (s *FeatureService) statusFor(ctx context.Context, p providerIdentifier, err error) domain.ProviderStatus {
 	st := domain.ProviderStatus{ID: p.ID(), Kind: p.Kind(), Error: err.Error()}
 	pe, ok := output.AsProviderError(err)
 	if !ok {
 		// Unknown error: be conservative and let the client retry.
-		s.logger.Warn("unclassified provider error", "provider", p.ID(), "error", err)
+		s.logger.WarnContext(ctx, "unclassified provider error", "provider", p.ID(), "error", err)
 		st.Status = domain.StatusUnavailable
 		st.Retryable = true
 		return st
