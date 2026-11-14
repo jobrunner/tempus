@@ -28,8 +28,10 @@ const (
 	licenseURL   = "https://open-meteo.com/en/license"
 	// cacheVersion is part of every cache key. Bump it whenever the derived
 	// classification changes, or cached features keep the old result for up to
-	// cacheTTL. "2": Köppen-Geiger aligned with Beck et al. 2018.
-	cacheVersion = "2"
+	// cacheTTL. "2": Köppen-Geiger aligned with Beck et al. 2018. "3":
+	// Rivas-Martínez macrobioclimate and thermotype per the WBCS key, with the
+	// archive's elevation (new altitudinalBelt.macrobioclimate object).
+	cacheVersion = "3"
 	cacheTTL     = 365 * 24 * time.Hour
 )
 
@@ -68,6 +70,9 @@ func (p *Provider) Attribution() domain.License {
 type dailyResponse struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
+	// Elevation is the grid-cell elevation (m) Open-Meteo downscales the
+	// temperatures to (90 m DEM by default); nil when the response lacks it.
+	Elevation *float64 `json:"elevation"`
 	Daily     struct {
 		Time   []string   `json:"time"`
 		TMax   []*float64 `json:"temperature_2m_max"`
@@ -144,7 +149,7 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 			"bio18": rmm(b.Bio18), "bio19": rmm(b.Bio19),
 		},
 		"koppen":          koppen,
-		"altitudinalBelt": altitudinalBeltProps(clim, data.Latitude),
+		"altitudinalBelt": altitudinalBeltProps(clim, rmSite(data)),
 		"units": map[string]string{
 			"temperature": "°C", "precipitation": "mm",
 			"bio3": "%", "bio4": "°C×100 (Std.abw.)", "bio15": "% (Variationskoeffizient)",
@@ -225,10 +230,11 @@ func rmm(v float64) float64 { return math.Round(v) }
 
 // altitudinalBeltProps builds the climate-derived altitudinal belt object: the
 // classic belt name (source of truth for FHL comparison), the deciding
-// indicators, a borderline flag, and the Rivas-Martínez thermotype.
-func altitudinalBeltProps(clim domain.MonthlyClimate, latDeg float64) map[string]any {
+// indicators, a borderline flag, and the Rivas-Martínez macrobioclimate and
+// thermotype.
+func altitudinalBeltProps(clim domain.MonthlyClimate, site domain.RivasMartinezSite) map[string]any {
 	belt := domain.AltitudinalBelt(clim)
-	tCode, tDe, tEn := domain.RivasMartinezThermotype(clim, latDeg)
+	thermotype, macro := rivasMartinezProps(clim, site)
 
 	out := map[string]any{
 		"belt":       map[string]any{"de": belt.De, "en": belt.En},
@@ -240,8 +246,9 @@ func altitudinalBeltProps(clim domain.MonthlyClimate, latDeg float64) map[string
 			"matC":            r1(belt.MATC),
 			"biotemperatureC": r1(belt.BiotemperatureC),
 		},
-		"thermotype": map[string]any{keyCode: tCode, "de": tDe, "en": tEn},
-		"source":     domain.BeltSource,
+		"thermotype":      thermotype,
+		"macrobioclimate": macro,
+		"source":          domain.BeltSource,
 	}
 	if belt.Borderline {
 		out["adjacentBelt"] = map[string]any{"de": belt.AdjDe, "en": belt.AdjEn}

@@ -1962,6 +1962,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     var ind = ab.indicators || {};
                     var tt = ab.thermotype || {};
                     html += '<div class="weather-grid">';
+                    var mb = ab.macrobioclimate || {};
+                    if (mb.de) html += weatherStat('Makrobioklima (Rivas-Martínez)', esc(mb.de));
                     if (tt.code) html += weatherStat('Thermotyp (Rivas-Martínez)', esc(tt.code));
                     if (ind.warmestQuarterC !== undefined) html += weatherStat('Wärmstes Quartal (Ø)', esc(ind.warmestQuarterC) + '&#x202F;&deg;C');
                     if (ind.matC !== undefined) html += weatherStat('Jahresmitteltemperatur', esc(ind.matC) + '&#x202F;&deg;C');

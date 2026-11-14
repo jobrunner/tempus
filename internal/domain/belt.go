@@ -3,7 +3,7 @@ package domain
 import "math"
 
 // BeltSource is the attribution for the altitudinal-belt computation.
-const BeltSource = "Höhenstufe thermoklimatisch berechnet (Paulsen & Körner 2014; Rivas-Martínez 2004), tempus"
+const BeltSource = "Höhenstufe thermoklimatisch berechnet (Paulsen & Körner 2014; Rivas-Martínez 2008, WBCS), tempus"
 
 // Altitudinal-belt isotherm thresholds (°C), calibrated to the Central-European
 // (Alpine) convention so the classic names match FHL/Hegi usage, then applied

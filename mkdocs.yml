@@ -37,6 +37,7 @@ nav:
       - Configuration: reference/configuration.md
       - Observability: reference/observability.md
       - Köppen-Geiger reference dossier: research/koppen-reference.md
+      - Rivas-Martínez reference: research/rivas-martinez-reference.md
   - Explanation:
       - Overview: explanation/index.md
       - Architecture: explanation/architecture.md
