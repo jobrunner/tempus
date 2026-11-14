@@ -13,16 +13,16 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
 
@@ -30,12 +30,12 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -51,12 +51,12 @@ jobs:
     name: Vet
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -66,16 +66,16 @@ jobs:
     name: Architecture
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           args: --enable-only depguard,gomodguard_v2
@@ -88,35 +88,56 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
       - name: Build binary
         run: go build -o tempus ./cmd/tempus
 
+  # On PRs and branch pushes a ratchet: only vulnerabilities the change adds
+  # fail it, pre-existing ones are listed as a warning (scripts/vuln-gate.sh
+  # explains why). On main it stays absolute — that is the alarm, and
+  # vuln-scan.yml opens the fix PR.
   security:
     name: Security
     runs-on: ubuntu-latest
+    env:
+      ON_DEFAULT_BRANCH: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+
+      # The baseline: the PR's base commit, or main for a branch push (this
+      # workflow also runs on pushes to feat/**, fix/**, chore/**, and that
+      # run reports the same required "Security" check). A nested module (own
+      # go.mod), so the head's ./... skips it.
+      - name: Check out base
+        if: env.ON_DEFAULT_BRANCH != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
+          path: base
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
       - name: govulncheck
+        env:
+          BASE_DIR: ${{ env.ON_DEFAULT_BRANCH != 'true' && 'base' || '' }}
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          scripts/vuln-gate.sh "$BASE_DIR"
       # gosec runs inside golangci-lint (Lint job), which honors the repo's
       # //nolint:gosec directives; a standalone gosec CLI here would re-flag
       # those and uses different (#nosec) suppression semantics, so it's dropped.
@@ -126,16 +147,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, test, vet, architecture, build]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
       - name: Install goimports

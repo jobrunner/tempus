@@ -29,14 +29,16 @@ jobs:
       # permission-* input the token inherits the App's full installation
       # permissions, which is far more than this workflow needs (zizmor's
       # github-app audit).
-      - uses: actions/create-github-app-token@v2
+      # client-id, not app-id: both identify the same app, but the action
+      # deprecated app-id in v3. The private key is unchanged either way.
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
         with:
-          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
           permission-contents: write
           permission-pull-requests: write
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -52,18 +54,19 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       # cache: false on purpose. This job publishes the release artifacts, and a
       # build cache is writable by any workflow run on the repo — a poisoned
       # cache entry would end up inside a signed release. Rebuilding from
       # scratch costs a minute; the release is worth it. (zizmor cache-poisoning)
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: '~> v2'
           args: release --clean
