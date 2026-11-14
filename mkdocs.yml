@@ -36,6 +36,7 @@ nav:
       - HTTP API: reference/http-api.md
       - Configuration: reference/configuration.md
       - Observability: reference/observability.md
+      - Köppen-Geiger reference dossier: research/koppen-reference.md
   - Explanation:
       - Overview: explanation/index.md
       - Architecture: explanation/architecture.md
