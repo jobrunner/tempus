@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -61,9 +60,12 @@ func RetryAfter(resp *http.Response, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-// maxRetryAfterSeconds is the largest whole-second value a time.Duration holds;
-// anything above overflows to a negative delay when multiplied by time.Second.
-const maxRetryAfterSeconds = math.MaxInt64 / int64(time.Second)
+// maxRetryAfterSeconds is the largest whole-second value a time.Duration holds
+// (math.MaxInt64 / int64(time.Second), asserted in the tests); anything above
+// overflows to a negative delay when multiplied by time.Second. A literal, not
+// the expression: gremlins mutates arithmetic in a const, coverage can never
+// reach it, and each such mutant counts against the package's mutant coverage.
+const maxRetryAfterSeconds = 9223372036
 
 // retryAfterSeconds parses Retry-After as integer seconds in [0, maxRetryAfterSeconds].
 func retryAfterSeconds(resp *http.Response) (time.Duration, bool) {

@@ -3,6 +3,7 @@ package omhttp
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -192,5 +193,11 @@ func TestRetryAfter(t *testing.T) {
 		if got := RetryAfter(resp, fallback); got != tc.want {
 			t.Errorf("RetryAfter(%q) = %v, want %v", tc.header, got, tc.want)
 		}
+	}
+}
+
+func TestMaxRetryAfterSecondsIsLargestWholeSecondDuration(t *testing.T) {
+	if want := int64(math.MaxInt64 / time.Second); maxRetryAfterSeconds != want {
+		t.Fatalf("maxRetryAfterSeconds = %d, want %d", maxRetryAfterSeconds, want)
 	}
 }
