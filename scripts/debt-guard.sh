@@ -20,10 +20,15 @@ status=0
 
 [ -f "$BUDGET_FILE" ] || { echo "debt-guard: baseline file not found: $BUDGET_FILE" >&2; exit 2; }
 
+# .claude is not first-party code: it holds the vendored skills and, locally,
+# agent worktrees under .claude/worktrees — full copies of this repo whose
+# suppressions would be counted again (a clean main read 5 instead of 1).
+EXCLUDE_DIRS=(--exclude-dir=.claude --exclude-dir=.git)
+
 # count <pattern> — matching directive lines in first-party *.go. Tolerant of
 # zero matches (grep exits 1 with no hits, which would abort under pipefail).
 count() {
-  { grep -rn "$1" --include='*.go' . || true; } \
+  { grep -rn "${EXCLUDE_DIRS[@]}" "$1" --include='*.go' . || true; } \
     | { grep -vc '/\.go/mod/' || true; } | tr -d ' '
 }
 
@@ -43,7 +48,7 @@ elif [ "$total" -lt "$baseline" ]; then
 fi
 
 # 2. No new debt markers (leading-marker form only, so prose doesn't trip it).
-markers=$(grep -rnE '//[[:space:]]*(TODO|FIXME|HACK|XXX)([[:space:]:(]|$)' --include='*.go' . \
+markers=$(grep -rnE "${EXCLUDE_DIRS[@]}" '//[[:space:]]*(TODO|FIXME|HACK|XXX)([[:space:]:(]|$)' --include='*.go' . \
   | grep -v '/\.go/mod/' || true)
 if [ -n "$markers" ]; then
   echo "  ▼ debt-guard: FAIL — debt markers found (track in docs instead):" >&2

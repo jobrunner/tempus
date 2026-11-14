@@ -99,6 +99,25 @@ docker_go_matches_toolchain() {
   [ -n "$have" ] && [ "$have" = "$want" ]
 }
 
+# make lint and CI must run the same golangci-lint. Linter versions differ in
+# what they report (v2.12.2 counts goconst occurrences in test files, 2.13.2
+# does not), so a drift lets a PR pass locally and fail in CI. Every
+# golangci-lint-action step must set `version:` to the Makefile's pin; a step
+# without one would run the action's default, so it counts as <missing>. A step
+# ends at the next list item, at the next file and at EOF.
+golangci_version_matches() {
+  want=$(awk -F':= *' '/^GOLANGCI_LINT_VERSION/ { print $2 }' Makefile)
+  [ -n "$want" ] || return 1
+  ! awk '
+    function flush() { if (inlint) print (ver == "" ? "<missing>" : ver); inlint = 0; ver = "" }
+    FNR == 1                                          { flush() }
+    /^[[:space:]]*-[[:space:]]/                       { flush() }
+    /uses:[[:space:]]*golangci\/golangci-lint-action/ { inlint = 1; next }
+    inlint && /^[[:space:]]+version:/                 { ver = $0; sub(/^[[:space:]]+version:[[:space:]]*/, "", ver); gsub(/["\047]/, "", ver) }
+    END                                               { flush() }
+  ' "$WORKFLOWS"/*.yml | grep -vxF "$want" | grep -q .
+}
+
 # gremlins must never be handed a `...` wildcard — it does not expand it and
 # generates zero mutants while exiting 0.
 #
@@ -190,6 +209,7 @@ check license              "LICENSE"                         has_file LICENSE
 echo "— Toolchain hygiene"
 check go-version-file      "no hardcoded go-version"         no_hardcoded_go
 check docker-go-toolchain  "Dockerfile golang = go.mod"      docker_go_matches_toolchain
+check golangci-version     "make lint = CI golangci-lint"    golangci_version_matches
 
 # Waiver ratchet.
 echo

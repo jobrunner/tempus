@@ -32,3 +32,6 @@ coverage.txt
 /git.cc.json
 /coverage.cc.json
 /coverage.info
+
+# Local agent worktrees (full repo copies), never committed.
+.claude/worktrees/

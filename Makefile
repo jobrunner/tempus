@@ -9,7 +9,11 @@ BUILD_TIME  := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS     := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 
 GO       := go
-GOLINT   := golangci-lint
+# One golangci-lint for local runs and CI: ci.yml pins the same version on its
+# golangci-lint-action steps, and harness-check.sh (golangci-version) fails when
+# they differ. A different local binary reported 0 issues where CI found 11.
+GOLANGCI_LINT_VERSION := v2.12.2
+GOLINT   := $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 COVERAGE_DIR := coverage
 MKDOCS   := uvx --with mkdocs-material mkdocs
 
