@@ -3,6 +3,7 @@ package httpapi
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -89,19 +90,21 @@ func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 //	  openssl dgst -sha384 -binary | openssl base64 -A
 const (
 	swaggerUIVersion      = "5.35.0"
-	swaggerUIBase         = "https://unpkg.com/swagger-ui-dist@" + swaggerUIVersion + "/"
 	swaggerUICSSIntegrity = "sha384-WlYgdmXYOOBWL5apwjDEZwN+U3HmXSSu5R6V5aGxEcf7z+KuRNwBhoxKVN1i3D5I"
 	swaggerUIJSIntegrity  = "sha384-gjRm0bEPMeTmMh5jT2cHccIwCUZSTd8YC+j0d0sXw0MdGEfScduGpSyF3ZSSLkX9"
 )
 
 // swaggerUIPage is a minimal Swagger UI page pointing at /openapi.json.
-// (Swap for your preferred renderer; kept tiny here on purpose.)
-const swaggerUIPage = `<!doctype html><html><head><meta charset="utf-8"><title>tempus API</title>
-<link rel="stylesheet" href="` + swaggerUIBase + `swagger-ui.css" integrity="` + swaggerUICSSIntegrity + `" crossorigin="anonymous"></head>
+// (Swap for your preferred renderer; kept tiny here on purpose.) It is
+// formatted rather than concatenated: gremlins mutates every `+` in a const
+// expression, and coverage cannot reach a const, so each one would count as an
+// uncovered mutant.
+var swaggerUIPage = fmt.Sprintf(`<!doctype html><html><head><meta charset="utf-8"><title>tempus API</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@%[1]s/swagger-ui.css" integrity="%[2]s" crossorigin="anonymous"></head>
 <body><div id="swagger-ui"></div>
-<script src="` + swaggerUIBase + `swagger-ui-bundle.js" integrity="` + swaggerUIJSIntegrity + `" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/swagger-ui-dist@%[1]s/swagger-ui-bundle.js" integrity="%[3]s" crossorigin="anonymous"></script>
 <script>window.onload=()=>SwaggerUIBundle({url:"/openapi.json",dom_id:"#swagger-ui"})</script>
-</body></html>`
+</body></html>`, swaggerUIVersion, swaggerUICSSIntegrity, swaggerUIJSIntegrity)
 
 // handleSwaggerUI serves the Swagger UI page.
 func (s *Server) handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
