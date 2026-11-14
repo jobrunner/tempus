@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.25.0](https://github.com/jobrunner/tempus/compare/v0.24.3...v0.25.0) (2026-11-14)
+
+
+### Features
+
+* **app:** hand the TracerProvider to the Open-Meteo clients ([2f47984](https://github.com/jobrunner/tempus/commit/2f479843c8cf53649eb8ae2980985811a20130de))
+* **bioclim:** expose the Rivas-Martínez macrobioclimate and feed the grid elevation into its key ([ac45d7d](https://github.com/jobrunner/tempus/commit/ac45d7d6e2ae791bab8af3ee8caa725d09119dcc))
+* **omhttp:** trace each Open-Meteo attempt as a client span ([cee51af](https://github.com/jobrunner/tempus/commit/cee51af3e287d68610f803b6ad4421eca18d98ca))
+* **telemetry:** trace outbound Open-Meteo calls via otelhttp ([f6982d6](https://github.com/jobrunner/tempus/commit/f6982d6df67fe43eddcd7dee5c4a739fc5da786e))
+
+
+### Bug Fixes
+
+* **bioclim:** bump the cache version so corrected Köppen classes are served ([9728651](https://github.com/jobrunner/tempus/commit/972865181b2981d7158423b62fc76d99158b1743))
+* **domain:** classify Thot = 10 °C as polar (Köppen E) ([8548c78](https://github.com/jobrunner/tempus/commit/8548c782f6d863eae55c30e765b6936794385230))
+* **domain:** compare Rivas-Martínez indices with the bounds beyond float roundoff ([537d880](https://github.com/jobrunner/tempus/commit/537d880f907bd181249070c0c42796d840a75aeb))
+* **domain:** count only months above 10 °C for Köppen Tmon10 ([a9392c5](https://github.com/jobrunner/tempus/commit/a9392c56febc968e216b025f02680ec4ac452a87))
+* **domain:** derive the Rivas-Martínez macrobioclimate and thermotype per source ([61f032e](https://github.com/jobrunner/tempus/commit/61f032e827e3dc2df746e493d4cddf6da1de0b52))
+* **domain:** drop the non-Beck "As" Köppen class ([b65121a](https://github.com/jobrunner/tempus/commit/b65121a0eb11d41df8f6a6a7e67ebd129fe2f235))
+* **domain:** keep an exact 70 % seasonal share at the even Köppen threshold ([a47fd36](https://github.com/jobrunner/tempus/commit/a47fd364233a16870aafec613629ff64cd215fd7))
+* **domain:** let Köppen a/b take precedence over d ([8acf6f3](https://github.com/jobrunner/tempus/commit/8acf6f3ca335d971f11f512d4a411609f1a909af))
+* **domain:** pick the Köppen summer half-year by temperature ([a553ad0](https://github.com/jobrunner/tempus/commit/a553ad02f023e1cdb7e3ca2fa65ee236a6c423a6))
+* **domain:** require more than 70 % seasonal rain for the Köppen B threshold ([3ca365d](https://github.com/jobrunner/tempus/commit/3ca365d1681c4e95362eddee13bd1ca5916dafbb))
+* **domain:** resolve Köppen s/w overlap by the wetter half-year ([2448ef1](https://github.com/jobrunner/tempus/commit/2448ef13df4253f23463de4e9e327c9f1c795c96))
+* **harness:** require an explicit version on every golangci-lint action step ([b7ef2ed](https://github.com/jobrunner/tempus/commit/b7ef2ed572f134324069cfffa62adaf6dc0af0f1))
+* **http:** pin Swagger UI to swagger-ui-dist 5.35.0 with SRI ([0c84c86](https://github.com/jobrunner/tempus/commit/0c84c86e03ac72eb429b105305547f144f98377e))
+* **http:** pin Swagger UI to the two-week-old 5.34.1 instead of 5.35.0 ([471898b](https://github.com/jobrunner/tempus/commit/471898bfc233ec0a421ddffa6f53109a737e24b6))
+* **logging:** log request-scoped events with the request context ([688f022](https://github.com/jobrunner/tempus/commit/688f022f2d1d3bf27e6af0aad88a89543b7179e5))
+* **omhttp:** reject Retry-After values that overflow a Duration ([b599ea8](https://github.com/jobrunner/tempus/commit/b599ea854f2dd0dcf818bb785df1f17fe0c556a2))
+
 ## [0.24.3](https://github.com/jobrunner/tempus/compare/v0.24.2...v0.24.3) (2026-11-14)
 
 
