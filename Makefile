@@ -83,13 +83,17 @@ mutation: ## Mutation testing (runs locally too — gremlins does not panic on m
 CCSH_VERSION ?= 1.143.0
 CCSH ?= $(shell command -v ccsh 2>/dev/null || echo "npx --yes codecharta-analysis@$(CCSH_VERSION)")
 
+# gcov2lcov from nixpkgs is built with -trimpath and has no GOROOT of its own.
+# Without one, go/build cannot resolve module packages: it warns per file,
+# writes an empty coverage.info and still exits 0, and ccsh merge then waits
+# forever on a prompt about the empty coverage map. Hence the explicit GOROOT.
 codecharta: ## CodeCharta map (structure+complexity+coverage+git) -> tempus.cc.json.gz, then the ratchet gate (needs node+java)
 	$(CCSH) unifiedparser . -fe=go -e='_test\.go,third_party,\.claude' -nc -o base.cc.json
 	$(CCSH) gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
 	@$(GO) test -coverprofile=coverage.out ./... || true; \
 	 inputs="base.cc.json git.cc.json"; \
 	 if [ -s coverage.out ]; then \
-	   gcov2lcov -infile=coverage.out -outfile=coverage.info; \
+	   GOROOT=$$($(GO) env GOROOT) gcov2lcov -infile=coverage.out -outfile=coverage.info; \
 	   $(CCSH) coverageimport coverage.info -f lcov -nc -o coverage.cc.json; \
 	   inputs="$$inputs coverage.cc.json"; \
 	 else echo "WARN: no coverage.out — map without coverage"; fi; \
