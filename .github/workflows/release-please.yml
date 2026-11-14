@@ -29,10 +29,12 @@ jobs:
       # permission-* input the token inherits the App's full installation
       # permissions, which is far more than this workflow needs (zizmor's
       # github-app audit).
+      # client-id, not app-id: both identify the same app, but the action
+      # deprecated app-id in v3. The private key is unchanged either way.
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
         with:
-          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
           permission-contents: write
           permission-pull-requests: write
