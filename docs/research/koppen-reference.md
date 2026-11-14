@@ -112,6 +112,38 @@ Sum: 75.
 - Tmon10 ≥ 4 ✔
 - Tcold < −38 ✔ (but evaluated first ✘)
 
+### Float roundoff at the thresholds
+
+Station normals carry one decimal, but their float sums do not land exactly:
+twelve months totalling 440 mm can sum to 439.99999999999994, so a value
+exactly on a Table 2 threshold could fall on the wrong side of a strict or
+non-strict inequality. Every comparison on a **computed** quantity therefore
+uses the roundoff helpers of `internal/domain/roundoff.go` (a value within
+1e-9, relative to the bound, counts as on the bound; the source's `<`/`≤`
+decides):
+
+| Criterion | Compared as | Why |
+|---|---|---|
+| B "MAP<10×Pth", BW "MAP<5×Pth" | `below(MAP, 10·Pth)`, `below(MAP, 5·Pth)` | MAP is a sum, Pth derives from a mean |
+| h "MAT≥18" | `atLeast(MAT, 18)` | MAT is a mean of 12 values |
+| Pthreshold ">70%" | `above(10·part, 7·total)` | no inexact 0.7; both are sums |
+| Am "Pdry≥100−MAP/25" | `atLeast(25·Pdry + MAP, 2500)` | no inexact MAP/25 (100 − 2070/25 is 17.200000000000003 in float) |
+| s "Psdry<Pwwet/3" | `below(3·Psdry, Pwwet)` | 91.2/3 is 30.400000000000002 in float |
+| s/w tie "more in winter" | `above(Pw_total, Ps_total)` | half-year sums; equal halves give w |
+| summer/winter half-year | `above(T_ONDJFM, T_AMJJAS)` | half-year sums |
+
+Compared **verbatim**, on purpose: Thot ≤ 10, Thot > 0, Tcold ≥ 18, Tcold > 0,
+Pdry ≥ 60, Psdry < 40, a month's T > 10, Thot ≥ 22, Tcold < −38 — each is one
+monthly input against a literal, so no summation roundoff can occur. Also
+verbatim: w "Pwdry<Pswet/10": with one-decimal inputs, Pswet = 10·Pwdry is a
+whole number, and n/10 rounds to the same double as the one-decimal literal
+Pwdry, so the float comparison is exact (no input can miss it).
+`KoppenBorderline` shifts every month by ±1.5 °C; 1.5 is exact in binary and
+the thresholds are whole numbers, so a shifted month hits a threshold only
+when the sum is exact. Regression cases: `koppen_roundoff_test.go`. Across
+the 4,540 WMO 1991–2020 stations with T and P, the change moves no station's
+class.
+
 ---
 
 ## Part 2: Rivas-Martínez macrobioclimates (WBCS08)
