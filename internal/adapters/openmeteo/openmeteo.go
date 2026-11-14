@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
@@ -24,6 +24,10 @@ const (
 	providerKind = "weather"
 	licenseName  = "CC-BY 4.0"
 	licenseURL   = "https://open-meteo.com/en/license"
+
+	// retryFallback is the retry hint for a throttled or failing upstream that
+	// sends no usable Retry-After header.
+	retryFallback = 30 * time.Second
 )
 
 // primaryVar is the variable that decides whether an hour has data yet: when it
@@ -116,28 +120,9 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, output.NewPermanentError(err)
 	}
 
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		if pe, ok := output.AsProviderError(err); ok {
-			return domain.ProviderResult{}, pe
-		}
-		return domain.ProviderResult{}, output.NewTransientError(err, 30*time.Second)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return domain.ProviderResult{}, output.NewTransientError(
-			fmt.Errorf("open-meteo status %d", resp.StatusCode), retryAfter(resp))
-	}
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return domain.ProviderResult{}, output.NewPermanentError(fmt.Errorf("open-meteo status %d: %s", resp.StatusCode, b))
-	}
-
 	var data apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return domain.ProviderResult{}, output.NewPermanentError(err)
+	if err := omhttp.GetJSON(ctx, p.client, u, &data, retryFallback); err != nil {
+		return domain.ProviderResult{}, err
 	}
 	return p.toFeature(data, req, useArchive)
 }
@@ -179,13 +164,4 @@ func (p *Provider) license(useArchive bool) domain.License {
 		URL:         licenseURL,
 		Attribution: "Weather data by Open-Meteo.com; " + src,
 	}
-}
-
-func retryAfter(resp *http.Response) time.Duration {
-	if s := resp.Header.Get("Retry-After"); s != "" {
-		if secs, err := time.ParseDuration(s + "s"); err == nil {
-			return secs
-		}
-	}
-	return 30 * time.Second
 }

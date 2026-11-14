@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -103,12 +102,8 @@ func shouldRetry(resp *http.Response, err error) bool {
 // retryDelay prefers the server's Retry-After (seconds) and falls back to
 // exponential backoff starting at 2s.
 func retryDelay(resp *http.Response, attempt int) time.Duration {
-	if resp != nil {
-		if s := resp.Header.Get("Retry-After"); s != "" {
-			if secs, err := strconv.Atoi(s); err == nil && secs >= 0 {
-				return time.Duration(secs) * time.Second
-			}
-		}
+	if d, ok := retryAfterSeconds(resp); ok {
+		return d
 	}
 	return 2 * time.Second << attempt
 }

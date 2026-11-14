@@ -1,17 +1,19 @@
 package bioclim
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/jobrunner/tempus/internal/domain"
-	"github.com/jobrunner/tempus/internal/ports/output"
 )
+
+// retryFallback is the retry hint for a throttled or failing upstream that
+// sends no usable Retry-After header. It is twice the other Open-Meteo
+// adapters' 30s: the 30-year daily archive range is the heaviest call tempus
+// makes (Open-Meteo counts it as many calls), so backing off longer before
+// asking again is kinder to the shared rate limit and daily budget.
+const retryFallback = 60 * time.Second
 
 // buildURL builds the ERA5 archive request URL for the given coordinate and
 // reference-period year range.
@@ -29,39 +31,6 @@ func (p *Provider) buildURL(coord domain.Coordinate, startY, endY int) (string, 
 	q.Set("end_date", fmt.Sprintf("%d-12-31", endY))
 	u.RawQuery = q.Encode()
 	return u.String(), nil
-}
-
-func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		if pe, ok := output.AsProviderError(err); ok {
-			return pe
-		}
-		return output.NewTransientError(err, 30*time.Second)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return output.NewTransientError(fmt.Errorf("open-meteo status %d", resp.StatusCode), retryAfter(resp))
-	}
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return output.NewPermanentError(fmt.Errorf("open-meteo status %d: %s", resp.StatusCode, b))
-	}
-	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
-		return output.NewPermanentError(err)
-	}
-	return nil
-}
-
-// retryAfter reads the response's Retry-After header (seconds) so the
-// envelope's hint reflects what Open-Meteo actually asked for; it falls back
-// to a fixed 60s when the header is absent or unparsable.
-func retryAfter(resp *http.Response) time.Duration {
-	if secs, err := time.ParseDuration(resp.Header.Get("Retry-After") + "s"); err == nil {
-		return secs
-	}
-	return 60 * time.Second
 }
 
 func (p *Provider) license(period string) domain.License {

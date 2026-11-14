@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
@@ -91,7 +92,7 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, output.NewPermanentError(err)
 	}
 	var data dailyResponse
-	if err := p.getJSON(ctx, u, &data); err != nil {
+	if err := omhttp.GetJSON(ctx, p.client, u, &data, retryFallback); err != nil {
 		return domain.ProviderResult{}, err
 	}
 

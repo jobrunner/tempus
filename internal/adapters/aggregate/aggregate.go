@@ -7,16 +7,15 @@ package aggregate
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"net/url"
 	"slices"
 	"time"
 
+	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
@@ -27,6 +26,10 @@ const (
 	licenseName  = "CC-BY 4.0"
 	licenseURL   = "https://open-meteo.com/en/license"
 	gddMethod    = "average (Tmax+Tmin)/2 − base, floor 0, no upper cutoff"
+
+	// retryFallback is the retry hint for a throttled or failing upstream that
+	// sends no usable Retry-After header.
+	retryFallback = 30 * time.Second
 )
 
 // errFuture is returned when an aggregate query targets a future instant.
@@ -105,14 +108,14 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 
 	// Daily range (GDD + fund-day extrema) — always from the archive.
 	var daily dailyResponse
-	if err := p.getJSON(ctx, p.dailyURL(req, start), &daily); err != nil {
+	if err := omhttp.GetJSON(ctx, p.client, p.dailyURL(req, start), &daily, retryFallback); err != nil {
 		return domain.ProviderResult{}, err
 	}
 
 	// Hourly precipitation window (last 5 days) — forecast endpoint for recent dates.
 	useArchive := p.clock.Now().UTC().Sub(req.Instant) >= p.archiveDelay
 	var hourly hourlyResponse
-	if err := p.getJSON(ctx, p.precipURL(req, useArchive), &hourly); err != nil {
+	if err := omhttp.GetJSON(ctx, p.client, p.precipURL(req, useArchive), &hourly, retryFallback); err != nil {
 		return domain.ProviderResult{}, err
 	}
 
@@ -228,39 +231,6 @@ func (p *Provider) precipURL(req domain.QueryRequest, useArchive bool) string {
 	}
 	u.RawQuery = q.Encode()
 	return u.String()
-}
-
-func (p *Provider) getJSON(ctx context.Context, u string, dst any) error {
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		if pe, ok := output.AsProviderError(err); ok {
-			return pe
-		}
-		return output.NewTransientError(err, 30*time.Second)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-		return output.NewTransientError(fmt.Errorf("open-meteo status %d", resp.StatusCode), retryAfter(resp))
-	}
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return output.NewPermanentError(fmt.Errorf("open-meteo status %d: %s", resp.StatusCode, b))
-	}
-	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
-		return output.NewPermanentError(err)
-	}
-	return nil
-}
-
-// retryAfter reads the response's Retry-After header (seconds) so the
-// envelope's hint reflects what Open-Meteo actually asked for; it falls back
-// to a fixed 30s when the header is absent or unparsable.
-func retryAfter(resp *http.Response) time.Duration {
-	if secs, err := time.ParseDuration(resp.Header.Get("Retry-After") + "s"); err == nil {
-		return secs
-	}
-	return 30 * time.Second
 }
 
 func (p *Provider) license() domain.License {
