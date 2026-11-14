@@ -35,10 +35,12 @@ jobs:
       issues: write           # open / comment on the security issue on findings
       security-events: write  # upload SARIF to the GitHub Security tab
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -47,17 +49,15 @@ jobs:
 
       - name: Run zizmor
         id: scan
+        # Without a token zizmor silently skips its online audits
+        # (impostor-commit, known-vulnerable-actions, ref-confusion,
+        # stale-action-refs) — exactly the ones that check our SHA pins.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # zizmor exits non-zero on findings. We gate on high severity only
-          # (template-injection, cache-poisoning etc.).
-          #
-          # NOTE what --min-severity=high means here: it filters BOTH passes,
-          # the SARIF one included. Informational, low and medium findings are
-          # therefore not reported anywhere — not in the issue and not in the
-          # Security tab. That is deliberate for a v0.x project (the noise
-          # would train people to ignore the label), but it is a choice, not a
-          # safety net. Drop the flag on the SARIF pass if you want the full
-          # picture in code scanning while still gating only on high.
+          # (template-injection, cache-poisoning etc.); informational to
+          # medium findings land in the SARIF upload but don't gate.
           #
           # Project policy + ignored audits are encoded in .github/zizmor.yml.
           #
@@ -73,8 +73,10 @@ jobs:
           # cannot tell us whether findings exist — but a non-zero exit here
           # still means the scan itself broke. Check it: otherwise a failed
           # SARIF pass followed by a clean plain pass uploads a truncated or
-          # empty report as though it were a clean scan.
-          zizmor --config .github/zizmor.yml --min-severity=high \
+          # empty report as though it were a clean scan. No --min-severity
+          # here: the Security tab gets every finding, only the gating pass
+          # below is restricted to high.
+          zizmor --config .github/zizmor.yml \
             --format sarif . > zizmor.sarif 2> zizmor.stderr
           sarif_rc=$?
           if [ "$sarif_rc" -ne 0 ]; then
@@ -106,7 +108,7 @@ jobs:
       # SARIF is unreliable.
       - name: Upload SARIF to GitHub Security tab
         if: steps.scan.outputs.rc == '0' || steps.scan.outputs.rc == '14'
-        uses: github/codeql-action/upload-sarif@v4.37.9
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: zizmor.sarif
           category: zizmor
