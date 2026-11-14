@@ -19,11 +19,19 @@ linters:
     - nolintlint
     - prealloc
     - revive
+    - sloglint
     - sqlclosecheck
     - unconvert
     - unparam
     - whitespace
   settings:
+    sloglint:
+      # Only the trace-correlation rule: a log call with a context in scope
+      # must pass it (InfoContext, ErrorContext, …), or SpanContextHandler
+      # cannot attach trace_id. The style rules stay off; mixed kv/attr args
+      # are allowed, as they were before.
+      no-mixed-args: false
+      context: scope
     depguard:
       rules:
         adapters:
@@ -94,6 +102,13 @@ linters:
           - goconst
           - noctx
         path: _test\.go
+      # sloglint is enabled for its context rule only. Its always-on
+      # io.Discard→slog.DiscardHandler check is not configurable and fires on
+      # test loggers only; it is style, not correlation, so it stays out here.
+      - linters:
+          - sloglint
+        path: _test\.go
+        text: use slog.DiscardHandler instead
     paths:
       - third_party$
       - builtin$

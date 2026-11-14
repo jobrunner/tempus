@@ -29,8 +29,8 @@ func spanCtx(t *testing.T) (context.Context, trace.SpanContext) {
 
 // jsonLogger builds the production decoration (SpanContextHandler over a JSON
 // handler) writing into buf.
-func jsonLogger(buf *bytes.Buffer, level slog.Level) *slog.Logger {
-	return slog.New(NewSpanContextHandler(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: level})))
+func jsonLogger(buf *bytes.Buffer) *slog.Logger {
+	return slog.New(NewSpanContextHandler(slog.NewJSONHandler(buf, nil)))
 }
 
 // lastLine decodes the single JSON record in buf.
@@ -51,7 +51,7 @@ func TestSpanContextHandler_AddsTraceAndSpanID(t *testing.T) {
 	var buf bytes.Buffer
 	ctx, sc := spanCtx(t)
 
-	jsonLogger(&buf, slog.LevelInfo).InfoContext(ctx, "hello", "k", "v")
+	jsonLogger(&buf).InfoContext(ctx, "hello", "k", "v")
 
 	m := lastLine(t, &buf)
 	if m["trace_id"] != sc.TraceID().String() {
@@ -76,7 +76,7 @@ func TestSpanContextHandler_NoValidSpan_NoKeys(t *testing.T) {
 	for name, ctx := range tests {
 		t.Run(name, func(t *testing.T) {
 			var buf bytes.Buffer
-			jsonLogger(&buf, slog.LevelInfo).InfoContext(ctx, "hello")
+			jsonLogger(&buf).InfoContext(ctx, "hello")
 
 			m := lastLine(t, &buf)
 			for _, k := range []string{"trace_id", "span_id"} {
@@ -112,7 +112,7 @@ func TestSpanContextHandler_WithAttrsKeepsDecoration(t *testing.T) {
 	var buf bytes.Buffer
 	ctx, sc := spanCtx(t)
 
-	jsonLogger(&buf, slog.LevelInfo).With("component", "http").InfoContext(ctx, "hello")
+	jsonLogger(&buf).With("component", "http").InfoContext(ctx, "hello")
 
 	m := lastLine(t, &buf)
 	if m["component"] != "http" {
@@ -131,7 +131,7 @@ func TestSpanContextHandler_WithGroupKeepsTraceIDsTopLevel(t *testing.T) {
 	var buf bytes.Buffer
 	ctx, sc := spanCtx(t)
 
-	jsonLogger(&buf, slog.LevelInfo).
+	jsonLogger(&buf).
 		With("pre", 1).
 		WithGroup("req").
 		With("method", "GET").
