@@ -80,15 +80,31 @@ func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// handleSwaggerUI serves a minimal Swagger UI page pointing at /openapi.json.
+// Swagger UI is loaded from unpkg, pinned to one exact swagger-ui-dist release
+// and guarded by Subresource Integrity, so neither a new upstream release nor
+// a tampered CDN file changes what /docs runs. A bump changes the version AND
+// both hashes (they are per-release); recompute each with
+//
+//	curl -sL https://unpkg.com/swagger-ui-dist@<version>/<file> |
+//	  openssl dgst -sha384 -binary | openssl base64 -A
+const (
+	swaggerUIVersion      = "5.35.0"
+	swaggerUIBase         = "https://unpkg.com/swagger-ui-dist@" + swaggerUIVersion + "/"
+	swaggerUICSSIntegrity = "sha384-WlYgdmXYOOBWL5apwjDEZwN+U3HmXSSu5R6V5aGxEcf7z+KuRNwBhoxKVN1i3D5I"
+	swaggerUIJSIntegrity  = "sha384-gjRm0bEPMeTmMh5jT2cHccIwCUZSTd8YC+j0d0sXw0MdGEfScduGpSyF3ZSSLkX9"
+)
+
+// swaggerUIPage is a minimal Swagger UI page pointing at /openapi.json.
 // (Swap for your preferred renderer; kept tiny here on purpose.)
-func (s *Server) handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
-	const page = `<!doctype html><html><head><meta charset="utf-8"><title>tempus API</title>
-<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css"></head>
+const swaggerUIPage = `<!doctype html><html><head><meta charset="utf-8"><title>tempus API</title>
+<link rel="stylesheet" href="` + swaggerUIBase + `swagger-ui.css" integrity="` + swaggerUICSSIntegrity + `" crossorigin="anonymous"></head>
 <body><div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+<script src="` + swaggerUIBase + `swagger-ui-bundle.js" integrity="` + swaggerUIJSIntegrity + `" crossorigin="anonymous"></script>
 <script>window.onload=()=>SwaggerUIBundle({url:"/openapi.json",dom_id:"#swagger-ui"})</script>
 </body></html>`
+
+// handleSwaggerUI serves the Swagger UI page.
+func (s *Server) handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(page))
+	_, _ = w.Write([]byte(swaggerUIPage))
 }
