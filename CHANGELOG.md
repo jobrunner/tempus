@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.1](https://github.com/jobrunner/tempus/compare/v0.25.0...v0.25.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **bioclim:** bump the cache version so roundoff-corrected Köppen classes are served ([41f6c02](https://github.com/jobrunner/tempus/commit/41f6c02b5b58a799b9205975540b0a26efe405f3))
+* **domain:** compare Köppen thresholds on computed values beyond float roundoff ([c442f1b](https://github.com/jobrunner/tempus/commit/c442f1b43b9ec89899310ec3142f42909d41cce7))
+
 ## [0.25.0](https://github.com/jobrunner/tempus/compare/v0.24.3...v0.25.0) (2026-11-14)
 
 
