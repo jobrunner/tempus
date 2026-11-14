@@ -57,17 +57,19 @@
           ];
 
           # The go binary from nixpkgs only bootstraps. The Go that builds,
-          # tests and gets scanned by govulncheck is exactly go.mod's toolchain
-          # directive, the one the Dockerfile pins. Not GOTOOLCHAIN=auto: that
-          # only ever switches UP, so once nixpkgs ships a newer patch release
-          # than go.mod names, the scan would see a newer stdlib than the
-          # release binary. Same rule as scripts/vuln-gate.sh; read when the
-          # shell starts (direnv reloads on go.mod changes, see .envrc).
+          # tests and gets scanned by govulncheck is go.mod's toolchain
+          # directive, the one the Dockerfile pins. Not plain GOTOOLCHAIN=auto:
+          # that starts from the bundled Go and only ever switches UP, so once
+          # nixpkgs ships a newer patch release than go.mod names, the scan
+          # would see a newer stdlib than the release binary. <toolchain>+auto
+          # starts from the declared toolchain and still switches up when a
+          # module requires a newer Go (go get raises the directive then).
+          # Read when the shell starts; direnv reloads on go.mod changes.
           shellHook = ''
             if [ -f go.mod ]; then
               GOTOOLCHAIN=$(awk '$1 == "toolchain" { print $2 }' go.mod)
               [ -n "$GOTOOLCHAIN" ] || GOTOOLCHAIN="go$(awk '$1 == "go" { print $2 }' go.mod)"
-              export GOTOOLCHAIN
+              export GOTOOLCHAIN="$GOTOOLCHAIN+auto"
             fi
           '';
           # The release binary is static (Dockerfile, .goreleaser.yml), and

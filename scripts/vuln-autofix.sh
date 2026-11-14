@@ -19,12 +19,15 @@
 set -euo pipefail
 
 SUMMARY=$1
-# Scan with exactly the toolchain go.mod declares, the Go of the release
-# binary (the Dockerfile pins the same). Not GOTOOLCHAIN=auto: it only switches
-# up, so a newer local Go would scan a newer stdlib. Called again before the
-# re-scan, after a stdlib fix moved the directive.
+# Scan with the toolchain go.mod declares, the Go of the release binary (the
+# Dockerfile pins the same). Not plain GOTOOLCHAIN=auto: it starts from the
+# local Go and only switches up, so a newer local Go would scan a newer stdlib.
+# +auto keeps the declared toolchain as the start but lets go get switch up
+# (and raise the directive) when a fixed module requires a newer Go; an exact
+# pin would make that go get fail. Called again before the re-scan, after the
+# fixes moved the directive.
 use_declared_toolchain() {
-    GOTOOLCHAIN=$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')
+    GOTOOLCHAIN="$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')+auto"
     export GOTOOLCHAIN
 }
 use_declared_toolchain
