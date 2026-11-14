@@ -53,15 +53,15 @@ func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
 
 	// Summer is the warm half-year (Apr–Sep north, Oct–Mar south).
 	summer, winter := halfYears(latDeg)
-	pSummer, pSummerMin, pSummerMax := seasonStats(c.Precip, summer)
-	pWinter, pWinterMin, pWinterMax := seasonStats(c.Precip, winter)
+	ps := seasonStats(c.Precip, summer)
+	pw := seasonStats(c.Precip, winter)
 
 	// Aridity threshold for B climates.
 	var pth float64
 	switch {
-	case pWinter >= 0.7*mapp:
+	case pw.total >= 0.7*mapp:
 		pth = 2 * mat
-	case pSummer >= 0.7*mapp:
+	case ps.total >= 0.7*mapp:
 		pth = 2*mat + 28
 	default:
 		pth = 2*mat + 14
@@ -75,9 +75,9 @@ func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
 	case tcold >= 18:
 		code = koppenA(pdry, mapp)
 	case tcold > 0:
-		code = "C" + seasonLetter(pSummerMin, pSummerMax, pWinterMin, pWinterMax) + heatLetter(thot, tmon10, tcold, false)
+		code = "C" + seasonLetter(ps, pw) + heatLetter(thot, tmon10, tcold, false)
 	default:
-		code = "D" + seasonLetter(pSummerMin, pSummerMax, pWinterMin, pWinterMax) + heatLetter(thot, tmon10, tcold, true)
+		code = "D" + seasonLetter(ps, pw) + heatLetter(thot, tmon10, tcold, true)
 	}
 
 	desc := koppenDescriptions[code]
@@ -116,16 +116,27 @@ func koppenA(pdry, mapp float64) string {
 	}
 }
 
-// seasonLetter returns the precipitation sub-type: s (dry summer), w (dry
-// winter) or f (no dry season).
-func seasonLetter(pSummerMin, pSummerMax, pWinterMin, pWinterMax float64) string {
-	if pSummerMin < 40 && pSummerMin < pWinterMax/3 {
-		return "s"
-	}
-	if pWinterMin < pSummerMax/10 {
+// seasonLetter returns the C/D precipitation sub-type per Beck et al. 2018,
+// Table 2: s (dry summer) "Psdry<40 & Psdry<Pwwet/3", w (dry winter)
+// "Pwdry<Pswet/10", else f. When both criteria hold, the Methods text decides:
+// s and w "were made mutually exclusive by assigning s when more
+// precipitation falls in winter than in summer and assigning w otherwise".
+func seasonLetter(summer, winter halfYearPrecip) string {
+	s := summer.min < 40 && summer.min < winter.max/3
+	w := winter.min < summer.max/10
+	switch {
+	case s && w:
+		if winter.total > summer.total {
+			return "s"
+		}
 		return "w"
+	case s:
+		return "s"
+	case w:
+		return "w"
+	default:
+		return "f"
 	}
-	return "f"
 }
 
 // heatLetter returns the temperature sub-type: a/b/c, plus d for very cold
@@ -155,19 +166,19 @@ func halfYears(latDeg float64) (summer, winter [6]int) {
 	return north, south
 }
 
-func seasonStats(precip [12]float64, months [6]int) (total, minVal, maxVal float64) {
-	minVal, maxVal = precip[months[0]], precip[months[0]]
+// halfYearPrecip is the precipitation total, driest and wettest month of a
+// six-month half-year (mm).
+type halfYearPrecip struct{ total, min, max float64 }
+
+func seasonStats(precip [12]float64, months [6]int) halfYearPrecip {
+	h := halfYearPrecip{min: precip[months[0]], max: precip[months[0]]}
 	for _, m := range months {
 		v := precip[m]
-		total += v
-		if v < minVal {
-			minVal = v
-		}
-		if v > maxVal {
-			maxVal = v
-		}
+		h.total += v
+		h.min = min(h.min, v)
+		h.max = max(h.max, v)
 	}
-	return total, minVal, maxVal
+	return h
 }
 
 type koppenDesc struct{ de, en string }
