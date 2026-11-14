@@ -88,10 +88,15 @@ func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 //
 //	curl -sL https://unpkg.com/swagger-ui-dist@<version>/<file> |
 //	  openssl dgst -sha384 -binary | openssl base64 -A
+//
+// Pick a release that has been out for about two weeks: SRI freezes whatever
+// the pinned version contains, so a just-published (possibly bad) release
+// should get time to be yanked first. Check that unpkg and jsDelivr serve
+// identical hashes.
 const (
-	swaggerUIVersion      = "5.35.0"
-	swaggerUICSSIntegrity = "sha384-WlYgdmXYOOBWL5apwjDEZwN+U3HmXSSu5R6V5aGxEcf7z+KuRNwBhoxKVN1i3D5I"
-	swaggerUIJSIntegrity  = "sha384-gjRm0bEPMeTmMh5jT2cHccIwCUZSTd8YC+j0d0sXw0MdGEfScduGpSyF3ZSSLkX9"
+	swaggerUIVersion      = "5.34.1"
+	swaggerUICSSIntegrity = "sha384-4c3vsE5f+trhFyHrFrLM1fFGUn531NIaC7dcqEWIJdoRQJ5CkJbSuSCwXLpaS1KF"
+	swaggerUIJSIntegrity  = "sha384-XFYN47VzPiDY6qPtxYKg0nqUeW/upo20xf1j2SUE7gT/i35FJB4cuS/71Iegzk8Z"
 )
 
 // swaggerUIPage is a minimal Swagger UI page pointing at /openapi.json.
