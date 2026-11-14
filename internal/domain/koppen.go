@@ -77,8 +77,13 @@ func KoppenGeiger(c MonthlyClimate, _ float64) (code, de, en string) {
 		pth = 2*mat + 14
 	}
 
+	// Comparisons on computed quantities (sums, means, derived bounds) go
+	// through the roundoff helpers, so a value exactly on a threshold in
+	// decimal keeps Beck's strictness (see roundoffTolerance). Single monthly
+	// values (Thot, Tcold, Pdry, Psdry, a month's T) are compared verbatim: an
+	// input carries no summation roundoff.
 	switch {
-	case mapp < 10*pth:
+	case below(mapp, 10*pth):
 		code = koppenB(mapp, pth, mat)
 	case thot <= 10: // Beck et al. 2018, Table 2: E "Not (B) & Thot≤10"
 		code = koppenE(thot)
@@ -104,10 +109,10 @@ func moreThan70Percent(part, total float64) bool {
 
 func koppenB(mapp, pth, mat float64) string {
 	code := "BS"
-	if mapp < 5*pth {
+	if below(mapp, 5*pth) {
 		code = "BW"
 	}
-	if mat >= 18 {
+	if atLeast(mat, 18) {
 		return code + "h"
 	}
 	return code + "k"
@@ -122,12 +127,14 @@ func koppenE(thot float64) string {
 
 // koppenA returns the tropical sub-type. Beck et al. 2018, Table 2 defines only
 // Af ("Pdry≥60"), Am ("Not (Af) & Pdry≥100-MAP/25") and Aw ("Not (Af) &
-// Pdry<100-MAP/25"); the As of Kottek et al. 2006 is not part of it.
+// Pdry<100-MAP/25"); the As of Kottek et al. 2006 is not part of it. The Am
+// bound is compared as 25·Pdry + MAP ≥ 2500, so the inexact MAP/25 (2070/25 =
+// 82.8) never enters, and up to roundoff, because MAP is a float sum.
 func koppenA(pdry, mapp float64) string {
 	switch {
 	case pdry >= 60:
 		return "Af"
-	case pdry >= 100-mapp/25:
+	case atLeast(25*pdry+mapp, 2500):
 		return "Am"
 	default:
 		return "Aw"
@@ -139,12 +146,18 @@ func koppenA(pdry, mapp float64) string {
 // "Pwdry<Pswet/10", else f. When both criteria hold, the Methods text decides:
 // s and w "were made mutually exclusive by assigning s when more
 // precipitation falls in winter than in summer and assigning w otherwise".
+//
+// Psdry<Pwwet/3 is compared as 3·Psdry < Pwwet beyond roundoff (91.2/3 is
+// 30.400000000000002, not 30.4), and the half-year totals are float sums, so
+// equal halves stay equal and give w. Pwdry<Pswet/10 needs no slack: with
+// one-decimal inputs, Pswet = 10·Pwdry is a whole number, and n/10 rounds to
+// the same double as the one-decimal literal, so that comparison is exact.
 func seasonLetter(summer, winter halfYearPrecip) string {
-	s := summer.min < 40 && summer.min < winter.max/3
+	s := summer.min < 40 && below(3*summer.min, winter.max)
 	w := winter.min < summer.max/10
 	switch {
 	case s && w:
-		if winter.total > summer.total {
+		if above(winter.total, summer.total) {
 			return "s"
 		}
 		return "w"
