@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -60,13 +61,17 @@ func RetryAfter(resp *http.Response, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-// retryAfterSeconds parses Retry-After as integer seconds >= 0.
+// maxRetryAfterSeconds is the largest whole-second value a time.Duration holds;
+// anything above overflows to a negative delay when multiplied by time.Second.
+const maxRetryAfterSeconds = math.MaxInt64 / int64(time.Second)
+
+// retryAfterSeconds parses Retry-After as integer seconds in [0, maxRetryAfterSeconds].
 func retryAfterSeconds(resp *http.Response) (time.Duration, bool) {
 	if resp == nil {
 		return 0, false
 	}
-	secs, err := strconv.Atoi(resp.Header.Get("Retry-After"))
-	if err != nil || secs < 0 {
+	secs, err := strconv.ParseInt(resp.Header.Get("Retry-After"), 10, 64)
+	if err != nil || secs < 0 || secs > maxRetryAfterSeconds {
 		return 0, false
 	}
 	return time.Duration(secs) * time.Second, true

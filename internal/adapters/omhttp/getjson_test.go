@@ -179,6 +179,10 @@ func TestRetryAfter(t *testing.T) {
 		{"1.5", fallback},
 		{"abc", fallback},
 		{"Wed, 21 Oct 2026 07:28:00 GMT", fallback},
+		// The largest whole-second Duration, and one past it: multiplying the
+		// latter by time.Second would overflow into a negative delay.
+		{"9223372036", 9223372036 * time.Second},
+		{"9223372037", fallback},
 	}
 	for _, tc := range tests {
 		resp := &http.Response{Header: http.Header{}}
