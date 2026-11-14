@@ -70,7 +70,7 @@ func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
 	switch {
 	case mapp < 10*pth:
 		code = koppenB(mapp, pth, mat)
-	case thot < 10:
+	case thot <= 10: // Beck et al. 2018, Table 2: E "Not (B) & Thot≤10"
 		code = koppenE(thot)
 	case tcold >= 18:
 		code = koppenA(pdry, mapp, c.Precip, summer)
