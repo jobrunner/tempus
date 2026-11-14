@@ -101,15 +101,20 @@ docker_go_matches_toolchain() {
 
 # make lint and CI must run the same golangci-lint. Linter versions differ in
 # what they report (v2.12.2 counts goconst occurrences in test files, 2.13.2
-# does not), so a drift lets a PR pass locally and fail in CI. Every `version:`
-# on a golangci-lint-action step must equal the Makefile's pin.
+# does not), so a drift lets a PR pass locally and fail in CI. Every
+# golangci-lint-action step must set `version:` to the Makefile's pin; a step
+# without one would run the action's default, so it counts as <missing>. A step
+# ends at the next list item, at the next file and at EOF.
 golangci_version_matches() {
   want=$(awk -F':= *' '/^GOLANGCI_LINT_VERSION/ { print $2 }' Makefile)
   [ -n "$want" ] || return 1
   ! awk '
-    /uses:[[:space:]]*golangci\/golangci-lint-action/ { inlint=1; next }
-    /^[[:space:]]*-[[:space:]]/                       { inlint=0 }
-    inlint && /^[[:space:]]+version:/                  { sub(/^[[:space:]]+version:[[:space:]]*/, ""); print }
+    function flush() { if (inlint) print (ver == "" ? "<missing>" : ver); inlint = 0; ver = "" }
+    FNR == 1                                          { flush() }
+    /^[[:space:]]*-[[:space:]]/                       { flush() }
+    /uses:[[:space:]]*golangci\/golangci-lint-action/ { inlint = 1; next }
+    inlint && /^[[:space:]]+version:/                 { ver = $0; sub(/^[[:space:]]+version:[[:space:]]*/, "", ver); gsub(/["\047]/, "", ver) }
+    END                                               { flush() }
   ' "$WORKFLOWS"/*.yml | grep -vxF "$want" | grep -q .
 }
 
