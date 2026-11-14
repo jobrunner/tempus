@@ -239,6 +239,7 @@ func TestIosLimits(t *testing.T) {
 		{10.0001, 1.1, 1.7}, {11.0, 1.1, 1.7},
 		{11.0001, 1.0, 1.7}, {12.0, 1.0, 1.7},
 		{12.0001, 0.9, 1.7}, {50, 0.9, 1.7},
+		{math.NaN(), 2.0, 2.0}, // no Io: no compensation
 	}
 	for _, tc := range cases {
 		if l2, l3 := iosLimits(tc.io); l2 != tc.lim2 || l3 != tc.lim3 {
