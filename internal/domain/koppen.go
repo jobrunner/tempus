@@ -73,7 +73,7 @@ func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
 	case thot <= 10: // Beck et al. 2018, Table 2: E "Not (B) & Thot≤10"
 		code = koppenE(thot)
 	case tcold >= 18:
-		code = koppenA(pdry, mapp, c.Precip, summer)
+		code = koppenA(pdry, mapp)
 	case tcold > 0:
 		code = "C" + seasonLetter(pSummerMin, pSummerMax, pWinterMin, pWinterMax) + heatLetter(thot, tmon10, tcold, false)
 	default:
@@ -102,17 +102,16 @@ func koppenE(thot float64) string {
 	return "EF"
 }
 
-func koppenA(pdry, mapp float64, precip [12]float64, summer [6]int) string {
+// koppenA returns the tropical sub-type. Beck et al. 2018, Table 2 defines only
+// Af ("Pdry≥60"), Am ("Not (Af) & Pdry≥100-MAP/25") and Aw ("Not (Af) &
+// Pdry<100-MAP/25"); the As of Kottek et al. 2006 is not part of it.
+func koppenA(pdry, mapp float64) string {
 	switch {
 	case pdry >= 60:
 		return "Af"
 	case pdry >= 100-mapp/25:
 		return "Am"
 	default:
-		// Dry season: As if the driest month is in the summer half, else Aw.
-		if inSeason(argMin12(precip), summer) {
-			return "As"
-		}
 		return "Aw"
 	}
 }
@@ -171,23 +170,13 @@ func seasonStats(precip [12]float64, months [6]int) (total, minVal, maxVal float
 	return total, minVal, maxVal
 }
 
-func inSeason(month int, months [6]int) bool {
-	for _, m := range months {
-		if m == month {
-			return true
-		}
-	}
-	return false
-}
-
 type koppenDesc struct{ de, en string }
 
 // koppenDescriptions maps each Köppen-Geiger code to a bilingual description.
 var koppenDescriptions = map[string]koppenDesc{
 	"Af":  {"tropisches Regenwaldklima", "tropical rainforest"},
 	"Am":  {"tropisches Monsunklima", "tropical monsoon"},
-	"Aw":  {"tropisches Savannenklima (Wintertrocken)", "tropical savanna, dry winter"},
-	"As":  {"tropisches Savannenklima (Sommertrocken)", "tropical savanna, dry summer"},
+	"Aw":  {"tropisches Savannenklima (mit Trockenzeit)", "tropical savanna (with a dry season)"},
 	"BWh": {"heißes Wüstenklima", "hot desert"},
 	"BWk": {"kaltes Wüstenklima", "cold desert"},
 	"BSh": {"heißes Steppenklima", "hot semi-arid (steppe)"},
