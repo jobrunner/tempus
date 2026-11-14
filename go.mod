@@ -6,9 +6,9 @@ toolchain go1.26.11
 
 require (
 	github.com/gorilla/mux v1.8.1
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/spf13/viper v1.21.0
-	go.etcd.io/bbolt v1.3.11
+	go.etcd.io/bbolt v1.5.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux v0.72.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0
@@ -18,8 +18,8 @@ require (
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/metric v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
-	go.yaml.in/yaml/v3 v3.0.5
-	golang.org/x/time v0.15.0
+	go.yaml.in/yaml/v3 v3.0.6
+	golang.org/x/time v0.16.0
 )
 
 require (
