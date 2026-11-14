@@ -93,12 +93,15 @@ jobs:
 
           # The PR asks for fixes to be committed on its branch. Once it holds
           # a commit not made by this workflow, a refresh from main would
-          # force-push them away, so the branch is left alone until the PR
-          # is merged or closed.
-          if gh api "repos/${REPO}/branches/${PR_BRANCH}" --silent 2>/dev/null; then
-            foreign=$(gh api "repos/${REPO}/compare/main...${PR_BRANCH}" \
-              --jq '.commits[].commit.author.email' \
-              | grep -cvFx "${bot_id}+${bot}@users.noreply.github.com" || true)
+          # force-push them away, so the branch is left alone while that PR
+          # is open. A closed PR releases it. A failing API call fails the
+          # run instead of counting as "no foreign commits".
+          open=$(gh pr list --repo "$REPO" --head "$PR_BRANCH" --state open --json number --jq 'length')
+          if [ "$open" -gt 0 ]; then
+            emails=$(gh api "repos/${REPO}/compare/main...${PR_BRANCH}" --jq '.commits[].commit.author.email')
+            # grep exits 1 when every commit is the bot's; only that is fine.
+            foreign=$(printf '%s\n' "$emails" \
+              | grep -cvFx -e "${bot_id}+${bot}@users.noreply.github.com" -e '') || [ $? -eq 1 ]
             if [ "$foreign" -gt 0 ]; then
               echo "::notice::${PR_BRANCH} holds ${foreign} commit(s) not made by this workflow; not refreshing it. Merge or close the open update PR to get the next update."
               exit 0
