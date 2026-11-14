@@ -44,9 +44,11 @@ func KoppenGeiger(c MonthlyClimate, latDeg float64) (code, de, en string) {
 	tcold := min12(c.Tmean)
 	pdry := min12(c.Precip)
 
+	// Beck et al. 2018, Table 2 footnote: "Tmon10 = the number of months with
+	// air temperature >10 °C" (strict; Kottek 2006 uses ≥ 10).
 	tmon10 := 0
 	for _, t := range c.Tmean {
-		if t >= 10 {
+		if t > 10 {
 			tmon10++
 		}
 	}
