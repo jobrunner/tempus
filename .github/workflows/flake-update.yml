@@ -96,9 +96,17 @@ jobs:
           # force-push them away, so the branch is left alone while that PR
           # is open. A closed PR releases it. A failing API call fails the
           # run instead of counting as "no foreign commits".
+          #
+          # Everything below works on one immutable SHA of the branch (empty:
+          # no branch yet), and the push is a lease on it: a fix pushed while
+          # this runs makes the push fail instead of vanishing. Author AND
+          # committer count, so a fix made with `git commit --amend` on a bot
+          # commit (bot author, human committer) is seen too.
+          lease=$(git ls-remote origin "refs/heads/${PR_BRANCH}" | cut -f1)
           open=$(gh pr list --repo "$REPO" --head "$PR_BRANCH" --state open --json number --jq 'length')
-          if [ "$open" -gt 0 ]; then
-            emails=$(gh api "repos/${REPO}/compare/main...${PR_BRANCH}" --jq '.commits[].commit.author.email')
+          if [ -n "$lease" ] && [ "$open" -gt 0 ]; then
+            emails=$(gh api "repos/${REPO}/compare/main...${lease}" \
+              --jq '.commits[].commit | .author.email, .committer.email')
             # grep exits 1 when every commit is the bot's; only that is fine.
             foreign=$(printf '%s\n' "$emails" \
               | grep -cvFx -e "${bot_id}+${bot}@users.noreply.github.com" -e '') || [ $? -eq 1 ]
@@ -114,11 +122,12 @@ jobs:
 
           # Unchanged since the last run: skip the push, so the open PR's CI
           # is not restarted.
-          if git fetch --quiet origin "$PR_BRANCH" 2>/dev/null \
+          if [ -n "$lease" ] && git fetch --quiet origin "$lease" \
             && git diff --quiet FETCH_HEAD HEAD -- flake.lock; then
             echo "Update PR branch is up to date."
           else
-            git push --force "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${PR_BRANCH}"
+            git push --force-with-lease="refs/heads/${PR_BRANCH}:${lease}" \
+              "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${PR_BRANCH}"
           fi
 
           {

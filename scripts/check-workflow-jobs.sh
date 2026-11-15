@@ -33,7 +33,9 @@ exempt=$(awk '!/^[[:space:]]*(#|$)/ { print $1 }' "$EXEMPT" | jq -R . | jq -sc .
 jobs_seen=""
 fail=0
 
-for wf in "$WORKFLOWS"/*.yml; do
+# GitHub runs both extensions; nullglob drops the one that has no files.
+shopt -s nullglob
+for wf in "$WORKFLOWS"/*.yml "$WORKFLOWS"/*.yaml; do
   name=$(basename "$wf")
   out=$(yq -o=json '.' "$wf" | jq -r \
     --arg f "$name" --arg nix "$NIX_ACTION" \
