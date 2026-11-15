@@ -15,6 +15,7 @@
 # Fails when a package is below its threshold, is missing from
 # .mutation-thresholds, or produces no mutants without declaring NONE.
 set -euo pipefail
+. "$(dirname "$0")/require-devshell.sh"
 
 # LC_ALL=C forces a dot decimal separator so awk's numeric compares work in
 # comma-locale environments (e.g. de_DE would stringify "98,15").

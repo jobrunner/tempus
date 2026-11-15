@@ -17,11 +17,21 @@
 # Usage: scripts/vuln-autofix.sh <summary-file>
 # Exit:  0 fixes applied, 3 nothing to fix, 2 scan/fix error
 set -euo pipefail
+. "$(dirname "$0")/require-devshell.sh"
 
 SUMMARY=$1
-# Follow go.mod's toolchain, before and after the bump, also where the
-# environment pins GOTOOLCHAIN=local (setup-go does).
-export GOTOOLCHAIN=auto
+# Scan with the toolchain go.mod declares, the Go of the release binary (the
+# Dockerfile pins the same). Not plain GOTOOLCHAIN=auto: it starts from the
+# local Go and only switches up, so a newer local Go would scan a newer stdlib.
+# +auto keeps the declared toolchain as the start but lets go get switch up
+# (and raise the directive) when a fixed module requires a newer Go; an exact
+# pin would make that go get fail. Called again before the re-scan, after the
+# fixes moved the directive.
+use_declared_toolchain() {
+    GOTOOLCHAIN="$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')+auto"
+    export GOTOOLCHAIN
+}
+use_declared_toolchain
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -122,6 +132,7 @@ fi
 # Re-scan: a later go get or the tidy can move a module back below its fix,
 # and the fix PR's ratchet gate would not notice (the finding is on main
 # too). Every finding this run fixed must be gone, or there is no PR.
+use_declared_toolchain
 govulncheck -format json ./... > "$TMP/rescan.json" || { echo "govulncheck failed on the re-scan" >&2; exit 2; }
 jq -r 'select(.finding) | .finding | select(.trace[0].function != null) | .osv' "$TMP/rescan.json" | sort -u > "$TMP/left.ids"
 cut -f3 "$TMP/fixes.tsv" | sort -u | comm -12 - "$TMP/left.ids" > "$TMP/unfixed.ids"

@@ -28,6 +28,7 @@
 # Usage: scripts/vuln-gate.sh [base-dir]
 # Exit:  0 ok, 1 findings, 2 scan error
 set -euo pipefail
+. "$(dirname "$0")/require-devshell.sh"
 
 BASE_DIR="${1:-}"
 

@@ -1,0 +1,152 @@
+# Weekly `nix flake update` as a pull request.
+#
+# flake.lock pins every tool make verify and CI run (golangci-lint, govulncheck,
+# oasdiff, zizmor, …), and Dependabot has no ecosystem for Nix flakes, so
+# without this the tools would only move when someone remembers. Go itself is
+# not affected: it follows go.mod's toolchain directive, which Dependabot and
+# vuln-scan.yml keep current.
+#
+# No auto-merge, unlike the govulncheck fix PR. A new linter, scanner or diff
+# tool can report findings the old one did not, or classify a change
+# differently, so the PR lists every tool whose version moves and waits for a
+# human. Its CI runs the full gates with the new tools.
+name: Flake update
+
+on:
+  schedule:
+    - cron: '0 5 * * 1' # Monday 05:00 UTC, before the Dependabot batch
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    name: nix flake update
+    # A manual run on another branch would carry that branch's commits into
+    # the update PR.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: flake-update
+      cancel-in-progress: false
+    env:
+      PR_BRANCH: chore/flake-update
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Nix only, no store cache: this job holds a write token, and nothing is
+      # built here (the versions are evaluated, the PR's CI builds the shell).
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+      - name: Update flake.lock
+        id: update
+        run: |
+          scripts/flake-tool-versions.sh > "$RUNNER_TEMP/before.tsv"
+          nix flake update
+          if git diff --quiet flake.lock; then
+            echo "flake.lock is current."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          scripts/flake-tool-versions.sh > "$RUNNER_TEMP/after.tsv"
+          {
+            echo "| Tool | Before | After |"
+            echo "|---|---|---|"
+            join -t "$(printf '\t')" -a 1 -a 2 -e '—' -o '0,1.2,2.2' \
+              <(sort "$RUNNER_TEMP/before.tsv") <(sort "$RUNNER_TEMP/after.tsv") \
+              | awk -F'\t' '$2 != $3 { printf "| %s | %s | **%s** |\n", $1, $2, $3 }'
+          } > "$RUNNER_TEMP/versions.md"
+          if [ "$(wc -l < "$RUNNER_TEMP/versions.md")" -eq 2 ]; then
+            echo "| _(no tool version changes; only nixpkgs revisions)_ | | |" >> "$RUNNER_TEMP/versions.md"
+          fi
+          cat "$RUNNER_TEMP/versions.md"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # The app token, not GITHUB_TOKEN: a PR opened with GITHUB_TOKEN runs no
+      # CI, so its required checks would never report. Only flake.lock
+      # changes, so no `workflows` permission.
+      - name: Mint GitHub App installation token
+        id: app-token
+        if: steps.update.outputs.changed == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+          permission-contents: write      # push the update branch
+          permission-pull-requests: write # open the PR
+
+      - name: Open or refresh the update PR
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bot="${APP_SLUG}[bot]"
+          bot_id=$(gh api "/users/${bot}" --jq .id)
+          git config user.name "$bot"
+          git config user.email "${bot_id}+${bot}@users.noreply.github.com"
+
+          # The PR asks for fixes to be committed on its branch. Once it holds
+          # a commit not made by this workflow, a refresh from main would
+          # force-push them away, so the branch is left alone while that PR
+          # is open. A closed PR releases it. A failing API call fails the
+          # run instead of counting as "no foreign commits".
+          #
+          # Everything below works on one immutable SHA of the branch (empty:
+          # no branch yet), and the push is a lease on it: a fix pushed while
+          # this runs makes the push fail instead of vanishing. Author AND
+          # committer count, so a fix made with `git commit --amend` on a bot
+          # commit (bot author, human committer) is seen too.
+          lease=$(git ls-remote origin "refs/heads/${PR_BRANCH}" | cut -f1)
+          open=$(gh pr list --repo "$REPO" --head "$PR_BRANCH" --state open --json number --jq 'length')
+          if [ -n "$lease" ] && [ "$open" -gt 0 ]; then
+            emails=$(gh api "repos/${REPO}/compare/main...${lease}" \
+              --jq '.commits[].commit | .author.email, .committer.email')
+            # grep exits 1 when every commit is the bot's; only that is fine.
+            foreign=$(printf '%s\n' "$emails" \
+              | grep -cvFx -e "${bot_id}+${bot}@users.noreply.github.com" -e '') || [ $? -eq 1 ]
+            if [ "$foreign" -gt 0 ]; then
+              echo "::notice::${PR_BRANCH} holds ${foreign} commit(s) not made by this workflow; not refreshing it. Merge or close the open update PR to get the next update."
+              exit 0
+            fi
+          fi
+
+          title="chore(deps): update the Nix dev shell (flake.lock)"
+          git checkout -b "$PR_BRANCH"
+          git commit -a -m "$title" -m "Tool versions that change:" -m "$(cat "$RUNNER_TEMP/versions.md")"
+
+          # Unchanged since the last run: skip the push, so the open PR's CI
+          # is not restarted.
+          if [ -n "$lease" ] && git fetch --quiet origin "$lease" \
+            && git diff --quiet FETCH_HEAD HEAD -- flake.lock; then
+            echo "Update PR branch is up to date."
+          else
+            git push --force-with-lease="refs/heads/${PR_BRANCH}:${lease}" \
+              "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${PR_BRANCH}"
+          fi
+
+          {
+            echo "Automated update, opened by \`flake-update.yml\` (refreshed against main every week while open)."
+            echo
+            echo "\`nix flake update\` moved the locked nixpkgs. Tool versions in the dev shell that change (local \`make verify\` and every CI job use them):"
+            echo
+            cat "$RUNNER_TEMP/versions.md"
+            echo
+            echo "**No auto-merge.** A new golangci-lint, oasdiff or zizmor can report findings or classify a change differently than the old one. Check this PR's CI; fix new findings here or in a follow-up before merging."
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          pr=$(gh pr list --repo "$REPO" --head "$PR_BRANCH" --state open --json url --jq '.[0].url // ""')
+          if [ -n "$pr" ]; then
+            # REST, not `gh pr edit`: that one also queries the deprecated
+            # Projects (classic) API and fails on it.
+            gh api -X PATCH "repos/${REPO}/pulls/${pr##*/}" -f title="$title" \
+              -F body=@"$RUNNER_TEMP/pr-body.md" --silent
+          else
+            gh pr create --repo "$REPO" --base main --head "$PR_BRANCH" \
+              --title "$title" --body-file "$RUNNER_TEMP/pr-body.md" --label dependencies
+          fi

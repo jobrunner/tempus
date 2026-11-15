@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 
+# Every job runs its steps in the flake's dev shell (.github/actions/nix-shell),
+# the same tools `make verify` uses locally. Steps that are actions (checkout,
+# the nix-shell action itself) are not affected.
+defaults:
+  run:
+    shell: nix develop --command bash -eo pipefail {0}
+
 jobs:
   lint:
     name: Lint
@@ -18,13 +25,8 @@ jobs:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.12.2
+      - uses: ./.github/actions/nix-shell
+      - run: make lint
 
   test:
     name: Test
@@ -35,10 +37,7 @@ jobs:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/nix-shell
       - name: Run tests with coverage
         run: |
           mkdir -p coverage
@@ -56,10 +55,7 @@ jobs:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/nix-shell
       - run: go vet ./...
 
   architecture:
@@ -71,14 +67,9 @@ jobs:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.12.2
-          args: --enable-only depguard,gomodguard_v2
+      - uses: ./.github/actions/nix-shell
+      - name: depguard + gomodguard
+        run: golangci-lint run --enable-only depguard,gomodguard_v2 ./...
       - name: go mod tidy check
         run: go mod tidy -diff
       - name: Debt guard
@@ -93,10 +84,7 @@ jobs:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/nix-shell
       - name: Build binary
         run: go build -o tempus ./cmd/tempus
 
@@ -128,16 +116,11 @@ jobs:
           path: base
           persist-credentials: false
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      - uses: ./.github/actions/nix-shell
       - name: govulncheck
         env:
           BASE_DIR: ${{ env.ON_DEFAULT_BRANCH != 'true' && 'base' || '' }}
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-          scripts/vuln-gate.sh "$BASE_DIR"
+        run: scripts/vuln-gate.sh "$BASE_DIR"
       # gosec runs inside golangci-lint (Lint job), which honors the repo's
       # //nolint:gosec directives; a standalone gosec CLI here would re-flag
       # those and uses different (#nosec) suppression semantics, so it's dropped.
@@ -152,15 +135,7 @@ jobs:
           # No git writes in this workflow, so the token has no business
           # staying in .git/config where PR code can read it (zizmor artipacked).
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.12.2
-      - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
+      - uses: ./.github/actions/nix-shell
       - name: Full verify
         run: |
           make fmt-check
