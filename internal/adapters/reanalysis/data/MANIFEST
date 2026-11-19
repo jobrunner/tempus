@@ -1,0 +1,3 @@
+copernicus_era5.om sha256=f86d1c0d9cae0139c4179d416cad4e3bbd5d32f0a4486e585703ffce4ba1b0e0 etag="89d73c069b7c89f211c575bac71828fe" source=https://openmeteo.s3.amazonaws.com/data/copernicus_era5/static/HSURF.om
+copernicus_era5_land.om sha256=61b519872278251607a13caf6a71b223cd81073db7852a92c9d7dabde18084af etag="8e0d6ac99a2570c38eded555036f1dc4" source=https://openmeteo.s3.amazonaws.com/data/copernicus_era5_land/static/HSURF.om
+ecmwf_ifs.om sha256=2e8279f8bd12052ba5be5a0bcba2293dc4316097e434d6691f9e6711249e1fd3 etag="91286afefb256fd70a8e34b18fd4ddf7" source=https://openmeteo.s3.amazonaws.com/data/ecmwf_ifs/static/HSURF.om

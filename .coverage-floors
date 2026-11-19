@@ -4,12 +4,15 @@
 # caused false failures. Re-tighten once the toolchain is pinned consistently.
 # package                                             floor(%)
 internal/domain                                       93
+internal/domain/reanalysis                            95
 internal/application                                  89
 internal/config                                       86
 internal/adapters/cache/memory                        92
 internal/adapters/cache/bolt                          81
 internal/adapters/openmeteo                           84
 internal/adapters/omfile                              91
+internal/adapters/omstore                             84
+internal/adapters/reanalysis                          84
 internal/adapters/astronomy                           95
 internal/adapters/aggregate                           80
 internal/adapters/bioclim                             83

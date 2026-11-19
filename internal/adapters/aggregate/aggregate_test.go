@@ -3,8 +3,7 @@ package aggregate
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
+	"math"
 	"testing"
 	"time"
 
@@ -16,108 +15,72 @@ type fixedClock struct{ t time.Time }
 
 func (c fixedClock) Now() time.Time { return c.t }
 
-const dailyJSON = `{"latitude":49.8,"longitude":9.94,"daily":{
-  "time":["2025-06-13","2025-06-14","2025-06-15"],
-  "temperature_2m_max":[20,22,24],
-  "temperature_2m_min":[10,12,14],
-  "temperature_2m_mean":[15,17,19]}}`
+// fakeReanalysis serves fixed series and records what the provider asked for.
+type fakeReanalysis struct {
+	daily     domain.DailySeries
+	hourly    domain.HourlySeries
+	dailyErr  error
+	hourlyErr error
 
-const hourlyJSON = `{"hourly":{
-  "time":["2025-06-15T10:00","2025-06-15T11:00","2025-06-15T12:00","2025-06-15T13:00"],
-  "precipitation":[1.0,2.0,0.0,3.0]}}`
+	calls             int
+	point             domain.GeoPoint
+	firstDay, lastDay time.Time
+	hourFrom, hourTo  time.Time
+	hourlyVars        []string
+}
 
-func newProvider(t *testing.T) (*Provider, func()) {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("daily") != "" {
-			_, _ = w.Write([]byte(dailyJSON))
-			return
-		}
-		_, _ = w.Write([]byte(hourlyJSON))
-	}))
-	p := New(Options{
-		ArchiveBaseURL:  srv.URL,
-		ForecastBaseURL: srv.URL,
-		Timeout:         2 * time.Second,
-		ArchiveDelay:    5 * 24 * time.Hour,
-		Clock:           fixedClock{time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)},
-	})
-	return p, srv.Close
+func (f *fakeReanalysis) Hourly(_ context.Context, p domain.GeoPoint, from, to time.Time, variables ...string) (domain.HourlySeries, error) {
+	f.calls++
+	f.point, f.hourFrom, f.hourTo, f.hourlyVars = p, from, to, variables
+	return f.hourly, f.hourlyErr
+}
+
+func (f *fakeReanalysis) Daily(_ context.Context, p domain.GeoPoint, firstDay, lastDay time.Time) (domain.DailySeries, error) {
+	f.calls++
+	f.point, f.firstDay, f.lastDay = p, firstDay, lastDay
+	return f.daily, f.dailyErr
+}
+
+var (
+	now     = time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	instant = time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)
+	nan     = math.NaN()
+)
+
+// newFake returns three fund-window days (13–15 June) and four precipitation
+// hours ending at the instant.
+func newFake() *fakeReanalysis {
+	return &fakeReanalysis{
+		daily: domain.DailySeries{
+			FirstDay: time.Date(2025, 6, 13, 0, 0, 0, 0, time.UTC),
+			TMax:     []float64{20, 22, 24},
+			TMin:     []float64{10, 12, 14},
+			TMean:    []float64{15, 17, 19},
+		},
+		hourly: domain.HourlySeries{
+			From:   time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC),
+			Values: map[string][]float64{domain.VarPrecip: {1, 2, 0, 3}},
+		},
+	}
+}
+
+func newProvider(f *fakeReanalysis) *Provider {
+	return New(Options{Reanalysis: f, Clock: fixedClock{now}})
 }
 
 func req(instant time.Time, base *float64) domain.QueryRequest {
 	return domain.QueryRequest{
 		Coordinate:     domain.Coordinate{Lat: 49.79, Lon: 9.93},
+		Elevation:      180,
 		Instant:        instant,
 		GDDBaseCelsius: base,
 	}
 }
 
-func TestFetch_RetryAfterReflectsHeader(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Retry-After", "17")
-		w.WriteHeader(http.StatusTooManyRequests)
-	}))
-	defer srv.Close()
-
-	// A plain client: the adapter's own retryAfter parsing must be reached
-	// directly, without omhttp.Transport's internal retries intercepting the 429.
-	p := New(Options{
-		ArchiveBaseURL:  srv.URL,
-		ForecastBaseURL: srv.URL,
-		Timeout:         2 * time.Second,
-		ArchiveDelay:    5 * 24 * time.Hour,
-		Clock:           fixedClock{time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)},
-		HTTPClient:      &http.Client{},
-	})
-
-	_, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), nil))
-	var pe output.ProviderError
-	if !errors.As(err, &pe) {
-		t.Fatalf("Fetch err = %v, want ProviderError", err)
-	}
-	if pe.RetryAfter != 17*time.Second {
-		t.Errorf("RetryAfter = %v, want 17s", pe.RetryAfter)
-	}
-}
-
-// roundTripperFunc adapts a function to http.RoundTripper for tests.
-type roundTripperFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
-
-func TestFetch_PropagatesClassifiedTransportError(t *testing.T) {
-	// A transport-level failure that already carries a classified
-	// output.ProviderError (e.g. omhttp's budget-exhaustion) must surface with
-	// its own RetryAfter, not be re-wrapped behind a fabricated 30s hint.
-	want := output.NewTransientError(errors.New("daily budget exhausted"), 3*time.Hour)
-	rt := roundTripperFunc(func(*http.Request) (*http.Response, error) {
-		return nil, want
-	})
-	p := New(Options{
-		ArchiveBaseURL:  "http://example.invalid",
-		ForecastBaseURL: "http://example.invalid",
-		Timeout:         2 * time.Second,
-		ArchiveDelay:    5 * 24 * time.Hour,
-		Clock:           fixedClock{time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)},
-		HTTPClient:      &http.Client{Transport: rt},
-	})
-
-	_, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), nil))
-	pe, ok := output.AsProviderError(err)
-	if !ok {
-		t.Fatalf("Fetch err = %v, want output.ProviderError", err)
-	}
-	if pe.RetryAfter != 3*time.Hour {
-		t.Errorf("RetryAfter = %v, want 3h (propagated, not the generic 30s)", pe.RetryAfter)
-	}
-}
-
 func TestFetch_ComputesAggregates(t *testing.T) {
-	p, done := newProvider(t)
-	defer done()
-
-	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), nil))
+	f := newFake()
+	r := req(instant, nil)
+	res, err := newProvider(f).Fetch(context.Background(), r)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -174,17 +137,30 @@ func TestFetch_ComputesAggregates(t *testing.T) {
 		t.Errorf("arrhenius value = %v, want > 0", att["value"])
 	}
 
-	if res.Feature.License.Attribution == "" {
-		t.Error("attribution empty")
+	// The daily range runs from the GDD start to the fund day, at the request point.
+	if f.point != r.PointOf() {
+		t.Errorf("point = %+v, want %+v", f.point, r.PointOf())
+	}
+	if want := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC); !f.firstDay.Equal(want) {
+		t.Errorf("firstDay = %v, want %v", f.firstDay, want)
+	}
+	if want := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC); !f.lastDay.Equal(want) {
+		t.Errorf("lastDay = %v, want %v", f.lastDay, want)
+	}
+
+	// The feature sits on the request coordinate and carries the reanalysis license.
+	if c := res.Feature.Geometry.Coordinates; len(c) != 2 || c[0] != 9.93 || c[1] != 49.79 {
+		t.Errorf("coordinates = %v, want request coordinate", res.Feature.Geometry.Coordinates)
+	}
+	lic, want := res.Feature.License, domain.ReanalysisLicense()
+	if lic.Name != want.Name || lic.URL != want.URL || lic.Attribution == "" {
+		t.Errorf("license = %+v, want the reanalysis license", lic)
 	}
 }
 
 func TestFetch_GDDBaseOverride(t *testing.T) {
-	p, done := newProvider(t)
-	defer done()
-
 	base := 7.0 // distinct from the fixed 5 and 10
-	res, err := p.Fetch(context.Background(), req(time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC), &base))
+	res, err := newProvider(newFake()).Fetch(context.Background(), req(instant, &base))
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -203,14 +179,157 @@ func TestFetch_GDDBaseOverride(t *testing.T) {
 	}
 }
 
-func TestFetch_FutureRejected(t *testing.T) {
-	p, done := newProvider(t)
-	defer done()
+func TestFetch_PrecipWindows(t *testing.T) {
+	// 121 hours: one before the 120-h window, then 120 hours ending at the
+	// instant. Each window counts the instant's hour and the hours before it.
+	vals := make([]float64, 121)
+	vals[0] = 1000 // outside every window
+	for i := 1; i <= 120; i++ {
+		switch {
+		case i > 120-24:
+			vals[i] = 1 // inside 24 h
+		case i > 120-72:
+			vals[i] = 0.5 // inside 72 h only
+		default:
+			vals[i] = 0.25 // inside 120 h only
+		}
+	}
+	vals[110] = nan // a missing hour inside the window is skipped
+	f := newFake()
+	f.hourly = domain.HourlySeries{
+		From:   instant.Add(-120 * time.Hour),
+		Values: map[string][]float64{domain.VarPrecip: vals},
+	}
 
-	_, err := p.Fetch(context.Background(), req(time.Date(2026, 7, 21, 13, 0, 0, 0, time.UTC), nil))
+	res, err := newProvider(f).Fetch(context.Background(), req(instant, nil))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	precip := res.Feature.Properties["precipitation"].(map[string]any)
+	// 24 h: 23×1 (one NaN); 72 h: +48×0.5; 120 h: +48×0.25.
+	if precip["last24h"] != 23.0 || precip["last72h"] != 47.0 || precip["last120h"] != 59.0 {
+		t.Errorf("precipitation = %v, want 23/47/59", precip)
+	}
+
+	// Exactly the window's hours are requested: [instant−119 h, instant+1 h).
+	if want := instant.Add(-119 * time.Hour); !f.hourFrom.Equal(want) {
+		t.Errorf("hourly from = %v, want %v", f.hourFrom, want)
+	}
+	if want := instant.Add(time.Hour); !f.hourTo.Equal(want) {
+		t.Errorf("hourly to = %v, want %v", f.hourTo, want)
+	}
+	if len(f.hourlyVars) != 1 || f.hourlyVars[0] != domain.VarPrecip {
+		t.Errorf("hourly variables = %v, want [%s]", f.hourlyVars, domain.VarPrecip)
+	}
+}
+
+func TestFetch_SumsUseUnroundedValues(t *testing.T) {
+	// 0.04 mm per hour would round to 0.0 at display precision; summed
+	// unrounded, 24 h give 0.96 → 1.0. Likewise 10.04 °C days add up.
+	vals := make([]float64, 24)
+	for i := range vals {
+		vals[i] = 0.04
+	}
+	f := newFake()
+	f.hourly = domain.HourlySeries{
+		From:   instant.Add(-23 * time.Hour),
+		Values: map[string][]float64{domain.VarPrecip: vals},
+	}
+	f.daily = domain.DailySeries{
+		FirstDay: time.Date(2025, 6, 13, 0, 0, 0, 0, time.UTC),
+		TMax:     []float64{10.04, 10.04, 10.04},
+		TMin:     []float64{10.04, 10.04, 10.04},
+		TMean:    []float64{10.04, 10.04, 10.04},
+	}
+
+	res, err := newProvider(f).Fetch(context.Background(), req(instant, nil))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	props := res.Feature.Properties
+	if got := props["precipitation"].(map[string]any)["last24h"]; got != 1.0 {
+		t.Errorf("last24h = %v, want 1 (24×0.04 unrounded)", got)
+	}
+	if got := props["growingDegreeDays"].(map[string]any)["base10"]; got != 0.1 {
+		t.Errorf("gdd base10 = %v, want 0.1 (3×0.04 unrounded)", got)
+	}
+	if got := props["temperatureDay"].(map[string]any)["max"]; got != 10.0 {
+		t.Errorf("temperatureDay max = %v, want display-rounded 10", got)
+	}
+}
+
+func TestFetch_MissingValues(t *testing.T) {
+	// The instant's hour is NaN (not yet in the archive): no precipitation.
+	// The fund day's mean is NaN: (max+min)/2 instead. An incomplete day
+	// drops out of the GDD sum.
+	f := newFake()
+	f.hourly.Values[domain.VarPrecip][3] = nan
+	f.daily.TMean[2] = nan
+	f.daily.TMin[0] = nan
+
+	res, err := newProvider(f).Fetch(context.Background(), req(instant, nil))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	props := res.Feature.Properties
+	if _, has := props["precipitation"]; has {
+		t.Errorf("precipitation present for a NaN instant hour: %v", props["precipitation"])
+	}
+	if got := props["temperatureDay"].(map[string]any)["mean"]; got != 19.0 {
+		t.Errorf("mean = %v, want (24+14)/2 = 19", got)
+	}
+	gdd := props["growingDegreeDays"].(map[string]any)
+	if gdd["days"] != 2 || gdd["base10"] != 16.0 {
+		t.Errorf("gdd days/base10 = %v/%v, want 2/16", gdd["days"], gdd["base10"])
+	}
+}
+
+func TestFetch_NotYetAvailable(t *testing.T) {
+	// Every value NaN: nothing usable yet, so a retryable not-yet-available error.
+	f := newFake()
+	f.hourly.Values[domain.VarPrecip] = []float64{nan, nan, nan, nan}
+	f.daily.TMax = []float64{nan, nan, nan}
+	f.daily.TMin = []float64{nan, nan, nan}
+	f.daily.TMean = []float64{nan, nan, nan}
+
+	_, err := newProvider(f).Fetch(context.Background(), req(instant, nil))
+	pe, ok := output.AsProviderError(err)
+	if !ok || pe.Class != output.ClassNotYetAvailable || !pe.Retryable {
+		t.Fatalf("want retryable not-yet-available ProviderError, got %v", err)
+	}
+}
+
+func TestFetch_FutureRejected(t *testing.T) {
+	f := newFake()
+	_, err := newProvider(f).Fetch(context.Background(), req(now.Add(time.Hour), nil))
 	pe, ok := output.AsProviderError(err)
 	if !ok || pe.Retryable {
 		t.Fatalf("want non-retryable ProviderError for future date, got %v", err)
+	}
+	if f.calls != 0 {
+		t.Errorf("reanalysis called %d times for a future instant, want 0", f.calls)
+	}
+}
+
+func TestFetch_PassesPortErrorsThrough(t *testing.T) {
+	// Port failures are already classified; they must surface unchanged.
+	want := output.NewTransientError(errors.New("bucket unavailable"), 3*time.Hour)
+	for _, tc := range []struct {
+		name string
+		set  func(*fakeReanalysis)
+	}{
+		{"daily", func(f *fakeReanalysis) { f.dailyErr = want }},
+		{"hourly", func(f *fakeReanalysis) { f.hourlyErr = want }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFake()
+			tc.set(f)
+			_, err := newProvider(f).Fetch(context.Background(), req(instant, nil))
+			pe, ok := output.AsProviderError(err)
+			if !ok || pe != want {
+				t.Errorf("Fetch err = %v, want the port's ProviderError unchanged", err)
+			}
+		})
 	}
 }
 
@@ -221,48 +340,5 @@ func TestProviderIDKind(t *testing.T) {
 	}
 	if p.Attribution().Attribution == "" {
 		t.Error("attribution empty")
-	}
-}
-
-func TestFetch_PrecipWindowModeFollowsArchiveDelay(t *testing.T) {
-	// The hourly precipitation request switches from the forecast's rolling
-	// past_days window to an explicit start/end date range once the instant is
-	// at least ArchiveDelay old — inclusive at exactly ArchiveDelay.
-	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
-	const delay = 5 * 24 * time.Hour
-	for _, tc := range []struct {
-		name      string
-		instant   time.Time
-		wantRange bool
-	}{
-		{"recent instant uses past_days", now.Add(-time.Hour), false},
-		{"exactly ArchiveDelay old uses a date range", now.Add(-delay), true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var gotRange, gotPastDays bool
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				q := r.URL.Query()
-				if q.Get("daily") != "" {
-					_, _ = w.Write([]byte(dailyJSON))
-					return
-				}
-				gotRange = q.Get("start_date") != ""
-				gotPastDays = q.Get("past_days") != ""
-				_, _ = w.Write([]byte(hourlyJSON))
-			}))
-			defer srv.Close()
-			p := New(Options{
-				ArchiveBaseURL:  srv.URL,
-				ForecastBaseURL: srv.URL,
-				Timeout:         2 * time.Second,
-				ArchiveDelay:    delay,
-				Clock:           fixedClock{now},
-			})
-
-			_, _ = p.Fetch(context.Background(), req(tc.instant, nil))
-			if gotRange != tc.wantRange || gotPastDays == tc.wantRange {
-				t.Errorf("start_date=%v past_days=%v, want date range %v", gotRange, gotPastDays, tc.wantRange)
-			}
-		})
 	}
 }

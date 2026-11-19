@@ -42,6 +42,7 @@ nav:
       - Overview: explanation/index.md
       - Architecture: explanation/architecture.md
       - Retry semantics: explanation/retry-semantics.md
+      - Data source: explanation/data-source.md
       - Attribution requirement: explanation/attribution.md
       - Caching model: explanation/caching.md
       - Future datetimes: explanation/no-future-datetimes.md

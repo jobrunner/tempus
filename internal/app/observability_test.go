@@ -7,10 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/jobrunner/tempus/internal/adapters/metrics"
-	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 	"github.com/jobrunner/tempus/internal/config"
 )
 
@@ -30,48 +28,25 @@ func scrape(t *testing.T, handler http.Handler) string {
 	return string(body)
 }
 
-type fakeTestClock struct{ now time.Time }
-
-func (f *fakeTestClock) Now() time.Time { return f.now }
-
-// registerBudgetGauges must expose both the spent and limit gauges, reading
-// live values from the budget on each scrape.
-func TestRegisterBudgetGauges_ExposesSpentAndLimit(t *testing.T) {
+// The metrics endpoint must keep the standard Go runtime metrics that
+// metrics.New's private-registry rewrite has to register explicitly
+// (go_goroutines and process_* only self-register onto the global
+// DefaultRegisterer via client_golang's package init()).
+func TestMetricsServer_KeepsRuntimeMetrics(t *testing.T) {
 	srv, err := metrics.New(config.MetricsConfig{Enabled: true, Port: 0, Path: "/metrics"})
 	if err != nil {
 		t.Fatalf("metrics.New: %v", err)
 	}
-
-	clk := &fakeTestClock{now: time.Date(2026, 9, 6, 10, 0, 0, 0, time.UTC)}
-	budget := omhttp.NewBudget(100, clk)
-	budget.TryReserve(37)
-
-	if err := registerBudgetGauges(srv.Provider().Meter("tempus/omhttp"), budget); err != nil {
-		t.Fatalf("registerBudgetGauges: %v", err)
-	}
-
 	body := scrape(t, srv.Handler())
-	// Pin both properties together: the new budget gauges must be present
-	// WITHOUT losing the standard Go runtime metrics that metrics.New's
-	// private-registry rewrite must still preserve (go_goroutines and
-	// process_* only ever self-register onto the global DefaultRegisterer via
-	// client_golang's package init(), so a naive dedicated prometheus.Registry
-	// silently drops them unless explicitly registered).
-	for _, want := range []string{
-		"tempus_openmeteo_daily_budget_spent",
-		"tempus_openmeteo_daily_budget_limit",
-		"go_goroutines",
-		"process_",
-	} {
+	for _, want := range []string{"go_goroutines", "process_"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape output missing %q\n---\n%s", want, body)
 		}
 	}
 }
 
-// App.New, with metrics enabled and Open-Meteo enabled, must register the
-// budget gauges without erroring.
-func TestApp_WithMetricsEnabled_RegistersBudgetGauges(t *testing.T) {
+// App.New with metrics enabled must start the metrics server without erroring.
+func TestApp_WithMetricsEnabled_Starts(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.Metrics.Enabled = true
 	cfg.Metrics.Port = 0

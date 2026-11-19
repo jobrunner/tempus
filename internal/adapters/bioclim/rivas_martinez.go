@@ -1,22 +1,16 @@
 package bioclim
 
-import (
-	"math"
+import "github.com/jobrunner/tempus/internal/domain"
 
-	"github.com/jobrunner/tempus/internal/domain"
-)
-
-// rmSite is the Rivas-Martínez site of the archive response: the resolved grid
-// cell and its elevation. The archive's temperatures are downscaled to exactly
-// that elevation, so it is the one the WBCS altitude reduction must start from.
-// Without it the key runs unreduced (documented fallback, see
-// docs/research/rivas-martinez-reference.md).
-func rmSite(data dailyResponse) domain.RivasMartinezSite {
-	s := domain.RivasMartinezSite{Lat: data.Latitude, Lon: data.Longitude}
-	if data.Elevation != nil && !math.IsNaN(*data.Elevation) {
-		s.ElevationM, s.ElevationKnown = *data.Elevation, true
+// rmSite is the Rivas-Martínez site of the request: its coordinate and the
+// client-supplied elevation. The reanalysis temperatures are corrected to
+// exactly that elevation, so it is the one the WBCS altitude reduction must
+// start from.
+func rmSite(req domain.QueryRequest) domain.RivasMartinezSite {
+	return domain.RivasMartinezSite{
+		Lat: req.Coordinate.Lat, Lon: req.Coordinate.Lon,
+		ElevationM: req.Elevation, ElevationKnown: true,
 	}
-	return s
 }
 
 // rivasMartinezProps returns the thermotype and macrobioclimate objects of the

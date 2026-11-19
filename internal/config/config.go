@@ -104,36 +104,34 @@ type BatchConfig struct {
 }
 
 type ProvidersConfig struct {
-	OpenMeteo OpenMeteoConfig `mapstructure:"openmeteo"`
-	Aggregate AggregateConfig `mapstructure:"aggregate"`
-	Bioclim   BioclimConfig   `mapstructure:"bioclim"`
+	Reanalysis ReanalysisConfig `mapstructure:"reanalysis"`
+	Aggregate  AggregateConfig  `mapstructure:"aggregate"`
+	Bioclim    BioclimConfig    `mapstructure:"bioclim"`
 }
 
 // BioclimConfig configures the bioclim provider (BIO variables + Köppen-Geiger,
-// computed from ERA5 monthly normals). It reuses the Open-Meteo archive URL.
+// computed from 30-year reanalysis normals).
 type BioclimConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 }
 
-type OpenMeteoConfig struct {
-	Enabled         bool          `mapstructure:"enabled"`
-	ArchiveBaseURL  string        `mapstructure:"archive_base_url"`
-	ForecastBaseURL string        `mapstructure:"forecast_base_url"`
-	Timeout         time.Duration `mapstructure:"timeout"`
-	ArchiveDelay    time.Duration `mapstructure:"archive_delay"`
-	RatePerMinute   int           `mapstructure:"rate_per_minute"`
-	RetryAttempts   int           `mapstructure:"retry_attempts"`
-	DailyBudget     int           `mapstructure:"daily_budget"`
-	Weights         CallWeights   `mapstructure:"weights"`
-}
-
-// CallWeights are the estimated Open-Meteo cost weights per call type; long
-// archive ranges count as multiple calls upstream, so bioclim's 30-year daily
-// series weighs far more than a single-day weather call.
-type CallWeights struct {
-	Weather   int `mapstructure:"weather"`
-	Aggregate int `mapstructure:"aggregate"`
-	Bioclim   int `mapstructure:"bioclim"`
+// ReanalysisConfig configures the reanalysis archive behind the weather,
+// aggregate and bioclim providers: ECMWF IFS, ERA5 and ERA5-Land read straight
+// from Open-Meteo's open-data bucket (no API, no quota, no key).
+type ReanalysisConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// BaseURL is the bucket root served over HTTPS.
+	BaseURL string `mapstructure:"base_url"`
+	// Timeout bounds a single range request.
+	Timeout       time.Duration `mapstructure:"timeout"`
+	MaxParallel   int           `mapstructure:"max_parallel"`
+	RetryAttempts int           `mapstructure:"retry_attempts"`
+	// ListTTL bounds how long a directory listing is trusted; the newest
+	// files are rewritten daily.
+	ListTTL time.Duration `mapstructure:"list_ttl"`
+	// Maturity is the age after which an hour's values are final and cached
+	// for long; younger hours (IFS forecast/analysis updates) expire quickly.
+	Maturity time.Duration `mapstructure:"maturity"`
 }
 
 // AggregateConfig configures the weather-aggregate provider (antecedent
@@ -176,17 +174,13 @@ func Defaults() {
 	viper.SetDefault("query.batch.max_points", 10000)
 	viper.SetDefault("query.batch.max_sync_points", 1000)
 	viper.SetDefault("query.batch.concurrency", 4)
-	viper.SetDefault("providers.openmeteo.enabled", true)
-	viper.SetDefault("providers.openmeteo.archive_base_url", "https://archive-api.open-meteo.com/v1/archive")
-	viper.SetDefault("providers.openmeteo.forecast_base_url", "https://api.open-meteo.com/v1/forecast")
-	viper.SetDefault("providers.openmeteo.timeout", 10*time.Second)
-	viper.SetDefault("providers.openmeteo.archive_delay", 5*24*time.Hour)
-	viper.SetDefault("providers.openmeteo.rate_per_minute", 500)
-	viper.SetDefault("providers.openmeteo.retry_attempts", 3)
-	viper.SetDefault("providers.openmeteo.daily_budget", 8000)
-	viper.SetDefault("providers.openmeteo.weights.weather", 1)
-	viper.SetDefault("providers.openmeteo.weights.aggregate", 2)
-	viper.SetDefault("providers.openmeteo.weights.bioclim", 30)
+	viper.SetDefault("providers.reanalysis.enabled", true)
+	viper.SetDefault("providers.reanalysis.base_url", "https://openmeteo.s3.amazonaws.com")
+	viper.SetDefault("providers.reanalysis.timeout", 30*time.Second)
+	viper.SetDefault("providers.reanalysis.max_parallel", 32)
+	viper.SetDefault("providers.reanalysis.retry_attempts", 3)
+	viper.SetDefault("providers.reanalysis.list_ttl", time.Hour)
+	viper.SetDefault("providers.reanalysis.maturity", 72*time.Hour)
 	viper.SetDefault("providers.aggregate.enabled", true)
 	viper.SetDefault("providers.bioclim.enabled", true)
 }

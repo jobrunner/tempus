@@ -805,6 +805,11 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="elevation">Höhe (m über NN)</label>
+                    <input type="text" id="elevation" name="elevation" placeholder="z.B. 34" inputmode="decimal" required>
+                </div>
+
+                <div class="form-group">
                     <label for="datetime">Datum &amp; Uhrzeit (Ortszeit)</label>
                     <div class="dt-field">
                         <input type="datetime-local" id="datetime" name="datetime" required>
@@ -852,11 +857,11 @@
             <h2 class="card-title">Batch-Abfrage</h2>
             <form id="batchForm">
                 <div class="form-group">
-                    <label for="batchInput">Punkte &mdash; eine Zeile pro Punkt: <code>[id;] lat; lon; datetime</code>
+                    <label for="batchInput">Punkte &mdash; eine Zeile pro Punkt: <code>[id;] lat; lon; höhe; datetime</code>
                         (Trennung durch <code>;</code>, <code>,</code> oder Tab; datetime RFC3339 oder
                         <code>YYYY-MM-DDTHH:MM</code>, ohne Offset = UTC)</label>
                     <textarea id="batchInput" rows="10" spellcheck="false"
-                        placeholder="fund-17; 49.79; 9.95; 2025-06-03T14:00&#10;47.42; 10.98; 2024-08-14T09:30"></textarea>
+                        placeholder="fund-17; 49.79; 9.95; 180; 2025-06-03T14:00&#10;47.42; 10.98; 1523; 2024-08-14T09:30"></textarea>
                 </div>
                 <div class="form-group">
                     <label id="batchProvidersLabel">Provider</label>
@@ -916,6 +921,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
             const form = document.getElementById('queryForm');
             const latInput = document.getElementById('lat');
             const lonInput = document.getElementById('lon');
+            const elevationInput = document.getElementById('elevation');
             const datetimeInput = document.getElementById('datetime');
             const tzzoneSelect = document.getElementById('tzzone');
             const tzabbrevEl = document.getElementById('tzabbrev');
@@ -1317,11 +1323,16 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
 
                 const lat = latInput.value.trim().replace(',', '.');
                 const lon = lonInput.value.trim().replace(',', '.');
+                const elevation = elevationInput.value.trim().replace(',', '.');
                 const localDatetime = datetimeInput.value.trim(); // YYYY-MM-DDTHH:MM (local time in selected zone)
                 const zone = tzzoneSelect.value;
 
                 if (!lat || !lon || isNaN(parseFloat(lat)) || isNaN(parseFloat(lon))) {
                     showError('Bitte geben Sie gültige Koordinaten ein.');
+                    return;
+                }
+                if (!elevation || isNaN(parseFloat(elevation))) {
+                    showError('Bitte geben Sie die Höhe in Metern über NN ein.');
                     return;
                 }
                 if (!localDatetime) {
@@ -1348,6 +1359,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 const url = '/api/v1/query?' +
                     'lat=' + encodeURIComponent(lat) +
                     '&lon=' + encodeURIComponent(lon) +
+                    '&elevation=' + encodeURIComponent(elevation) +
                     '&datetime=' + encodeURIComponent(datetime);
 
                 submitBtn.disabled = true;
@@ -1393,13 +1405,15 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
             });
 
             // --- Prefill from URL query (shareable links) --------------------------
-            // ?lat=..&lon=..&datetime=YYYY-MM-DDTHH:MM[&tz=IANA] prefills the form;
-            // when lat, lon and datetime are all present the query is auto-run.
+            // ?lat=..&lon=..&elevation=..&datetime=YYYY-MM-DDTHH:MM[&tz=IANA] prefills
+            // the form; when all of them are present the query is auto-run.
             (function prefillFromURL() {
                 var p = new URLSearchParams(window.location.search);
                 var lat = p.get('lat'), lon = p.get('lon'), dt = p.get('datetime'), tz = p.get('tz');
+                var elev = p.get('elevation');
                 if (lat) latInput.value = lat;
                 if (lon) lonInput.value = lon;
+                if (elev) elevationInput.value = elev;
                 if (dt) datetimeInput.value = dt;
                 if (lat && lon) updateDetectedZone();
                 if (tz) {
@@ -1408,7 +1422,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     }
                 }
                 updateAbbrev();
-                if (lat && lon && dt) {
+                if (lat && lon && elev && dt) {
                     window.__autoRan = true;
                     form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true }));
                 }
@@ -2182,7 +2196,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 fileInput.value = '';
             });
 
-            // parseBatchLines: "[id sep] lat sep lon sep datetime", sep = ; , or tab.
+            // parseBatchLines: "[id sep] lat sep lon sep elevation sep datetime",
+            // sep = ; , or tab.
             // Comma only splits when the line has no ; or tab (comma decimals then
             // cannot be used — the placeholder shows dot decimals).
             function parseBatchLines(text) {
@@ -2193,12 +2208,14 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                     const parts = line.split(sep).map(s => s.trim()).filter(s => s !== '');
                     let id = '';
                     let rest = parts;
-                    if (parts.length === 4) { id = parts[0]; rest = parts.slice(1); }
-                    if (rest.length !== 3) { errors.push({ line: i + 1, reason: 'erwartet [id' + sep + '] lat' + sep + ' lon' + sep + ' datetime' }); return; }
+                    if (parts.length === 5) { id = parts[0]; rest = parts.slice(1); }
+                    if (rest.length !== 4) { errors.push({ line: i + 1, reason: 'erwartet [id' + sep + '] lat' + sep + ' lon' + sep + ' höhe' + sep + ' datetime' }); return; }
                     const lat = Number(rest[0].replace(',', '.'));
                     const lon = Number(rest[1].replace(',', '.'));
+                    const elevation = Number(rest[2].replace(',', '.'));
                     if (!isFinite(lat) || !isFinite(lon)) { errors.push({ line: i + 1, reason: 'lat/lon keine Zahl' }); return; }
-                    points.push({ id: id || String(points.length), lat: lat, lon: lon, datetime: rest[2] });
+                    if (!isFinite(elevation)) { errors.push({ line: i + 1, reason: 'Höhe keine Zahl' }); return; }
+                    points.push({ id: id || String(points.length), lat: lat, lon: lon, elevation: elevation, datetime: rest[3] });
                 });
                 return { points: points, errors: errors };
             }

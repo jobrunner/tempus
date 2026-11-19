@@ -1,7 +1,12 @@
+// Package omhttp provides the HTTP transport for the open-data bucket the
+// Open-Meteo store reads from: transparent retry of 429/5xx/network failures
+// honoring Retry-After, and one client span per attempt. The bucket is plain
+// public object storage with no quota, so the transport neither rate-limits
+// nor budgets. Adapters receive it as a plain *http.Client, so no adapter
+// imports this package (composition happens in internal/app).
 package omhttp
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -10,28 +15,15 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/time/rate"
-
-	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
-// ErrBudgetExhausted is returned (without any upstream call) when a
-// batch-originated request finds today's weighted call budget spent.
-var ErrBudgetExhausted = errors.New("open-meteo daily budget exhausted; retry tomorrow")
+// eventRetry is the span event recorded on the caller's span (the inbound
+// request span) for each backoff wait between per-attempt client spans.
+const eventRetry = "open-meteo.retry"
 
-// Span events recorded on the caller's span (the inbound request span) for the
-// waits and rejections that happen around the per-attempt client spans.
-const (
-	eventRetry           = "open-meteo.retry"
-	eventBudgetExhausted = "open-meteo.budget_exhausted"
-)
-
-// Options configures the transport. Limiter and Budget are shared across all
-// Open-Meteo adapters; Weight is the per-call cost this client charges.
+// Options configures the transport.
 type Options struct {
-	Limiter       *rate.Limiter
-	Budget        *Budget
-	Weight        int
+	// RetryAttempts is how many times a failed attempt is retried (0 = none).
 	RetryAttempts int
 	Base          http.RoundTripper
 	// TracerProvider, when non-nil, wraps Base so each actual attempt becomes
@@ -39,13 +31,10 @@ type Options struct {
 	TracerProvider trace.TracerProvider
 }
 
-// Transport rate-limits, retries (429/5xx/network, honoring Retry-After), and
-// budget-guards Open-Meteo GET requests. Retries assume idempotent, body-less
-// requests — all Open-Meteo calls are plain GETs.
+// Transport retries GET requests on 429/5xx/network failures, honoring
+// Retry-After. Retries assume idempotent, body-less requests — every bucket
+// read is a plain (ranged) GET; a request with a body is never retried.
 type Transport struct {
-	limiter  *rate.Limiter
-	budget   *Budget
-	weight   int
 	attempts int
 	base     http.RoundTripper
 }
@@ -60,36 +49,18 @@ func NewTransport(opts Options) *Transport {
 	if opts.TracerProvider != nil {
 		// Wrapping the base (not this Transport) gives one span per attempt, so
 		// retries show up individually. The empty composite propagator injects
-		// nothing: Open-Meteo is a third party and gets no trace context.
+		// nothing: the bucket is a third party and gets no trace context.
 		base = otelhttp.NewTransport(base,
 			otelhttp.WithTracerProvider(opts.TracerProvider),
 			otelhttp.WithPropagators(propagation.NewCompositeTextMapPropagator()),
 		)
 	}
-	return &Transport{
-		limiter:  opts.Limiter,
-		budget:   opts.Budget,
-		weight:   opts.Weight,
-		attempts: opts.RetryAttempts,
-		base:     base,
-	}
+	return &Transport{attempts: opts.RetryAttempts, base: base}
 }
 
 // RoundTrip implements http.RoundTripper.
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if t.budget != nil && output.IsBatchOrigin(req.Context()) && !t.budget.TryReserve(t.weight) {
-		trace.SpanFromContext(req.Context()).AddEvent(eventBudgetExhausted,
-			trace.WithAttributes(attribute.Int("budget.weight", t.weight)))
-		// The retry hint is "until UTC midnight", when the daily budget rolls
-		// over — not a fabricated short backoff.
-		return nil, output.NewTransientError(ErrBudgetExhausted, t.budget.UntilReset())
-	}
 	for attempt := 0; ; attempt++ {
-		if t.limiter != nil {
-			if err := t.limiter.Wait(req.Context()); err != nil {
-				return nil, err
-			}
-		}
 		resp, err := t.base.RoundTrip(req)
 		if !shouldRetry(resp, err) || attempt >= t.attempts || req.Body != nil {
 			return resp, err

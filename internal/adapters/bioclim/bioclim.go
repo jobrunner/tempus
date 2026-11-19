@@ -1,20 +1,19 @@
 // Package bioclim implements the bioclim FeatureProvider: the 19 WorldClim
-// bioclimatic variables and the Köppen-Geiger class, computed from ERA5
-// (Open-Meteo archive) monthly climate normals. The reference period is chosen
+// bioclimatic variables and the Köppen-Geiger class, computed from monthly
+// climate normals of the reanalysis archive (output.Reanalysis: ECMWF IFS,
+// ERA5, ERA5-Land, corrected for the request's elevation). The period is chosen
 // contemporaneously to the query instant (or via the refPeriod override), so
 // the values are time-appropriate even for historical records. Results are
-// time-independent for a given location+period and are cached per coordinate.
+// time-independent for a given location+period and are cached per coordinate
+// and elevation.
 package bioclim
 
 import (
 	"context"
 	"fmt"
 	"math"
-	"net/http"
-	"strconv"
 	"time"
 
-	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
@@ -24,40 +23,32 @@ const keyCode = "code"
 const (
 	providerID   = "bioclim"
 	providerKind = "bioclim"
-	licenseName  = "CC-BY 4.0"
-	licenseURL   = "https://open-meteo.com/en/license"
 	// cacheVersion is part of every cache key. Bump it whenever the derived
 	// classification changes, or cached features keep the old result for up to
 	// cacheTTL. "2": Köppen-Geiger aligned with Beck et al. 2018. "3":
 	// Rivas-Martínez macrobioclimate and thermotype per the WBCS key, with the
 	// archive's elevation (new altitudinalBelt.macrobioclimate object). "4":
 	// Köppen thresholds on computed values compared beyond float roundoff.
-	cacheVersion = "4"
+	// "5": normals from the reanalysis port (unrounded, client elevation).
+	cacheVersion = "5"
 	cacheTTL     = 365 * 24 * time.Hour
 )
 
 // Options configures the provider.
 type Options struct {
-	ArchiveBaseURL string
-	Timeout        time.Duration
-	Cache          output.Cache
-	HTTPClient     *http.Client
+	Reanalysis output.Reanalysis
+	Cache      output.Cache
 }
 
 // Provider computes bioclimatic variables and the Köppen-Geiger class.
 type Provider struct {
-	archiveBaseURL string
-	cache          output.Cache
-	client         *http.Client
+	reanalysis output.Reanalysis
+	cache      output.Cache
 }
 
 // New builds the provider.
 func New(opts Options) *Provider {
-	client := opts.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: opts.Timeout}
-	}
-	return &Provider{archiveBaseURL: opts.ArchiveBaseURL, cache: opts.Cache, client: client}
+	return &Provider{reanalysis: opts.Reanalysis, cache: opts.Cache}
 }
 
 func (p *Provider) ID() string   { return providerID }
@@ -65,22 +56,9 @@ func (p *Provider) Kind() string { return providerKind }
 
 // Attribution is the base license; Fetch refines the attribution text.
 func (p *Provider) Attribution() domain.License {
-	return domain.License{Name: licenseName, URL: licenseURL, Attribution: domain.BioclimSource}
-}
-
-type dailyResponse struct {
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	// Elevation is the grid-cell elevation (m) Open-Meteo downscales the
-	// temperatures to (90 m DEM by default); nil when the response lacks it.
-	Elevation *float64 `json:"elevation"`
-	Daily     struct {
-		Time   []string   `json:"time"`
-		TMax   []*float64 `json:"temperature_2m_max"`
-		TMin   []*float64 `json:"temperature_2m_min"`
-		TMean  []*float64 `json:"temperature_2m_mean"`
-		Precip []*float64 `json:"precipitation_sum"`
-	} `json:"daily"`
+	l := domain.ReanalysisLicense()
+	l.Attribution = domain.BioclimSource
+	return l
 }
 
 // Fetch returns the bioclim feature for the request coordinate. The reference
@@ -91,17 +69,15 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, output.NewPermanentError(err)
 	}
 
-	key := cacheKey(req.Coordinate, startY, endY)
+	key := cacheKey(req.PointOf(), startY, endY)
 	if feat, ok := p.cachedFeature(ctx, key); ok {
 		return domain.ProviderResult{Feature: feat, Cached: true}, nil
 	}
 
-	u, err := p.buildURL(req.Coordinate, startY, endY)
+	first := time.Date(startY, time.January, 1, 0, 0, 0, 0, time.UTC)
+	last := time.Date(endY, time.December, 31, 0, 0, 0, 0, time.UTC)
+	data, err := p.reanalysis.Daily(ctx, req.PointOf(), first, last)
 	if err != nil {
-		return domain.ProviderResult{}, output.NewPermanentError(err)
-	}
-	var data dailyResponse
-	if err := omhttp.GetJSON(ctx, p.client, u, &data, retryFallback); err != nil {
 		return domain.ProviderResult{}, err
 	}
 
@@ -110,7 +86,7 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, output.NewNotYetAvailableError(24 * time.Hour)
 	}
 
-	feat := p.buildFeature(data, clim, startY, endY)
+	feat := p.buildFeature(req, clim, startY, endY)
 	if lerr := feat.License.Validate(); lerr != nil {
 		return domain.ProviderResult{}, output.NewPermanentError(lerr)
 	}
@@ -118,11 +94,11 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 	return domain.ProviderResult{Feature: feat}, nil
 }
 
-func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
+func (p *Provider) buildFeature(req domain.QueryRequest, clim domain.MonthlyClimate,
 	startY, endY int,
 ) domain.Feature {
 	b := domain.BioclimVariables(clim)
-	code, kde, ken := domain.KoppenGeiger(clim, data.Latitude)
+	code, kde, ken := domain.KoppenGeiger(clim, req.Coordinate.Lat)
 	period := fmt.Sprintf("%d-%d", startY, endY)
 
 	koppen := map[string]any{
@@ -132,7 +108,7 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 		// Köppen raster vs. ERA5) could change the main class — see the adjacent code.
 		"coldestMonthMeanC": r1(domain.ColdestMonthMeanC(clim)),
 	}
-	if bl, adjCode, adjDe, adjEn := domain.KoppenBorderline(clim, data.Latitude); bl {
+	if bl, adjCode, adjDe, adjEn := domain.KoppenBorderline(clim, req.Coordinate.Lat); bl {
 		koppen["borderline"] = true
 		koppen["adjacent"] = map[string]any{keyCode: adjCode, "de": adjDe, "en": adjEn}
 	}
@@ -150,46 +126,45 @@ func (p *Provider) buildFeature(data dailyResponse, clim domain.MonthlyClimate,
 			"bio18": rmm(b.Bio18), "bio19": rmm(b.Bio19),
 		},
 		"koppen":          koppen,
-		"altitudinalBelt": altitudinalBeltProps(clim, rmSite(data)),
+		"altitudinalBelt": altitudinalBeltProps(clim, rmSite(req)),
 		"units": map[string]string{
 			"temperature": "°C", "precipitation": "mm",
 			"bio3": "%", "bio4": "°C×100 (Std.abw.)", "bio15": "% (Variationskoeffizient)",
 		},
 	}
-	// Geometry uses the provider-resolved coordinate (Open-Meteo grid cell),
-	// consistent with the other providers.
-	resolved := domain.Coordinate{Lat: data.Latitude, Lon: data.Longitude}
-	return domain.NewPointFeature(resolved, props, p.license(period))
+	return domain.NewPointFeature(req.Coordinate, props, license(period))
+}
+
+// license is the reanalysis license with the reference period and the bioclim
+// method source appended to the attribution.
+func license(period string) domain.License {
+	l := domain.ReanalysisLicense()
+	l.Attribution += "; " + period + "; " + domain.BioclimSource
+	return l
 }
 
 // monthlyNormals aggregates the daily archive range into 12-month climate
 // normals. Temperature normals are the mean daily value per calendar month;
 // precipitation normals are the mean monthly total (per-month sum ÷ years).
 // ok is false when any month has no valid data.
-func monthlyNormals(data dailyResponse, years int) (domain.MonthlyClimate, bool) {
+func monthlyNormals(data domain.DailySeries, years int) (domain.MonthlyClimate, bool) {
 	var sumMin, sumMax, sumMean, sumPrecip [12]float64
 	var days [12]int
 
-	n := len(data.Daily.Time)
+	n := min(len(data.TMax), len(data.TMin), len(data.TMean), len(data.PrecipSum))
 	for i := 0; i < n; i++ {
-		m, ok := monthIndex(data.Daily.Time[i])
-		if !ok {
-			continue
-		}
-		tmin := valueAt(data.Daily.TMin, i)
-		tmax := valueAt(data.Daily.TMax, i)
-		tmean := valueAt(data.Daily.TMean, i)
-		pr := valueAt(data.Daily.Precip, i)
+		m := int(data.FirstDay.AddDate(0, 0, i).Month()) - 1
+		tmin, tmax, tmean, pr := data.TMin[i], data.TMax[i], data.TMean[i], data.PrecipSum[i]
 		// Require all fields (incl. precipitation): counting a day with missing
 		// precip would bias the monthly total — and thus BIO12–19 and Köppen —
 		// toward drier values.
-		if tmin == nil || tmax == nil || tmean == nil || pr == nil {
+		if math.IsNaN(tmin) || math.IsNaN(tmax) || math.IsNaN(tmean) || math.IsNaN(pr) {
 			continue
 		}
-		sumMin[m] += *tmin
-		sumMax[m] += *tmax
-		sumMean[m] += *tmean
-		sumPrecip[m] += *pr
+		sumMin[m] += tmin
+		sumMax[m] += tmax
+		sumMean[m] += tmean
+		sumPrecip[m] += pr
 		days[m]++
 	}
 
@@ -205,25 +180,6 @@ func monthlyNormals(data dailyResponse, years int) (domain.MonthlyClimate, bool)
 		clim.Precip[m] = sumPrecip[m] / float64(years)
 	}
 	return clim, true
-}
-
-// monthIndex extracts the 0-based month from a "YYYY-MM-DD" date string.
-func monthIndex(date string) (int, bool) {
-	if len(date) < 7 {
-		return 0, false
-	}
-	m, err := strconv.Atoi(date[5:7])
-	if err != nil || m < 1 || m > 12 {
-		return 0, false
-	}
-	return m - 1, true
-}
-
-func valueAt(s []*float64, i int) *float64 {
-	if i < len(s) {
-		return s[i]
-	}
-	return nil
 }
 
 func r1(v float64) float64  { return math.Round(v*10) / 10 }

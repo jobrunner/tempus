@@ -41,3 +41,7 @@ which the response envelope does not currently represent.
 The weather provider compares the requested datetime against the current
 wall-clock time (injected via the `Clock` output port, which is mockable in
 tests). Astronomy providers apply no such boundary.
+
+A past hour that the reanalysis archive has not filled in yet (the newest ECMWF
+IFS hours arrive with a delay) is a different case: it is reported as
+`unavailable` and **retryable**, because it will become available.

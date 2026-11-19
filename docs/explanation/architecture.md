@@ -16,8 +16,8 @@ tempus follows the hexagonal (ports and adapters) architecture pattern:
                        ▼               ▼
           ┌────────────────┐   ┌───────────────────┐
           │ FeatureService │   │  FeatureProvider   │
-          │ ProviderLister │   │  Clock             │
-          │ HealthChecker  │   │  Cache             │
+          │ ProviderLister │   │  Reanalysis        │
+          │ HealthChecker  │   │  Clock, Cache      │
           └────┬───────────┘   └──────────┬────────┘
                │                          │
                ▼                          ▼
@@ -26,6 +26,14 @@ tempus follows the hexagonal (ports and adapters) architecture pattern:
      │  (gorilla/mux)   │      │  (open-meteo, …)     │
      └──────────────────┘      └──────────────────────┘
 ```
+
+The weather (`open-meteo`), `aggregate` and `bioclim` providers do not talk to
+the network themselves. They read point series through the `Reanalysis` output
+port (`internal/ports/output/reanalysis.go`), implemented by
+`internal/adapters/reanalysis` (cell selection, elevation correction, model
+mixing) on top of `internal/adapters/omstore` (HTTP range reads from the
+open-data bucket) and `internal/adapters/omfile` (the OM file decoder). See
+[Data source](data-source.md).
 
 The domain package has no framework or infrastructure dependencies. The
 application layer (`internal/application/`) composes providers, applies the
@@ -37,8 +45,8 @@ envelope.
 tempus draws on the Ortus feature-query pattern: given a coordinate, return a
 collection of GeoJSON features enriched with domain data. The key difference is
 that Ortus answers "which polygon does this point fall in?" (point-in-polygon
-against pre-packaged local data), while tempus **fetches or computes** data from
-upstream providers in real-time (with caching). Both share the same response
+against pre-packaged local data), while tempus **reads or computes** data at query
+time — from the reanalysis archive or by pure computation — with caching. Both share the same response
 envelope shape and the same mandatory attribution contract.
 
 ## Provider abstraction

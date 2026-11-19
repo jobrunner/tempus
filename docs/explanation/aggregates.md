@@ -2,8 +2,8 @@
 
 A single hourly value rarely explains a field observation on its own — the
 *preceding* conditions and the season-to-date warmth often matter more. The
-weather-aggregate provider (`kind: "aggregate"`) computes these from an
-Open-Meteo archive range and is aimed at enriching occurrence records (e.g.
+weather-aggregate provider (`kind: "aggregate"`) computes these from a
+reanalysis archive range and is aimed at enriching occurrence records (e.g.
 biological collection data) with the weather/climate context of a find.
 
 Unlike a derived feature, it fetches a **time range** (not just the fund hour),
@@ -76,9 +76,12 @@ standard for development timing.
 
 ## Data source and latency
 
-Aggregates are computed from the **Open-Meteo archive (ERA5, Copernicus/ECMWF)**;
-antecedent precipitation for very recent dates falls back to the forecast
-endpoint. Because ERA5 has a few days' latency, aggregates for finds in the last
-few days may have reduced coverage; for historical collection records (the
-primary use-case) this does not apply. Future instants are rejected with a
+Aggregates are computed from the **reanalysis archive** (ECMWF IFS from 2017,
+ERA5-Land and ERA5 before), read from Open-Meteo's open-data bucket and
+corrected to the request's elevation — see [Data source](data-source.md). The
+daily minimum and maximum are the extrema of a Hermite curve through the hourly
+temperatures, as in the Open-Meteo archive. There is no separate forecast
+source any more: IFS reaches up to the current day, so recent finds are
+covered too. When the archive has no usable data for the range yet, the
+provider reports a retryable `unavailable` status. Future instants are rejected with a
 non-retryable provider status.

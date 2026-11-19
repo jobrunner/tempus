@@ -2,10 +2,12 @@
 
 ## Why Not the Weather Provider's `is_day`?
 
-Open-Meteo's Archive API (ERA5) returns `is_day=0` for **all hours** of
-historical dates. This means querying e.g. `lat=49, lon=10,
-datetime=1954-07-23T11:00Z` would show "Nacht" (night) at 11:00 midday
-— clearly wrong.
+Open-Meteo's Archive API (ERA5) returned `is_day=0` for **all hours** of
+historical dates, so querying e.g. `lat=49, lon=10,
+datetime=1954-07-23T11:00Z` showed "Nacht" (night) at 11:00 midday — clearly
+wrong. tempus now reads the reanalysis archive directly (see
+[Data source](data-source.md)), which carries no reliable day/night flag for
+historical dates either.
 
 ## What tempus Does Instead
 

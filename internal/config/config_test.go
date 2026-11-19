@@ -7,7 +7,7 @@ import (
 
 func TestLoadDefaultsAndEnvOverride(t *testing.T) {
 	t.Setenv("TEMPUS_CACHE_TYPE", "memory")
-	t.Setenv("TEMPUS_PROVIDERS_OPENMETEO_TIMEOUT", "7s")
+	t.Setenv("TEMPUS_PROVIDERS_REANALYSIS_TIMEOUT", "7s")
 
 	cfg, err := Load("")
 	if err != nil {
@@ -19,18 +19,19 @@ func TestLoadDefaultsAndEnvOverride(t *testing.T) {
 	if cfg.Cache.Path == "" {
 		t.Error("cache.path default must be set")
 	}
-	if cfg.Providers.OpenMeteo.Timeout != 7*time.Second {
-		t.Errorf("openmeteo.timeout = %v, want 7s", cfg.Providers.OpenMeteo.Timeout)
+	r := cfg.Providers.Reanalysis
+	if r.Timeout != 7*time.Second {
+		t.Errorf("reanalysis.timeout = %v, want 7s", r.Timeout)
 	}
-	if !cfg.Providers.OpenMeteo.Enabled {
-		t.Error("openmeteo enabled default must be true")
+	if !r.Enabled || r.BaseURL != "https://openmeteo.s3.amazonaws.com" {
+		t.Errorf("reanalysis defaults = %+v", r)
 	}
-	if cfg.Providers.OpenMeteo.ArchiveDelay != 5*24*time.Hour {
-		t.Errorf("archiveDelay = %v, want 120h", cfg.Providers.OpenMeteo.ArchiveDelay)
+	if r.Maturity != 72*time.Hour || r.ListTTL != time.Hour || r.MaxParallel != 32 || r.RetryAttempts != 3 {
+		t.Errorf("reanalysis defaults = %+v", r)
 	}
 }
 
-func TestLoad_BatchAndThrottleDefaults(t *testing.T) {
+func TestLoad_BatchDefaults(t *testing.T) {
 	cfg, err := Load("")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -43,13 +44,6 @@ func TestLoad_BatchAndThrottleDefaults(t *testing.T) {
 	}
 	if got := cfg.Query.Batch.Concurrency; got != 4 {
 		t.Errorf("query.batch.concurrency = %d, want 4", got)
-	}
-	om := cfg.Providers.OpenMeteo
-	if om.RatePerMinute != 500 || om.RetryAttempts != 3 || om.DailyBudget != 8000 {
-		t.Errorf("openmeteo throttle defaults = %+v, want 500/3/8000", om)
-	}
-	if om.Weights.Weather != 1 || om.Weights.Aggregate != 2 || om.Weights.Bioclim != 30 {
-		t.Errorf("openmeteo weights = %+v, want 1/2/30", om.Weights)
 	}
 }
 

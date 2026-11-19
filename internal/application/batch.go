@@ -8,7 +8,6 @@ import (
 
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/input"
-	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
 // BatchService processes batch points through the single-query path with a
@@ -40,7 +39,7 @@ type group struct {
 
 // QueryBatch implements input.BatchService.
 func (s *BatchService) QueryBatch(ctx context.Context, points []input.BatchPoint, emit func(input.BatchItem) error) error {
-	ctx, cancel := context.WithCancel(output.WithBatchOrigin(ctx))
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // stops the dispatcher when emit aborts early
 
 	assign, order := s.buildGroups(points)
@@ -121,16 +120,17 @@ func (s *BatchService) awaitAndEmit(ctx context.Context, p input.BatchPoint, g *
 	return emit(input.BatchItem{ID: p.ID, QueryResult: &res})
 }
 
-// groupKey identifies "the same fetch": rounded coordinate, instant, and the
-// per-request options that change provider output.
+// groupKey identifies "the same fetch": rounded coordinate and elevation,
+// instant, and the per-request options that change provider output.
 func (s *BatchService) groupKey(req domain.QueryRequest) string {
 	gdd := ""
 	if req.GDDBaseCelsius != nil {
 		gdd = fmt.Sprintf("%.2f", *req.GDDBaseCelsius)
 	}
-	return fmt.Sprintf("%.*f|%.*f|%s|%s|%s|%s",
+	return fmt.Sprintf("%.*f|%.*f|%.0f|%s|%s|%s|%s",
 		s.precision, roundTo(req.Coordinate.Lat, s.precision),
 		s.precision, roundTo(req.Coordinate.Lon, s.precision),
+		roundTo(req.Elevation, 0),
 		req.Instant.UTC().Format(time.RFC3339),
 		gdd, req.RefPeriod, strings.Join(req.Providers, ","))
 }

@@ -15,8 +15,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
 // tracedSetup is a recording TracerProvider plus a "parent" span standing in
@@ -170,7 +168,7 @@ func TestTransport_RetryEventCarriesNetworkError(t *testing.T) {
 	// recorded before the wait starts.
 	ctx, cancel := context.WithTimeout(s.ctx, 50*time.Millisecond)
 	defer cancel()
-	if err := s.get(ctx, t, opts, "http://open-meteo.invalid/"); err == nil {
+	if err := s.get(ctx, t, opts, "http://bucket.invalid/"); err == nil {
 		t.Fatal("want an error")
 	}
 
@@ -184,35 +182,6 @@ func TestTransport_RetryEventCarriesNetworkError(t *testing.T) {
 	}
 	if v, ok := attrOf(retries[0].Attributes, "retry.wait_ms"); !ok || v.AsInt64() != 2000 {
 		t.Errorf("retry.wait_ms = %d (present %v), want 2000 (first backoff)", v.AsInt64(), ok)
-	}
-}
-
-func TestTransport_BudgetExhaustedRecordsEventWithoutClientSpan(t *testing.T) {
-	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	s := newTracedSetup(t)
-	clk := &fakeClock{now: time.Date(2026, 9, 6, 10, 0, 0, 0, time.UTC)}
-	opts := Options{Budget: NewBudget(0, clk), Weight: 1}
-	err := s.get(output.WithBatchOrigin(s.ctx), t, opts, srv.URL)
-	if !errors.Is(err, ErrBudgetExhausted) {
-		t.Fatalf("err = %v, want ErrBudgetExhausted", err)
-	}
-
-	parent, clients := s.finish(t)
-	if len(clients) != 0 || calls.Load() != 0 {
-		t.Fatalf("client spans = %d, upstream calls = %d; want none", len(clients), calls.Load())
-	}
-	events := eventsNamed(parent, eventBudgetExhausted)
-	if len(events) != 1 {
-		t.Fatalf("budget events = %d, want 1", len(events))
-	}
-	if v, ok := attrOf(events[0].Attributes, "budget.weight"); !ok || v.AsInt64() != 1 {
-		t.Errorf("budget.weight = %d (present %v), want 1", v.AsInt64(), ok)
 	}
 }
 
@@ -238,7 +207,7 @@ func TestTransport_NilTracerProviderRecordsNoSpans(t *testing.T) {
 	}
 }
 
-// Open-Meteo is a third party: our trace IDs must not leak to it.
+// The bucket is a third party: our trace IDs must not leak to it.
 func TestTransport_DoesNotPropagateTraceContext(t *testing.T) {
 	var leaked atomic.Value
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

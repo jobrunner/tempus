@@ -83,7 +83,7 @@ func TestHealthEndpoints(t *testing.T) {
 func TestHandleQuery_InvalidRequestIsBadRequest(t *testing.T) {
 	srv := serverWith(stubFeatures{}, stubHealth{}, Options{})
 	rr := httptest.NewRecorder()
-	srv.Router().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=999&lon=9.93", nil))
+	srv.Router().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=999&lon=9.93&elevation=200", nil))
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rr.Code)
@@ -101,7 +101,7 @@ func TestHandleQuery_ProviderErrorIsInternalError(t *testing.T) {
 	srv := serverWith(failingFeatures{errors.New("boom")}, stubHealth{}, Options{})
 	rr := httptest.NewRecorder()
 	srv.Router().ServeHTTP(rr,
-		httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=49.79&lon=9.93&datetime=2025-06-15T13:00:00Z", nil))
+		httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=49.79&lon=9.93&elevation=200&datetime=2025-06-15T13:00:00Z", nil))
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rr.Code)
@@ -115,7 +115,7 @@ func TestHandleQuery_ClientCancellationWritesNothing(t *testing.T) {
 	srv := serverWith(failingFeatures{context.Canceled}, stubHealth{}, Options{})
 	rr := httptest.NewRecorder()
 	srv.Router().ServeHTTP(rr,
-		httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=49.79&lon=9.93&datetime=2025-06-15T13:00:00Z", nil))
+		httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=49.79&lon=9.93&elevation=200&datetime=2025-06-15T13:00:00Z", nil))
 
 	if rr.Body.Len() != 0 {
 		t.Errorf("body = %q, want empty for a cancelled client", rr.Body.String())

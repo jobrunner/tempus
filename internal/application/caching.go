@@ -94,15 +94,15 @@ func (c *CachingProvider) ttlFor(instant time.Time) time.Duration {
 
 // CacheKey derives a deterministic key. Coordinates are rounded to precision
 // decimals so nearby points share the coarse weather grid cell (better hit rate);
-// determinism preserves idempotency. params, when non-empty, partitions the key
-// further (e.g. by a provider-specific request parameter); an empty params
-// reproduces the legacy raw format byte-for-byte, so existing cache entries
-// stay valid.
+// the elevation, rounded to whole metres, is part of the key because it selects
+// the model cell and drives the lapse-rate correction. Determinism preserves
+// idempotency. params, when non-empty, partitions the key further (e.g. by a
+// provider-specific request parameter).
 func CacheKey(providerID, version string, req domain.QueryRequest, precision int, params string) string {
 	lat := roundTo(req.Coordinate.Lat, precision)
 	lon := roundTo(req.Coordinate.Lon, precision)
-	raw := fmt.Sprintf("%s|%s|%.*f|%.*f|%s",
-		providerID, version, precision, lat, precision, lon, req.Instant.UTC().Format(time.RFC3339))
+	raw := fmt.Sprintf("%s|%s|%.*f|%.*f|%.0f|%s",
+		providerID, version, precision, lat, precision, lon, roundTo(req.Elevation, 0), req.Instant.UTC().Format(time.RFC3339))
 	if params != "" {
 		raw += "|" + params
 	}

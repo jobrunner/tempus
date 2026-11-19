@@ -6,8 +6,9 @@ coordinate.
 
 ## Prerequisites
 
-- Docker (or a Go 1.23 toolchain)
+- Docker (or a Go 1.26 toolchain)
 - `curl` or any HTTP client
+- Outbound HTTPS to `openmeteo.s3.amazonaws.com` (no account or API key)
 
 ## Step 1 — Start the service
 
@@ -51,31 +52,36 @@ attribution metadata.
 
 ## Step 4 — Make your first weather query
 
-Query the weather for Munich (48.137, 11.576) at noon UTC on 1 July 2025:
+Query the weather for Munich (48.137, 11.576, 520 m above sea level) at noon
+UTC on 1 July 2025. The elevation is required: it picks the model grid cell and
+corrects the temperature to the location's height.
 
 ```bash
-curl -s 'http://localhost:8080/api/v1/query?lat=48.137&lon=11.576&datetime=2025-07-01T12:00:00Z&timezone=Europe/Berlin' | jq .
+curl -s 'http://localhost:8080/api/v1/query?lat=48.137&lon=11.576&elevation=520&datetime=2025-07-01T12:00:00Z' | jq .
 ```
 
-A successful response looks like:
+A successful response looks like this (shortened to the weather feature):
 
 ```json
 {
   "query": {
     "coordinate": {"lat": 48.137, "lon": 11.576},
-    "datetime": "2025-07-01T12:00:00Z",
-    "timezone": "Europe/Berlin",
-    "localTime": "2025-07-01T14:00:00+02:00"
+    "datetime": "2025-07-01T12:00:00Z"
   },
   "features": [
     {
       "type": "Feature",
       "geometry": {"type": "Point", "coordinates": [11.576, 48.137]},
-      "properties": {"temperature_2m": 24.3, "precipitation": 0.0},
+      "properties": {
+        "kind": "weather",
+        "elevation": 520,
+        "temperature2m": 24.3,
+        "precipitation": 0.0
+      },
       "license": {
-        "name": "Open-Meteo",
-        "url": "https://open-meteo.com",
-        "attribution": "Weather data by Open-Meteo.com"
+        "name": "CC-BY 4.0",
+        "url": "https://open-meteo.com/en/license",
+        "attribution": "Weather data: ECMWF IFS (CC-BY 4.0) and Copernicus Climate Change Service ERA5/ERA5-Land (contains modified Copernicus Climate Change Service information), processed and distributed by Open-Meteo.com (CC-BY 4.0 open data)"
       }
     }
   ],
@@ -84,6 +90,10 @@ A successful response looks like:
   ]
 }
 ```
+
+The first query for a location reads the reanalysis archive from Open-Meteo's
+open-data bucket (see [Data source](../explanation/data-source.md)); repeating
+it is served from the cache and reports `"cached": true`.
 
 ## Step 5 — Explore the interactive API docs
 

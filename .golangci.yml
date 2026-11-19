@@ -46,13 +46,15 @@ linters:
           files:
             - '**/internal/adapters/**'
           # lax: everything not denied is allowed, and an allow entry more
-          # specific than a deny wins. The single exception is omhttp — the
-          # shared Open-Meteo HTTP plumbing (throttling transport + GetJSON)
-          # every Open-Meteo adapter needs; it is transport, not a port. The
-          # trailing $ makes it an exact match, so no sibling slips through.
+          # specific than a deny wins. Two exceptions, both plumbing rather
+          # than ports: omhttp — the shared HTTP transport (throttling,
+          # retries, GetJSON) — and omfile — the pure OM file codec (no I/O)
+          # the open-data store decodes with. The trailing $ makes each an
+          # exact match, so no sibling slips through.
           list-mode: lax
           allow:
             - github.com/jobrunner/tempus/internal/adapters/omhttp$
+            - github.com/jobrunner/tempus/internal/adapters/omfile$
           deny:
             - pkg: github.com/jobrunner/tempus/internal/application
               desc: adapters talk to the core only through ports
