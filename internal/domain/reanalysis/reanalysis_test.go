@@ -51,8 +51,17 @@ func TestMix_SmoothsTheHoursBeforeAGap(t *testing.T) {
 			t.Fatalf("index %d: got %v want %v (all %v)", i, got[i], want[i], got)
 		}
 	}
+	// A non-zero higher-priority value pins both blend weights.
+	high = []float32{4, 4, 4, 4, 4, nan, 4}
+	got = Mix([][]float32{high, low}, true)
+	want = []float32{4, 4, 5, 6, 7, 8, 4}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("blend index %d: got %v want %v (all %v)", i, got[i], want[i], got)
+		}
+	}
 	plain := Mix([][]float32{high, low}, false)
-	if plain[4] != 0 || plain[5] != 8 {
+	if plain[4] != 4 || plain[5] != 8 {
 		t.Fatalf("categorical variables are not smoothed: %v", plain)
 	}
 }

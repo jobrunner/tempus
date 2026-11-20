@@ -32,6 +32,7 @@ type fakeBucket struct {
 	files    map[string][]byte
 	etags    map[string]string
 	requests int
+	bytes    int64
 	lists    int
 	pageSize int
 }
@@ -91,6 +92,7 @@ func (b *fakeBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("ETag", b.etags[key])
 	w.WriteHeader(http.StatusPartialContent)
+	b.bytes += int64(hi + 1 - lo)
 	_, _ = w.Write(raw[lo : hi+1])
 }
 
@@ -196,6 +198,9 @@ func TestReadSeries_WarmReadsAreOneRequestPerFile(t *testing.T) {
 	if b.requests != 3 {
 		t.Fatalf("cold read: %d requests, want 3 (tail, LUT, data)", b.requests)
 	}
+	if req, n := s.Stats().Snapshot(); req != 3 || n != b.bytes || n == 0 {
+		t.Fatalf("stats: %d requests, %d bytes; bucket served 3 and %d", req, n, b.bytes)
+	}
 	lists := b.lists
 	if _, err := s.ReadSeries(context.Background(), testDomain, varTemp, []uint64{0, 1}, from, to); err != nil {
 		t.Fatal(err)
@@ -282,6 +287,48 @@ func TestResolve_BeforeTheEpochUsesTheContainingChunk(t *testing.T) {
 	segs := c.resolve(-505, -503)
 	if len(segs) != 2 || segs[0].obj.Key != "d/v/chunk_-2.om" || segs[0].t0 != 503 || segs[1].out != 1 {
 		t.Fatalf("segments: %+v", segs)
+	}
+}
+
+func TestResolve_YearFilesBoundChunksAndTheStaleCutoff(t *testing.T) {
+	// Year files 2003 and 2002 (listed out of order: the first year is the
+	// minimum, not the first listed), chunks around both edges of that span.
+	y2002, y2004 := yearStartHour(2002), yearStartHour(2004)
+	stale := floorDiv(y2002-1, hoursPerChunkFile) // ends inside 2001: stale
+	lastIn2001 := y2002 - 1
+	after := floorDiv(y2004, hoursPerChunkFile) // first chunk of 2004
+	c := newCatalog([]object{
+		{Key: "d/v/year_2003.om"}, {Key: "d/v/year_2002.om"},
+		{Key: fmt.Sprintf("d/v/chunk_%d.om", stale)},
+		{Key: fmt.Sprintf("d/v/chunk_%d.om", floorDiv(y2004-1, hoursPerChunkFile))},
+		{Key: fmt.Sprintf("d/v/chunk_%d.om", after)},
+	}, time.Now())
+	segs := c.resolve(lastIn2001, y2004+2)
+	want := []struct {
+		key    string
+		t0, t1 uint64
+		out    int
+	}{
+		{"d/v/year_2002.om", 0, index(yearStartHour(2003) - y2002), 1},
+		{"d/v/year_2003.om", 0, index(y2004 - yearStartHour(2003)), int(yearStartHour(2003) - lastIn2001)},
+		{fmt.Sprintf("d/v/chunk_%d.om", after), index(y2004 - after*hoursPerChunkFile), index(y2004 + 2 - after*hoursPerChunkFile), int(y2004 - lastIn2001)},
+	}
+	if len(segs) != len(want) {
+		t.Fatalf("segments: %+v", segs)
+	}
+	for i, w := range want {
+		if g := segs[i]; g.obj.Key != w.key || g.t0 != w.t0 || g.t1 != w.t1 || g.out != w.out {
+			t.Errorf("segment %d: got %+v want %+v", i, g, w)
+		}
+	}
+	// A chunk that straddles New Year stops where the next year file starts.
+	c = newCatalog([]object{{Key: "d/v/year_2002.om"}, {Key: fmt.Sprintf("d/v/chunk_%d.om", stale)}}, time.Now())
+	if segs := c.resolve(yearStartHour(2001), y2002+1); len(segs) != 1 || segs[0].obj.Key != "d/v/year_2002.om" {
+		t.Fatalf("chunks before the first year file are stale: %+v", segs)
+	}
+	c = newCatalog([]object{{Key: "d/v/year_2002.om"}, {Key: fmt.Sprintf("d/v/chunk_%d.om", stale)}, {Key: "d/v/chunk_x.om"}, {Key: "d/v/year_x.om"}, {Key: "d/v/meta.json"}}, time.Now())
+	if len(c.chunks) != 1 || len(c.years) != 1 {
+		t.Fatalf("unparsable names must be skipped: %+v", c)
 	}
 }
 

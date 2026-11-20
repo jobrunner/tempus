@@ -50,6 +50,17 @@
 # main() rechtfertigt das heute; sobald dort Logik landet, gehoeren Tests und
 # echte Zahlen her.
 #
+# NACHGETRAGEN AM 2026-11-20 (PR #100, lokal auf darwin/arm64, gremlins v0.5.1,
+# timeout-coefficient 60 aus .gremlins.yaml): die Pakete des OM-Lesepfads.
+# Gemessen omfile 91,46/94,30, omstore 86,51/96,92, adapters/reanalysis
+# 96,36/85,94, domain/reanalysis 85,81/96,88 — Schwellen wie oben ~3 Punkte
+# darunter. domain/reanalysis lag zuerst bei 69,84: die Hermite-Extrema, die
+# Mischgewichte und das Gauss-Zeilenlayout waren nur grob getestet; statt einer
+# niedrigen Schwelle gibt es dafuer jetzt Tests (dichte Referenzabtastung der
+# Hermite-Kurve, exakte Parabel, Zeilensummen von O1280). Die verbleibenden
+# omstore-Ueberlebenden in meta.go brauchen eine Testdatei > 4 KiB, deren
+# Variable ausserhalb des gelesenen Endstuecks liegt.
+#
 # paket                                 efficacy(%)  mcover(%)
 cmd/tempus                              0            0
 internal/adapters/aggregate             57           91
@@ -61,12 +72,16 @@ internal/adapters/clock                 NONE
 internal/adapters/dewpoint              80           82
 internal/adapters/http                  97           89
 internal/adapters/metrics               37           80
+internal/adapters/omfile                88           91
 internal/adapters/omhttp                76           93
+internal/adapters/omstore               83           93
 internal/adapters/openmeteo             66           76
+internal/adapters/reanalysis            93           82
 internal/adapters/telemetry             17           97
 internal/app                            37           88
 internal/application                    73           85
 internal/config                         60           88
 internal/domain                         52           56
+internal/domain/reanalysis              82           93
 internal/ports/input                    NONE
 internal/ports/output                   NONE

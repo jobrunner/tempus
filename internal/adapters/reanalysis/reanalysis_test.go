@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jobrunner/tempus/internal/domain"
+	ra "github.com/jobrunner/tempus/internal/domain/reanalysis"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
@@ -95,20 +96,29 @@ type fakeReader struct {
 	values map[string]float32 // model/variable → value; missing → NaN
 	reads  []string
 	err    error
+	// failOn makes only this model/variable fail with err.
+	failOn string
+	// at, when set, serves the value of model/variable at hour t instead of
+	// the constant from values.
+	at func(key string, t time.Time) float32
 }
 
 func (f *fakeReader) ReadSeries(_ context.Context, model, variable string, _ []uint64, from, to time.Time) ([]float32, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.reads = append(f.reads, model+"/"+variable)
-	if f.err != nil {
+	key := model + "/" + variable
+	f.reads = append(f.reads, key)
+	if f.err != nil && (f.failOn == "" || f.failOn == key) {
 		return nil, f.err
 	}
-	v, ok := f.values[model+"/"+variable]
+	v, ok := f.values[key]
 	out := make([]float32, int(to.Sub(from)/time.Hour))
 	for i := range out {
 		out[i] = nan32
-		if ok {
+		switch {
+		case f.at != nil:
+			out[i] = f.at(key, from.Add(time.Duration(i)*time.Hour))
+		case ok:
 			out[i] = v
 		}
 	}
@@ -144,9 +154,13 @@ func TestHourly_FallsBackOnlyWhereTheHigherModelHasGaps(t *testing.T) {
 	if f.didRead(domainERA5 + "/" + VarTemperature) {
 		t.Error("ERA5 temperature read although ERA5-Land filled every hour")
 	}
-	temp := h.Values[domain.VarTemperature][0]
-	if temp > 20.5 || temp < 19.5 {
-		t.Errorf("temperature from ERA5-Land, height-corrected: %v", temp)
+	land := h.Cells[1]
+	if land.Model != domainERA5Land || land.Elevation == munich.Elevation {
+		t.Fatalf("the test needs an ERA5-Land cell off the target height: %+v", land)
+	}
+	shift := float32(float32(float32(land.Elevation)-float32(munich.Elevation)) * ra.LapseRate)
+	if temp, want := h.Values[domain.VarTemperature][0], float64(20+shift); temp != want {
+		t.Errorf("temperature from ERA5-Land, height-corrected: %v want %v", temp, want)
 	}
 	if wc := h.Values[domain.VarWeatherCode][0]; wc != 51 {
 		t.Errorf("weather code from ERA5's 0.4 mm (drizzle beats cloud cover): %v", wc)
@@ -201,5 +215,76 @@ func TestService_Errors(t *testing.T) {
 	}
 	if _, err := svc.Daily(context.Background(), munich, day, day.AddDate(0, 0, -1)); err == nil {
 		t.Error("empty day range: no error")
+	}
+}
+
+func TestHourly_RawUnitsAndUncorrectedVariables(t *testing.T) {
+	f := &fakeReader{values: map[string]float32{
+		domainIFS + "/" + VarPrecip: 0.4, domainIFS + "/" + VarCloud: 30,
+		domainIFS + "/wind_u_component_10m": 3, domainIFS + "/wind_v_component_10m": 4,
+		domainIFS + "/snowfall_water_equivalent": 1, domainIFS + "/" + VarTemperature: -5,
+	}}
+	// Far off the IFS cell's height, so the snow rule and the lapse-rate
+	// correction would both act if they were (wrongly) applied.
+	high := domain.GeoPoint{Lat: munich.Lat, Lon: munich.Lon, Elevation: 3000}
+	h, err := NewService(f).Hourly(context.Background(), high, day, day.Add(2*time.Hour),
+		domain.VarPrecip, domain.VarCloud, domain.VarWind, domain.VarSnowfall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for v, want := range map[string]float32{
+		domain.VarPrecip: 0.4, domain.VarCloud: 30, domain.VarWind: 18, domain.VarSnowfall: ra.SnowfallCm(1),
+	} {
+		if got := h.Values[v]; len(got) != 2 || got[1] != float64(want) {
+			t.Errorf("%s: got %v want %v (no height correction)", v, got, want)
+		}
+	}
+}
+
+func TestHourly_WindComponentErrors(t *testing.T) {
+	for _, comp := range []string{"wind_u_component_10m", "wind_v_component_10m"} {
+		f := &fakeReader{err: errors.New("corrupt chunk"), failOn: domainIFS + "/" + comp}
+		_, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarWind)
+		if err == nil {
+			t.Errorf("%s: error swallowed", comp)
+		}
+	}
+}
+
+func TestDaily_WindowAndDayBoundaries(t *testing.T) {
+	// Precipitation equals the day of the month in every hour of that UTC day,
+	// temperature ten times that: an hour taken from the wrong day changes the
+	// sums and means.
+	f := &fakeReader{at: func(key string, at time.Time) float32 {
+		switch key {
+		case domainIFS + "/" + VarPrecip:
+			return float32(at.Day())
+		case domainIFS + "/" + VarTemperature:
+			return float32(10 * at.Day())
+		}
+		return nan32
+	}}
+	d, err := NewService(f).Daily(context.Background(), munich,
+		time.Date(2020, 3, 2, 15, 0, 0, 0, time.UTC), time.Date(2020, 3, 4, 1, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2020, 3, 2, 0, 0, 0, 0, time.UTC); !d.FirstDay.Equal(want) || len(d.PrecipSum) != 3 {
+		t.Fatalf("days: first %v, %d days", d.FirstDay, len(d.PrecipSum))
+	}
+	ifs := d.Cells[0]
+	shift := float64(float32(float32(float32(ifs.Elevation)-float32(munich.Elevation)) * ra.LapseRate))
+	for i, dom := range []float64{2, 3, 4} {
+		if d.PrecipSum[i] != 24*dom {
+			t.Errorf("day %d: precipitation sum %v want %v", i, d.PrecipSum[i], 24*dom)
+		}
+		if want := 10*dom + shift; math.Abs(d.TMean[i]-want) > 1e-3 {
+			t.Errorf("day %d: mean %v want %v", i, d.TMean[i], want)
+		}
+		// The day's intervals reach from 00:00 to the next midnight, whose
+		// value already belongs to the next day: the step lies inside.
+		if d.TMin[i] > 10*dom+shift+1e-3 || d.TMax[i] < 10*(dom+1)+shift-1e-3 {
+			t.Errorf("day %d: extrema %v/%v", i, d.TMin[i], d.TMax[i])
+		}
 	}
 }
