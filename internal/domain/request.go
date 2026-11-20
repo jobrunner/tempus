@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 )
@@ -70,7 +71,7 @@ func ParseQueryRequest(lat, lon, elevation, datetime, gddBase string, providers 
 	}
 
 	elev, err := strconv.ParseFloat(elevation, 64)
-	if err != nil || elev < minElevation || elev > maxElevation {
+	if err != nil || math.IsNaN(elev) || elev < minElevation || elev > maxElevation {
 		return QueryRequest{}, ValidationError{fieldElevation, "is required: metres above sea level in [-500,9000]"}
 	}
 

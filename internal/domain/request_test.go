@@ -70,7 +70,7 @@ func TestParseQueryRequest_ElevationIsRequired(t *testing.T) {
 	if err != nil || req.Elevation != 1523.5 {
 		t.Fatalf("valid elevation: %+v, %v", req, err)
 	}
-	for _, e := range []string{"", "abc", "-501", "9001"} {
+	for _, e := range []string{"", "abc", "-501", "9001", "NaN", "Inf"} {
 		_, err := ParseQueryRequest("47.4", "11.0", e, "2025-01-01T00:00:00Z", "", nil)
 		var ve ValidationError
 		if !errors.As(err, &ve) || ve.Field != fieldElevation {

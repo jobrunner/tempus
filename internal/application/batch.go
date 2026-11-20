@@ -120,17 +120,17 @@ func (s *BatchService) awaitAndEmit(ctx context.Context, p input.BatchPoint, g *
 	return emit(input.BatchItem{ID: p.ID, QueryResult: &res})
 }
 
-// groupKey identifies "the same fetch": rounded coordinate and elevation,
+// groupKey identifies "the same fetch": rounded coordinate, exact elevation,
 // instant, and the per-request options that change provider output.
 func (s *BatchService) groupKey(req domain.QueryRequest) string {
 	gdd := ""
 	if req.GDDBaseCelsius != nil {
 		gdd = fmt.Sprintf("%.2f", *req.GDDBaseCelsius)
 	}
-	return fmt.Sprintf("%.*f|%.*f|%.0f|%s|%s|%s|%s",
+	return fmt.Sprintf("%.*f|%.*f|%s|%s|%s|%s|%s",
 		s.precision, roundTo(req.Coordinate.Lat, s.precision),
 		s.precision, roundTo(req.Coordinate.Lon, s.precision),
-		roundTo(req.Elevation, 0),
+		elevationKey(req.Elevation),
 		req.Instant.UTC().Format(time.RFC3339),
 		gdd, req.RefPeriod, strings.Join(req.Providers, ","))
 }

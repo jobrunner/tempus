@@ -158,9 +158,16 @@ func archive(t *testing.T, c *http.Client, p domain.GeoPoint, from, to time.Time
 			var block map[string]json.RawMessage
 			if err == nil && json.Unmarshal(body[kind], &block) == nil {
 				out = map[string][]*float64{}
+				days := int(to.Sub(from)/(24*time.Hour)) + 1
+				want := days
+				if kind == "hourly" {
+					want = 24 * days
+				}
 				for _, v := range vars {
 					var s []*float64
-					_ = json.Unmarshal(block[v], &s)
+					if err := json.Unmarshal(block[v], &s); err != nil || len(s) != want {
+						t.Fatalf("oracle %s %s: %d values (want %d), err %v", kind, v, len(s), want, err)
+					}
 					out[v] = s
 				}
 				return out

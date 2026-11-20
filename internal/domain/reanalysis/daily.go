@@ -100,6 +100,9 @@ func DailySum(series []float32, start int) float32 {
 // Round rounds like the reference's JSON output: scale in float32, round half
 // away from zero, scale back.
 func Round(x float32, decimals int) float32 {
+	if math.IsNaN(float64(x)) || math.IsInf(float64(x), 0) {
+		return x
+	}
 	p := float32(math.Pow10(decimals))
 	return float32(roundHalfAway(float32(x*p))) / p
 }

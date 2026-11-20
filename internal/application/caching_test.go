@@ -119,7 +119,7 @@ func TestCacheKey_RoundsCoords(t *testing.T) {
 }
 
 // TestCacheKey_RawFormat pins the raw key format for params=="" byte-for-byte,
-// including the elevation rounded to whole metres.
+// including the exact elevation.
 func TestCacheKey_RawFormat(t *testing.T) {
 	r := domain.QueryRequest{
 		Coordinate: domain.Coordinate{Lat: 49.79345, Lon: 9.95341},
@@ -127,14 +127,14 @@ func TestCacheKey_RawFormat(t *testing.T) {
 		Instant:    time.Date(2025, 6, 3, 14, 0, 0, 0, time.UTC),
 	}
 	raw := fmt.Sprintf("%s|%s|%.*f|%.*f|%s|%s",
-		"open-meteo", "1", 2, 49.79, 2, 9.95, "183", r.Instant.UTC().Format(time.RFC3339))
+		"open-meteo", "1", 2, 49.79, 2, 9.95, "182.6", r.Instant.UTC().Format(time.RFC3339))
 	sum := sha256.Sum256([]byte(raw))
 	want := hex.EncodeToString(sum[:])
 	if got := CacheKey("open-meteo", "1", r, 2, ""); got != want {
 		t.Errorf("CacheKey with empty params = %s, want %s", got, want)
 	}
 	other := r
-	other.Elevation = 250
+	other.Elevation = 182.7
 	if CacheKey("open-meteo", "1", other, 2, "") == want {
 		t.Error("a different elevation must produce a different key")
 	}

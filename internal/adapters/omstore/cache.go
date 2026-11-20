@@ -2,6 +2,7 @@ package omstore
 
 import (
 	"container/list"
+	"context"
 	"sync"
 )
 
@@ -49,7 +50,9 @@ func (c *lru[K, V]) put(k K, v V) {
 	}
 }
 
-// flightGroup collapses concurrent calls with the same key into one.
+// flightGroup collapses concurrent calls with the same key into one. A waiter
+// whose own context ends stops waiting; the shared call keeps running for the
+// others.
 type flightGroup struct {
 	mu    sync.Mutex
 	calls map[string]*flightCall
@@ -61,15 +64,19 @@ type flightCall struct {
 	err  error
 }
 
-func (g *flightGroup) do(key string, fn func() (any, error)) (any, error) {
+func (g *flightGroup) do(ctx context.Context, key string, fn func() (any, error)) (any, error) {
 	g.mu.Lock()
 	if g.calls == nil {
 		g.calls = map[string]*flightCall{}
 	}
 	if c, ok := g.calls[key]; ok {
 		g.mu.Unlock()
-		<-c.done
-		return c.val, c.err
+		select {
+		case <-c.done:
+			return c.val, c.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	c := &flightCall{done: make(chan struct{})}
 	g.calls[key] = c

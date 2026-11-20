@@ -272,19 +272,15 @@ func TestFetch_CachesPerCoordinatePeriodElevation(t *testing.T) {
 		t.Error("second result should be Cached=true")
 	}
 
-	// Sub-metre differences share the entry; another whole metre does not.
+	// Any other elevation, even a fraction of a metre off, is its own entry.
 	r := req("1991-1992")
 	r.Elevation = 34.3
-	if res, _ := p.Fetch(context.Background(), r); !res.Cached {
-		t.Error("34.3 m should share the 34 m entry")
-	}
-	r.Elevation = 35
 	res, err = p.Fetch(context.Background(), r)
 	if err != nil {
-		t.Fatalf("Fetch at 35 m: %v", err)
+		t.Fatalf("Fetch at 34.3 m: %v", err)
 	}
 	if res.Cached || fake.calls != 2 {
-		t.Errorf("35 m: Cached=%v calls=%d, want a fresh fetch", res.Cached, fake.calls)
+		t.Errorf("34.3 m: Cached=%v calls=%d, want a fresh fetch", res.Cached, fake.calls)
 	}
 }
 

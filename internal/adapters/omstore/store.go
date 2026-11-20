@@ -202,7 +202,7 @@ func (s *Store) array(ctx context.Context, obj object) (omfile.Array, error) {
 	if a, ok := s.arrays.get(key); ok {
 		return a, nil
 	}
-	v, err := s.flight.do(key, func() (any, error) {
+	v, err := s.flight.do(ctx, key, func() (any, error) {
 		n := min(obj.Size, tailBytes)
 		tail, err := s.get(ctx, obj, obj.Size-n, n)
 		if err != nil {
@@ -240,7 +240,7 @@ func (s *Store) lut(ctx context.Context, obj object, p omfile.Plan) ([]byte, err
 	if b, ok := s.luts.get(key); ok {
 		return b, nil
 	}
-	v, err := s.flight.do(key, func() (any, error) {
+	v, err := s.flight.do(ctx, key, func() (any, error) {
 		b, err := s.get(ctx, obj, off, n)
 		if err != nil {
 			return nil, err
@@ -325,7 +325,7 @@ func (s *Store) catalog(ctx context.Context, domain, variable string) (*catalog,
 	if ok && s.now().Sub(c.fetched) < s.listTTL {
 		return c, nil
 	}
-	v, err := s.flight.do("list:"+dir, func() (any, error) {
+	v, err := s.flight.do(ctx, "list:"+dir, func() (any, error) {
 		objs, err := s.list(ctx, dir+"/")
 		if err != nil {
 			return nil, err

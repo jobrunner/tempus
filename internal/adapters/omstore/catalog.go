@@ -75,7 +75,7 @@ func (c *catalog) resolve(from, to int64) []segment {
 			h = end
 			continue
 		}
-		n := h / hoursPerChunkFile
+		n := floorDiv(h, hoursPerChunkFile)
 		end := min(to, (n+1)*hoursPerChunkFile)
 		if _, ok := c.years[t.Year()+1]; ok {
 			end = min(end, yearStartHour(t.Year()+1))
@@ -87,6 +87,16 @@ func (c *catalog) resolve(from, to int64) []segment {
 		h = end
 	}
 	return segs
+}
+
+// floorDiv divides rounding towards negative infinity, so hours before the
+// epoch land in the chunk that actually contains them.
+func floorDiv(a, b int64) int64 {
+	q := a / b
+	if a%b != 0 && (a < 0) != (b < 0) {
+		q--
+	}
+	return q
 }
 
 // index converts a non-negative hour offset into a file's time index.

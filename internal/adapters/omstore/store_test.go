@@ -268,3 +268,39 @@ func TestReadSeries_Errors(t *testing.T) {
 		t.Errorf("unreachable bucket: err = %v, want ErrUpstream", err)
 	}
 }
+
+func TestFloorDiv(t *testing.T) {
+	for _, c := range [][3]int64{{-505, 504, -2}, {-504, 504, -1}, {-1, 504, -1}, {0, 504, 0}, {505, 504, 1}} {
+		if got := floorDiv(c[0], c[1]); got != c[2] {
+			t.Errorf("floorDiv(%d, %d) = %d, want %d", c[0], c[1], got, c[2])
+		}
+	}
+}
+
+func TestResolve_BeforeTheEpochUsesTheContainingChunk(t *testing.T) {
+	c := newCatalog([]object{{Key: "d/v/chunk_-2.om"}, {Key: "d/v/chunk_-1.om"}}, time.Now())
+	segs := c.resolve(-505, -503)
+	if len(segs) != 2 || segs[0].obj.Key != "d/v/chunk_-2.om" || segs[0].t0 != 503 || segs[1].out != 1 {
+		t.Fatalf("segments: %+v", segs)
+	}
+}
+
+func TestFlightGroup_WaiterStopsOnItsOwnCancellation(t *testing.T) {
+	var g flightGroup
+	release := make(chan struct{})
+	started := make(chan struct{})
+	go func() {
+		_, _ = g.do(context.Background(), "k", func() (any, error) {
+			close(started)
+			<-release
+			return 1, nil
+		})
+	}()
+	<-started
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := g.do(ctx, "k", func() (any, error) { return 2, nil }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled waiter: err = %v", err)
+	}
+	close(release)
+}
