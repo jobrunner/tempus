@@ -70,9 +70,9 @@ func ParseQueryRequest(lat, lon, elevation, datetime, gddBase string, providers 
 		return QueryRequest{}, ValidationError{"lon", "must be a number in [-180,180]"}
 	}
 
-	elev, err := strconv.ParseFloat(elevation, 64)
-	if err != nil || math.IsNaN(elev) || elev < minElevation || elev > maxElevation {
-		return QueryRequest{}, ValidationError{fieldElevation, "is required: metres above sea level in [-500,9000]"}
+	elev, err := parseElevation(elevation)
+	if err != nil {
+		return QueryRequest{}, err
 	}
 
 	instant, ok := parseInstant(datetime)
@@ -93,6 +93,15 @@ func ParseQueryRequest(lat, lon, elevation, datetime, gddBase string, providers 
 		Providers:      providers,
 		GDDBaseCelsius: gdd,
 	}, nil
+}
+
+// parseElevation parses the required elevation in metres above sea level.
+func parseElevation(s string) (float64, error) {
+	elev, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(elev) || elev < minElevation || elev > maxElevation {
+		return 0, ValidationError{fieldElevation, "is required: metres above sea level in [-500,9000]"}
+	}
+	return elev, nil
 }
 
 // parseGDDBase parses the optional gddBase override. Empty ⇒ nil (use default).

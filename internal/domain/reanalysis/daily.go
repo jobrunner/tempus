@@ -31,58 +31,6 @@ func DailyMinMax(series []float32, start int) (lo, hi float32) {
 	return float32(mn), float32(mx)
 }
 
-// intervalExtrema bounds the Hermite curve between b and c on t ∈ [0, 1],
-// with tangents (c−a)/2 and (d−b)/2. The cubic's derivative is solved with
-// the numerically stable quadratic formula.
-func intervalExtrema(a, b, c, d float64) (lo, hi float64, ok bool) {
-	if math.IsNaN(b) || math.IsNaN(c) {
-		return 0, 0, false
-	}
-	if math.IsNaN(a) {
-		a = b
-	}
-	if math.IsNaN(d) {
-		d = c
-	}
-	// float64(…) around every product keeps the compiler from fusing it with
-	// the following addition (FMA), which would change the last bit.
-	m0, m1 := (c-a)/2, (d-b)/2
-	k3 := float64(2*(b-c)) + m0 + m1
-	k2 := float64(3*(c-b)) - float64(2*m0) - m1
-	val := func(t float64) float64 {
-		v := float64(k3*t) + k2
-		v = float64(v*t) + m0
-		return float64(v*t) + b
-	}
-	// The end points come from the polynomial too, not from b and c: the
-	// rounding of val(1) is part of the reference result.
-	lo, hi = math.Min(val(0), val(1)), math.Max(val(0), val(1))
-	inside := func(t float64) {
-		if t > 0 && t < 1 {
-			v := val(t)
-			lo, hi = math.Min(lo, v), math.Max(hi, v)
-		}
-	}
-	qa, qb, qc := 3*k3, 2*k2, m0
-	switch {
-	case qa == 0 && qb != 0:
-		inside(-qc / qb)
-	case qa != 0:
-		if disc := float64(qb*qb) - float64(4*qa*qc); disc >= 0 {
-			sign := 1.0
-			if qb < 0 {
-				sign = -1
-			}
-			q := -0.5 * (qb + float64(sign*math.Sqrt(disc)))
-			inside(q / qa)
-			if q != 0 {
-				inside(qc / q)
-			}
-		}
-	}
-	return lo, hi, true
-}
-
 // DailyMean is the float32 mean of the day's 24 hours (NaN if any is missing).
 func DailyMean(series []float32, start int) float32 {
 	return DailySum(series, start) / HoursPerDay

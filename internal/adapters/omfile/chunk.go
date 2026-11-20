@@ -21,6 +21,17 @@ func DecodeChunk(b []byte, shape []uint64, dst []uint16) error {
 	if len(vals) == 0 {
 		return nil
 	}
+	if err := decodeDeltas(b, vals); err != nil {
+		return err
+	}
+	undoRowDeltas(vals, len(vals[:shape[len(shape)-1]]))
+	return nil
+}
+
+// decodeDeltas decodes the chunk's value stream into vals: a prefix varint
+// holding the first value, then PFor blocks of zigzag-coded deltas that are
+// summed up along the flattened chunk.
+func decodeDeltas(b []byte, vals []uint16) error {
 	first, pos, err := readPrefixVarint(b)
 	if err != nil {
 		return err
@@ -47,14 +58,18 @@ func DecodeChunk(b []byte, shape []uint64, dst []uint16) error {
 			i++
 		}
 	}
-	cols := len(vals[:shape[len(shape)-1]])
+	return nil
+}
+
+// undoRowDeltas reverses the 2D delta step: every row of cols values was
+// stored as its difference to the row above.
+func undoRowDeltas(vals []uint16, cols int) {
 	for r := cols; r < len(vals); r += cols {
 		row, above := vals[r:r+cols], vals[r-cols:r]
 		for c := range row {
 			row[c] += above[c]
 		}
 	}
-	return nil
 }
 
 // unzigzag16 maps 0, 1, 2, 3, … to the two's-complement bit patterns of
