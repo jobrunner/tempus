@@ -43,12 +43,7 @@ func (g RegularGrid) nearest(lat, lon float32) (x, y int) {
 func (g RegularGrid) Select(lat, lon, elevation float32, e Elevations) Cell {
 	x, y := g.nearest(lat, lon)
 	center := y*g.Nx + x
-	var idx []int
-	for yy := max(0, y-1); yy < min(g.Ny, y+2); yy++ {
-		for xx := max(0, x-1); xx < min(g.Nx, x+2); xx++ {
-			idx = append(idx, yy*g.Nx+xx)
-		}
-	}
+	idx := g.window(x, y)
 	centerElev := e.At(idx[len(idx)/2])
 	best := absf(centerElev - elevation)
 	if best <= shortcutMetres {
@@ -71,6 +66,20 @@ func (g RegularGrid) Select(lat, lon, elevation float32, e Elevations) Cell {
 		return g.cell(center, centerElev)
 	}
 	return g.cell(bestIdx, bestElev)
+}
+
+// window returns the up to 3×3 grid indices around x/y, clamped at the edges.
+// A fixed array, not an append loop: the window can never grow past nine.
+func (g RegularGrid) window(x, y int) []int {
+	var buf [9]int
+	n := 0
+	for yy := max(0, y-1); yy < min(g.Ny, y+2); yy++ {
+		for xx := max(0, x-1); xx < min(g.Nx, x+2); xx++ {
+			buf[n] = yy*g.Nx + xx
+			n++
+		}
+	}
+	return buf[:n]
 }
 
 func (g RegularGrid) cell(i int, h float32) Cell {
