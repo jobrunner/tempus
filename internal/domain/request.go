@@ -61,18 +61,17 @@ var datetimeLayouts = []string{
 // any date. Providers that cannot serve the future (e.g. weather) reject it
 // themselves and report it in the response envelope.
 func ParseQueryRequest(lat, lon, elevation, datetime, gddBase string, providers []string) (QueryRequest, error) {
-	latF, err := strconv.ParseFloat(lat, 64)
-	if err != nil || math.IsNaN(latF) || latF < -90 || latF > 90 {
+	latF, ok := parseBounded(lat, -90, 90)
+	if !ok {
 		return QueryRequest{}, ValidationError{"lat", "must be a number in [-90,90]"}
 	}
-	lonF, err := strconv.ParseFloat(lon, 64)
-	if err != nil || math.IsNaN(lonF) || lonF < -180 || lonF > 180 {
+	lonF, ok := parseBounded(lon, -180, 180)
+	if !ok {
 		return QueryRequest{}, ValidationError{"lon", "must be a number in [-180,180]"}
 	}
-
-	elev, err := parseElevation(elevation)
-	if err != nil {
-		return QueryRequest{}, err
+	elev, ok := parseBounded(elevation, minElevation, maxElevation)
+	if !ok {
+		return QueryRequest{}, ValidationError{fieldElevation, "is required: metres above sea level in [-500,9000]"}
 	}
 
 	instant, ok := parseInstant(datetime)
@@ -95,13 +94,14 @@ func ParseQueryRequest(lat, lon, elevation, datetime, gddBase string, providers 
 	}, nil
 }
 
-// parseElevation parses the required elevation in metres above sea level.
-func parseElevation(s string) (float64, error) {
-	elev, err := strconv.ParseFloat(s, 64)
-	if err != nil || math.IsNaN(elev) || elev < minElevation || elev > maxElevation {
-		return 0, ValidationError{fieldElevation, "is required: metres above sea level in [-500,9000]"}
+// parseBounded parses a number in [lo, hi]. NaN fails every comparison, so it
+// is rejected explicitly: it would otherwise slip through a range check.
+func parseBounded(s string, lo, hi float64) (float64, bool) {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(v) || v < lo || v > hi {
+		return 0, false
 	}
-	return elev, nil
+	return v, true
 }
 
 // parseGDDBase parses the optional gddBase override. Empty ⇒ nil (use default).
