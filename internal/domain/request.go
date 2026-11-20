@@ -62,11 +62,11 @@ var datetimeLayouts = []string{
 // themselves and report it in the response envelope.
 func ParseQueryRequest(lat, lon, elevation, datetime, gddBase string, providers []string) (QueryRequest, error) {
 	latF, err := strconv.ParseFloat(lat, 64)
-	if err != nil || latF < -90 || latF > 90 {
+	if err != nil || math.IsNaN(latF) || latF < -90 || latF > 90 {
 		return QueryRequest{}, ValidationError{"lat", "must be a number in [-90,90]"}
 	}
 	lonF, err := strconv.ParseFloat(lon, 64)
-	if err != nil || lonF < -180 || lonF > 180 {
+	if err != nil || math.IsNaN(lonF) || lonF < -180 || lonF > 180 {
 		return QueryRequest{}, ValidationError{"lon", "must be a number in [-180,180]"}
 	}
 

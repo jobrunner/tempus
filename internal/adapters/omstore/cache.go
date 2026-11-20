@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"sync"
+	"time"
 )
 
 // lru is a small fixed-capacity least-recently-used map.
@@ -50,41 +51,65 @@ func (c *lru[K, V]) put(k K, v V) {
 	}
 }
 
-// flightGroup collapses concurrent calls with the same key into one. A waiter
-// whose own context ends stops waiting; the shared call keeps running for the
-// others.
+// sharedWorkTimeout bounds work that several requests wait on. It runs on a
+// context detached from whichever request started it, so one caller giving
+// up never fails the others.
+const sharedWorkTimeout = 2 * time.Minute
+
+// flightGroup collapses concurrent calls with the same key into one. The
+// shared call runs on its own goroutine with a detached, bounded context;
+// every caller — the one that started it too — waits only as long as its own
+// context allows.
 type flightGroup struct {
 	mu    sync.Mutex
 	calls map[string]*flightCall
 }
 
 type flightCall struct {
-	done chan struct{}
-	val  any
-	err  error
+	done    chan struct{}
+	val     any
+	err     error
+	waiters int // callers that joined after the start (guarded by mu)
 }
 
-func (g *flightGroup) do(ctx context.Context, key string, fn func() (any, error)) (any, error) {
+func (g *flightGroup) do(ctx context.Context, key string, fn func(context.Context) (any, error)) (any, error) {
 	g.mu.Lock()
 	if g.calls == nil {
 		g.calls = map[string]*flightCall{}
 	}
-	if c, ok := g.calls[key]; ok {
-		g.mu.Unlock()
-		select {
-		case <-c.done:
-			return c.val, c.err
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+	c, ok := g.calls[key]
+	if !ok {
+		c = &flightCall{done: make(chan struct{})}
+		g.calls[key] = c
+		go g.run(context.WithoutCancel(ctx), key, c, fn)
+	} else {
+		c.waiters++
 	}
-	c := &flightCall{done: make(chan struct{})}
-	g.calls[key] = c
 	g.mu.Unlock()
-	c.val, c.err = fn()
+	select {
+	case <-c.done:
+		return c.val, c.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (g *flightGroup) run(detached context.Context, key string, c *flightCall, fn func(context.Context) (any, error)) {
+	ctx, cancel := context.WithTimeout(detached, sharedWorkTimeout)
+	defer cancel()
+	c.val, c.err = fn(ctx)
 	g.mu.Lock()
 	delete(g.calls, key)
 	g.mu.Unlock()
 	close(c.done)
-	return c.val, c.err
+}
+
+// joined reports how many callers joined the running call for key.
+func (g *flightGroup) joined(key string) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if c, ok := g.calls[key]; ok {
+		return c.waiters
+	}
+	return 0
 }

@@ -78,3 +78,13 @@ func TestParseQueryRequest_ElevationIsRequired(t *testing.T) {
 		}
 	}
 }
+
+// NaN passes plain range comparisons; it must be rejected before it reaches
+// the grid selection.
+func TestParseQueryRequest_RejectsNaNCoordinates(t *testing.T) {
+	for _, c := range [][2]string{{"NaN", "11"}, {"47", "NaN"}, {"nan", "11"}} {
+		if _, err := ParseQueryRequest(c[0], c[1], "500", "2025-01-01T00:00:00Z", "", nil); err == nil {
+			t.Errorf("lat %q lon %q: accepted", c[0], c[1])
+		}
+	}
+}

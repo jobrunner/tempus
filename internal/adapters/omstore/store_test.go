@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -337,7 +338,7 @@ func TestFlightGroup_WaiterStopsOnItsOwnCancellation(t *testing.T) {
 	release := make(chan struct{})
 	started := make(chan struct{})
 	go func() {
-		_, _ = g.do(context.Background(), "k", func() (any, error) {
+		_, _ = g.do(context.Background(), "k", func(context.Context) (any, error) {
 			close(started)
 			<-release
 			return 1, nil
@@ -346,8 +347,52 @@ func TestFlightGroup_WaiterStopsOnItsOwnCancellation(t *testing.T) {
 	<-started
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := g.do(ctx, "k", func() (any, error) { return 2, nil }); !errors.Is(err, context.Canceled) {
+	if _, err := g.do(ctx, "k", func(context.Context) (any, error) { return 2, nil }); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled waiter: err = %v", err)
 	}
 	close(release)
+}
+
+// The caller that starts shared work may give up; the work itself must finish
+// for everyone else still waiting.
+func TestFlightGroup_SharedWorkOutlivesItsStarter(t *testing.T) {
+	var g flightGroup
+	release := make(chan struct{})
+	started := make(chan struct{})
+	starterCtx, cancelStarter := context.WithCancel(context.Background())
+	starterDone := make(chan error)
+	go func() {
+		_, err := g.do(starterCtx, "k", func(ctx context.Context) (any, error) {
+			close(started)
+			<-release
+			return "ok", ctx.Err()
+		})
+		starterDone <- err
+	}()
+	<-started
+	waiter := make(chan any)
+	go func() {
+		v, _ := g.do(context.Background(), "k", func(context.Context) (any, error) { return "dup", nil })
+		waiter <- v
+	}()
+	for g.joined("k") == 0 {
+		runtime.Gosched()
+	}
+	cancelStarter()
+	if err := <-starterDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("starter: err = %v", err)
+	}
+	close(release)
+	if v := <-waiter; v != "ok" {
+		t.Fatalf("waiter got %v, want the shared result", v)
+	}
+}
+
+func TestList_StopsAfterMaxPages(t *testing.T) {
+	b := newFakeBucket(t)
+	b.pageSize = 0 // never makes progress: every page is empty and truncated
+	s := newTestStore(t, b, time.Now)
+	if _, err := s.list(context.Background(), "data/testdom/temperature_2m/"); !errors.Is(err, ErrUpstream) {
+		t.Fatalf("endless listing: err = %v", err)
+	}
 }

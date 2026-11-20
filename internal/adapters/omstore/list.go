@@ -34,7 +34,7 @@ func (s *Store) catalog(ctx context.Context, domain, variable string) (*catalog,
 	if ok && s.now().Sub(c.fetched) < s.listTTL {
 		return c, nil
 	}
-	v, err := s.flight.do(ctx, "list:"+dir, func() (any, error) {
+	v, err := s.flight.do(ctx, "list:"+dir, func(ctx context.Context) (any, error) {
 		objs, err := s.list(ctx, dir+"/")
 		if err != nil {
 			return nil, err
@@ -61,11 +61,18 @@ type listResult struct {
 	NextContinuationToken string `xml:"NextContinuationToken"`
 }
 
+// maxListPages bounds the continuation loop: a variable directory holds a few
+// hundred files (1000 per page), so this is far beyond any real listing.
+const maxListPages = 100
+
 // list runs S3 ListObjectsV2 over prefix, following continuation tokens.
 func (s *Store) list(ctx context.Context, prefix string) ([]object, error) {
 	var objs []object
 	token := ""
-	for {
+	for page := 0; ; page++ {
+		if page >= maxListPages {
+			return nil, upstream("list %s: more than %d pages", prefix, maxListPages)
+		}
 		res, err := s.listPage(ctx, prefix, token)
 		if err != nil {
 			return nil, err

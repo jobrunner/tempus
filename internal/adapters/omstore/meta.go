@@ -14,7 +14,7 @@ func (s *Store) array(ctx context.Context, obj object) (omfile.Array, error) {
 	if a, ok := s.arrays.get(key); ok {
 		return a, nil
 	}
-	v, err := s.flight.do(ctx, key, func() (any, error) {
+	v, err := s.flight.do(ctx, key, func(ctx context.Context) (any, error) {
 		a, err := s.fetchArray(ctx, obj)
 		if err != nil {
 			return nil, err
@@ -63,7 +63,7 @@ func (s *Store) lut(ctx context.Context, obj object, p omfile.Plan) ([]byte, err
 	if b, ok := s.luts.get(key); ok {
 		return b, nil
 	}
-	v, err := s.flight.do(ctx, key, func() (any, error) {
+	v, err := s.flight.do(ctx, key, func(ctx context.Context) (any, error) {
 		b, err := s.get(ctx, obj, off, n)
 		if err != nil {
 			return nil, err

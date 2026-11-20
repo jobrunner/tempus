@@ -66,7 +66,10 @@ func (c *catalog) resolve(from, to int64) []segment {
 		}
 	}
 	var segs []segment
-	for h := from; h < to; {
+	// Every step covers at least one hour, so to−from steps always suffice;
+	// the bound turns any regression into missing data instead of an endless
+	// loop that grows segs without limit.
+	for h, step := from, int64(0); h < to && step < to-from; step++ {
 		t := time.Unix(h*3600, 0).UTC()
 		if obj, ok := c.years[t.Year()]; ok {
 			start := yearStartHour(t.Year())
