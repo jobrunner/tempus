@@ -1,0 +1,962 @@
+[
+{
+"lab": "dateline",
+"lat": -17.02719,
+"lon": 178.15687,
+"elevation": 400.0,
+"apiLat": -17.047453,
+"apiLon": 178.18617
+},
+{
+"lab": "south",
+"lat": -38.04126,
+"lon": 147.28103,
+"elevation": 70.0,
+"apiLat": -37.996487,
+"apiLon": 147.3387
+},
+{
+"lab": "norway",
+"lat": 59.32233,
+"lon": 6.79675,
+"elevation": 984.0,
+"apiLat": 59.36731,
+"apiLon": 6.75
+},
+{
+"lab": "lowland",
+"lat": 51.92545,
+"lon": 12.71288,
+"elevation": 163.0,
+"apiLat": 51.915638,
+"apiLon": 12.692308
+},
+{
+"lab": "greenwich",
+"lat": 51.45695,
+"lon": -0.04041,
+"elevation": 38.0,
+"apiLat": 51.42355,
+"apiLon": 0.0
+},
+{
+"lab": "dateline",
+"lat": -16.10567,
+"lon": 177.8773,
+"elevation": 150.0,
+"apiLat": -16.133568,
+"apiLon": 177.86731
+},
+{
+"lab": "dateline",
+"lat": -17.57687,
+"lon": 178.91585,
+"elevation": 150.0,
+"apiLat": -17.609842,
+"apiLon": 178.9555
+},
+{
+"lab": "south",
+"lat": -44.72924,
+"lon": 147.30848,
+"elevation": -60.0,
+"apiLat": -44.745167,
+"apiLon": 147.36111
+},
+{
+"lab": "lowland",
+"lat": 52.8823,
+"lon": 13.63396,
+"elevation": 60.0,
+"apiLat": 52.829525,
+"apiLon": 13.677299
+},
+{
+"lab": "pyrenees",
+"lat": 42.98612,
+"lon": -1.02774,
+"elevation": 1384.0,
+"apiLat": 42.987698,
+"apiLon": -1.0698547
+},
+{
+"lab": "dateline",
+"lat": -16.11726,
+"lon": 179.22623,
+"elevation": -60.0,
+"apiLat": -16.133568,
+"apiLon": 179.23224
+},
+{
+"lab": "pyrenees",
+"lat": 42.98612,
+"lon": -1.02774,
+"elevation": 1474.0,
+"apiLat": 42.987698,
+"apiLon": -1.0698547
+},
+{
+"lab": "alps",
+"lat": 45.916,
+"lon": 10.05949,
+"elevation": 1046.0,
+"apiLat": 45.869946,
+"apiLon": 10.11076
+},
+{
+"lab": "pyrenees",
+"lat": 42.98612,
+"lon": -1.02774,
+"elevation": 1324.0,
+"apiLat": 42.987698,
+"apiLon": -1.0698547
+},
+{
+"lab": "alps",
+"lat": 46.0476,
+"lon": 7.78591,
+"elevation": 2122.0,
+"apiLat": 46.151142,
+"apiLon": 7.7388535
+},
+{
+"lab": "pyrenees",
+"lat": 42.98612,
+"lon": -1.02774,
+"elevation": 1324.0,
+"apiLat": 42.987698,
+"apiLon": -1.0698547
+},
+{
+"lab": "lowland",
+"lat": 52.91674,
+"lon": 9.60678,
+"elevation": 221.0,
+"apiLat": 52.899822,
+"apiLon": 9.642857
+},
+{
+"lab": "norway",
+"lat": 59.23582,
+"lon": 8.07293,
+"elevation": 321.0,
+"apiLat": 59.22671,
+"apiLon": 8.144796
+},
+{
+"lab": "pyrenees",
+"lat": 42.81061,
+"lon": -0.34825,
+"elevation": 2018.0,
+"apiLat": 42.7768,
+"apiLon": -0.39941406
+},
+{
+"lab": "dateline",
+"lat": -17.60307,
+"lon": 179.71048,
+"elevation": 400.0,
+"apiLat": -17.609842,
+"apiLon": 179.73888
+},
+{
+"lab": "lowland",
+"lat": 52.91674,
+"lon": 9.60678,
+"elevation": 471.0,
+"apiLat": 52.899822,
+"apiLon": 9.642857
+},
+{
+"lab": "coast",
+"lat": 54.49157,
+"lon": 9.94648,
+"elevation": 0.0,
+"apiLat": 54.516693,
+"apiLon": 9.901768
+},
+{
+"lab": "coast",
+"lat": 53.66614,
+"lon": 9.51048,
+"elevation": 400.0,
+"apiLat": 53.673107,
+"apiLon": 9.500959
+},
+{
+"lab": "lowland",
+"lat": 52.73131,
+"lon": 9.77676,
+"elevation": 33.0,
+"apiLat": 52.759224,
+"apiLon": 9.775281
+},
+{
+"lab": "south",
+"lat": -44.72924,
+"lon": 147.30848,
+"elevation": 0.0,
+"apiLat": -44.745167,
+"apiLon": 147.36111
+},
+{
+"lab": "greenwich",
+"lat": 51.5062,
+"lon": 0.04704,
+"elevation": 154.0,
+"apiLat": 51.493847,
+"apiLon": 0.0
+},
+{
+"lab": "south",
+"lat": -37.23445,
+"lon": 149.96548,
+"elevation": 71.0,
+"apiLat": -37.223198,
+"apiLon": 149.96027
+},
+{
+"lab": "south",
+"lat": -37.23445,
+"lon": 149.96548,
+"elevation": 191.0,
+"apiLat": -37.223198,
+"apiLon": 149.96027
+},
+{
+"lab": "lowland",
+"lat": 51.43277,
+"lon": 7.82455,
+"elevation": 215.0,
+"apiLat": 51.42355,
+"apiLon": 7.8119354
+},
+{
+"lab": "greenwich",
+"lat": 51.38351,
+"lon": -0.13508,
+"elevation": 104.0,
+"apiLat": 51.35325,
+"apiLon": -0.16244507
+},
+{
+"lab": "alps",
+"lat": 46.0476,
+"lon": 7.78591,
+"elevation": 2522.0,
+"apiLat": 46.151142,
+"apiLon": 7.7388535
+},
+{
+"lab": "pyrenees",
+"lat": 42.59269,
+"lon": 1.52856,
+"elevation": 1449.0,
+"apiLat": 42.495605,
+"apiLon": 1.4558824
+},
+{
+"lab": "norway",
+"lat": 60.11368,
+"lon": 6.66119,
+"elevation": 920.0,
+"apiLat": 60.070297,
+"apiLon": 6.6976743
+},
+{
+"lab": "alps",
+"lat": 47.10187,
+"lon": 6.57949,
+"elevation": 958.0,
+"apiLat": 47.065025,
+"apiLon": 6.585366
+},
+{
+"lab": "pyrenees",
+"lat": 42.81061,
+"lon": -0.34825,
+"elevation": 2108.0,
+"apiLat": 42.7768,
+"apiLon": -0.39941406
+},
+{
+"lab": "greenwich",
+"lat": 51.34141,
+"lon": 0.05372,
+"elevation": 148.0,
+"apiLat": 51.35325,
+"apiLon": 0.0
+},
+{
+"lab": "coast",
+"lat": 54.49157,
+"lon": 9.94648,
+"elevation": 0.0,
+"apiLat": 54.516693,
+"apiLon": 9.901768
+},
+{
+"lab": "pyrenees",
+"lat": 42.81061,
+"lon": -0.34825,
+"elevation": 1958.0,
+"apiLat": 42.7768,
+"apiLon": -0.39941406
+},
+{
+"lab": "lowland",
+"lat": 53.92877,
+"lon": 7.32608,
+"elevation": 0.0,
+"apiLat": 53.954304,
+"apiLon": 7.311412
+},
+{
+"lab": "lowland",
+"lat": 52.91674,
+"lon": 9.60678,
+"elevation": 11.0,
+"apiLat": 52.899822,
+"apiLon": 9.642857
+},
+{
+"lab": "coast",
+"lat": 54.08779,
+"lon": 10.56298,
+"elevation": 76.0,
+"apiLat": 54.094902,
+"apiLon": 10.485437
+},
+{
+"lab": "alps",
+"lat": 46.0476,
+"lon": 7.78591,
+"elevation": 2182.0,
+"apiLat": 46.151142,
+"apiLon": 7.7388535
+},
+{
+"lab": "dateline",
+"lat": -16.10567,
+"lon": 177.8773,
+"elevation": 0.0,
+"apiLat": -16.133568,
+"apiLon": 177.86731
+},
+{
+"lab": "dateline",
+"lat": -16.11726,
+"lon": 179.22623,
+"elevation": 0.0,
+"apiLat": -16.133568,
+"apiLon": 179.23224
+},
+{
+"lab": "lowland",
+"lat": 53.57541,
+"lon": 9.02727,
+"elevation": 72.0,
+"apiLat": 53.60281,
+"apiLon": 8.965517
+},
+{
+"lab": "norway",
+"lat": 61.19776,
+"lon": 8.53354,
+"elevation": 1289.0,
+"apiLat": 61.195076,
+"apiLon": 8.478261
+},
+{
+"lab": "alps",
+"lat": 45.916,
+"lon": 10.05949,
+"elevation": 1136.0,
+"apiLat": 45.940243,
+"apiLon": 10.126782
+},
+{
+"lab": "alps",
+"lat": 46.87176,
+"lon": 8.92551,
+"elevation": 2471.0,
+"apiLat": 46.85413,
+"apiLon": 8.883495
+},
+{
+"lab": "pyrenees",
+"lat": 42.40639,
+"lon": 0.45585,
+"elevation": 901.0,
+"apiLat": 42.355007,
+"apiLon": 0.3958944
+},
+{
+"lab": "coast",
+"lat": 54.12162,
+"lon": 7.71976,
+"elevation": 0.0,
+"apiLat": 54.094902,
+"apiLon": 7.6893206
+},
+{
+"lab": "alps",
+"lat": 45.93971,
+"lon": 6.7257,
+"elevation": 933.0,
+"apiLat": 45.940243,
+"apiLon": 6.7036448
+},
+{
+"lab": "coast",
+"lat": 53.97978,
+"lon": 8.54918,
+"elevation": 400.0,
+"apiLat": 53.954304,
+"apiLon": 8.529981
+},
+{
+"lab": "pyrenees",
+"lat": 42.59269,
+"lon": 1.52856,
+"elevation": 1599.0,
+"apiLat": 42.495605,
+"apiLon": 1.4558824
+},
+{
+"lab": "pyrenees",
+"lat": 42.91283,
+"lon": -0.24501,
+"elevation": 1462.0,
+"apiLat": 42.987698,
+"apiLon": -0.26748657
+},
+{
+"lab": "south",
+"lat": -34.92039,
+"lon": 149.72341,
+"elevation": 1111.0,
+"apiLat": -34.90334,
+"apiLon": 149.7335
+},
+{
+"lab": "norway",
+"lat": 59.51736,
+"lon": 5.99046,
+"elevation": 422.0,
+"apiLat": 59.507908,
+"apiLon": 5.9589043
+},
+{
+"lab": "greenwich",
+"lat": 51.5062,
+"lon": 0.04704,
+"elevation": 404.0,
+"apiLat": 51.493847,
+"apiLon": 0.0
+},
+{
+"lab": "alps",
+"lat": 46.64904,
+"lon": 12.61482,
+"elevation": 2118.0,
+"apiLat": 46.64323,
+"apiLon": 12.608695
+},
+{
+"lab": "coast",
+"lat": 53.77122,
+"lon": 9.54947,
+"elevation": 149.0,
+"apiLat": 53.74341,
+"apiLon": 9.519231
+},
+{
+"lab": "greenwich",
+"lat": 51.64981,
+"lon": 0.11915,
+"elevation": 430.0,
+"apiLat": 51.634445,
+"apiLon": 0.16363636
+},
+{
+"lab": "alps",
+"lat": 46.87176,
+"lon": 8.92551,
+"elevation": 2071.0,
+"apiLat": 46.85413,
+"apiLon": 8.883495
+},
+{
+"lab": "pyrenees",
+"lat": 42.78671,
+"lon": 0.87748,
+"elevation": 2281.0,
+"apiLat": 42.7065,
+"apiLon": 0.9305761
+},
+{
+"lab": "alps",
+"lat": 46.44767,
+"lon": 7.20679,
+"elevation": 1919.0,
+"apiLat": 46.432335,
+"apiLon": 7.2115383
+},
+{
+"lab": "pyrenees",
+"lat": 42.40639,
+"lon": 0.45585,
+"elevation": 841.0,
+"apiLat": 42.355007,
+"apiLon": 0.3958944
+},
+{
+"lab": "alps",
+"lat": 45.916,
+"lon": 10.05949,
+"elevation": 926.0,
+"apiLat": 45.869946,
+"apiLon": 10.11076
+},
+{
+"lab": "coast",
+"lat": 53.97978,
+"lon": 8.54918,
+"elevation": 0.0,
+"apiLat": 53.954304,
+"apiLon": 8.529981
+},
+{
+"lab": "norway",
+"lat": 59.23582,
+"lon": 8.07293,
+"elevation": 721.0,
+"apiLat": 59.22671,
+"apiLon": 8.144796
+},
+{
+"lab": "norway",
+"lat": 59.32233,
+"lon": 6.79675,
+"elevation": 1444.0,
+"apiLat": 59.36731,
+"apiLon": 6.75
+},
+{
+"lab": "coast",
+"lat": 54.3206,
+"lon": 8.99657,
+"elevation": 61.0,
+"apiLat": 54.305798,
+"apiLon": 8.964844
+},
+{
+"lab": "dateline",
+"lat": -17.57687,
+"lon": 178.91585,
+"elevation": 0.0,
+"apiLat": -17.609842,
+"apiLon": 178.9555
+},
+{
+"lab": "coast",
+"lat": 54.08779,
+"lon": 10.56298,
+"elevation": 136.0,
+"apiLat": 54.094902,
+"apiLon": 10.485437
+},
+{
+"lab": "lowland",
+"lat": 52.8823,
+"lon": 13.63396,
+"elevation": 460.0,
+"apiLat": 52.829525,
+"apiLon": 13.677299
+},
+{
+"lab": "pyrenees",
+"lat": 42.91283,
+"lon": -0.24501,
+"elevation": 1462.0,
+"apiLat": 42.987698,
+"apiLon": -0.26748657
+},
+{
+"lab": "norway",
+"lat": 62.27712,
+"lon": 8.45594,
+"elevation": 1560.0,
+"apiLat": 62.31986,
+"apiLon": 8.366834
+},
+{
+"lab": "greenwich",
+"lat": 51.57048,
+"lon": -0.1784,
+"elevation": 261.0,
+"apiLat": 51.564144,
+"apiLon": -0.1633606
+},
+{
+"lab": "lowland",
+"lat": 52.73131,
+"lon": 9.77676,
+"elevation": 183.0,
+"apiLat": 52.759224,
+"apiLon": 9.775281
+},
+{
+"lab": "norway",
+"lat": 60.11368,
+"lon": 6.66119,
+"elevation": 920.0,
+"apiLat": 60.070297,
+"apiLon": 6.6976743
+},
+{
+"lab": "greenwich",
+"lat": 51.57048,
+"lon": -0.1784,
+"elevation": 511.0,
+"apiLat": 51.564144,
+"apiLon": -0.1633606
+},
+{
+"lab": "south",
+"lat": -37.23445,
+"lon": 149.96548,
+"elevation": 131.0,
+"apiLat": -37.223198,
+"apiLon": 149.96027
+},
+{
+"lab": "alps",
+"lat": 45.87499,
+"lon": 9.46917,
+"elevation": 1629.0,
+"apiLat": 45.940243,
+"apiLon": 9.55626
+},
+{
+"lab": "south",
+"lat": -44.27197,
+"lon": 148.50746,
+"elevation": 400.0,
+"apiLat": -44.253075,
+"apiLon": 148.53435
+},
+{
+"lab": "norway",
+"lat": 60.11368,
+"lon": 6.66119,
+"elevation": 980.0,
+"apiLat": 60.070297,
+"apiLon": 6.6976743
+},
+{
+"lab": "dateline",
+"lat": -17.60307,
+"lon": 179.71048,
+"elevation": 0.0,
+"apiLat": -17.609842,
+"apiLon": 179.73888
+},
+{
+"lab": "south",
+"lat": -40.3705,
+"lon": 148.34326,
+"elevation": 10.0,
+"apiLat": -40.386642,
+"apiLon": 148.30984
+},
+{
+"lab": "dateline",
+"lat": -17.91666,
+"lon": 178.71241,
+"elevation": 0.0,
+"apiLat": -17.891037,
+"apiLon": 178.60194
+},
+{
+"lab": "alps",
+"lat": 46.44767,
+"lon": 7.20679,
+"elevation": 1799.0,
+"apiLat": 46.432335,
+"apiLon": 7.2115383
+},
+{
+"lab": "norway",
+"lat": 60.5638,
+"lon": 8.48569,
+"elevation": 939.0,
+"apiLat": 60.56239,
+"apiLon": 8.510638
+},
+{
+"lab": "alps",
+"lat": 47.10187,
+"lon": 6.57949,
+"elevation": 1018.0,
+"apiLat": 47.065025,
+"apiLon": 6.585366
+},
+{
+"lab": "greenwich",
+"lat": 51.57048,
+"lon": -0.1784,
+"elevation": 51.0,
+"apiLat": 51.564144,
+"apiLon": -0.1633606
+},
+{
+"lab": "pyrenees",
+"lat": 42.59269,
+"lon": 1.52856,
+"elevation": 1849.0,
+"apiLat": 42.495605,
+"apiLon": 1.4558824
+},
+{
+"lab": "lowland",
+"lat": 51.54218,
+"lon": 11.0712,
+"elevation": 588.0,
+"apiLat": 51.564144,
+"apiLon": 11.107078
+},
+{
+"lab": "pyrenees",
+"lat": 42.78671,
+"lon": 0.87748,
+"elevation": 2741.0,
+"apiLat": 42.7065,
+"apiLon": 0.9305761
+},
+{
+"lab": "greenwich",
+"lat": 51.5062,
+"lon": 0.04704,
+"elevation": 4.0,
+"apiLat": 51.493847,
+"apiLon": 0.0
+},
+{
+"lab": "greenwich",
+"lat": 51.57048,
+"lon": -0.1784,
+"elevation": 171.0,
+"apiLat": 51.564144,
+"apiLon": -0.1633606
+},
+{
+"lab": "pyrenees",
+"lat": 42.81061,
+"lon": -0.34825,
+"elevation": 1958.0,
+"apiLat": 42.7768,
+"apiLon": -0.39941406
+},
+{
+"lab": "lowland",
+"lat": 51.54218,
+"lon": 11.0712,
+"elevation": 838.0,
+"apiLat": 51.564144,
+"apiLon": 11.107078
+},
+{
+"lab": "greenwich",
+"lat": 51.65981,
+"lon": 0.11199,
+"elevation": -13.0,
+"apiLat": 51.634445,
+"apiLon": 0.16363636
+},
+{
+"lab": "greenwich",
+"lat": 51.65981,
+"lon": 0.11199,
+"elevation": 197.0,
+"apiLat": 51.634445,
+"apiLon": 0.16363636
+},
+{
+"lab": "norway",
+"lat": 62.27712,
+"lon": 8.45594,
+"elevation": 1810.0,
+"apiLat": 62.31986,
+"apiLon": 8.366834
+},
+{
+"lab": "lowland",
+"lat": 53.57541,
+"lon": 9.02727,
+"elevation": -48.0,
+"apiLat": 53.60281,
+"apiLon": 8.965517
+},
+{
+"lab": "alps",
+"lat": 45.916,
+"lon": 10.05949,
+"elevation": 986.0,
+"apiLat": 45.869946,
+"apiLon": 10.11076
+},
+{
+"lab": "pyrenees",
+"lat": 42.32745,
+"lon": 1.17286,
+"elevation": 1884.0,
+"apiLat": 42.355007,
+"apiLon": 1.1876832
+},
+{
+"lab": "pyrenees",
+"lat": 42.40639,
+"lon": 0.45585,
+"elevation": 961.0,
+"apiLat": 42.355007,
+"apiLon": 0.3958944
+},
+{
+"lab": "dateline",
+"lat": -17.91666,
+"lon": 178.71241,
+"elevation": 400.0,
+"apiLat": -17.891037,
+"apiLon": 178.60194
+},
+{
+"lab": "greenwich",
+"lat": 51.64981,
+"lon": 0.11915,
+"elevation": 30.0,
+"apiLat": 51.634445,
+"apiLon": 0.16363636
+},
+{
+"lab": "dateline",
+"lat": -16.10567,
+"lon": 177.8773,
+"elevation": 60.0,
+"apiLat": -16.133568,
+"apiLon": 177.86731
+},
+{
+"lab": "pyrenees",
+"lat": 42.78671,
+"lon": 0.87748,
+"elevation": 2491.0,
+"apiLat": 42.7065,
+"apiLon": 0.9305761
+},
+{
+"lab": "coast",
+"lat": 54.12162,
+"lon": 7.71976,
+"elevation": 0.0,
+"apiLat": 54.094902,
+"apiLon": 7.6893206
+},
+{
+"lab": "dateline",
+"lat": -18.05946,
+"lon": 178.07989,
+"elevation": 157.0,
+"apiLat": -18.101934,
+"apiLon": 178.07205
+},
+{
+"lab": "south",
+"lat": -39.31082,
+"lon": 148.32076,
+"elevation": 60.0,
+"apiLat": -39.33216,
+"apiLon": 148.34483
+},
+{
+"lab": "norway",
+"lat": 60.5638,
+"lon": 8.48569,
+"elevation": 1339.0,
+"apiLat": 60.56239,
+"apiLon": 8.510638
+},
+{
+"lab": "alps",
+"lat": 46.44767,
+"lon": 7.20679,
+"elevation": 2259.0,
+"apiLat": 46.432335,
+"apiLon": 7.2115383
+},
+{
+"lab": "alps",
+"lat": 45.93971,
+"lon": 6.7257,
+"elevation": 1143.0,
+"apiLat": 45.940243,
+"apiLon": 6.7036448
+},
+{
+"lab": "south",
+"lat": -40.3705,
+"lon": 148.34326,
+"elevation": 470.0,
+"apiLat": -40.386642,
+"apiLon": 148.30984
+},
+{
+"lab": "south",
+"lat": -38.04126,
+"lon": 147.28103,
+"elevation": 160.0,
+"apiLat": -37.996487,
+"apiLon": 147.3387
+},
+{
+"lab": "greenwich",
+"lat": 51.5062,
+"lon": 0.04704,
+"elevation": 64.0,
+"apiLat": 51.493847,
+"apiLon": 0.0
+},
+{
+"lab": "norway",
+"lat": 61.19776,
+"lon": 8.53354,
+"elevation": 1229.0,
+"apiLat": 61.195076,
+"apiLon": 8.478261
+},
+{
+"lab": "alps",
+"lat": 45.87499,
+"lon": 9.46917,
+"elevation": 1879.0,
+"apiLat": 45.940243,
+"apiLon": 9.55626
+},
+{
+"lab": "norway",
+"lat": 59.51736,
+"lon": 5.99046,
+"elevation": 482.0,
+"apiLat": 59.507908,
+"apiLon": 5.9589043
+},
+{
+"lab": "south",
+"lat": -39.31082,
+"lon": 148.32076,
+"elevation": -60.0,
+"apiLat": -39.33216,
+"apiLon": 148.34483
+}
+]

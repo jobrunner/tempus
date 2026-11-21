@@ -1,7 +1,7 @@
 # tempus
 
 **tempus** beantwortet die Frage: *Wie war es an diesem Ort zu dieser Zeit?*
-Aus Koordinate + Zeitpunkt baut der Dienst eine GeoJSON-FeatureCollection aus
+Aus Koordinate, Höhe und Zeitpunkt baut der Dienst eine GeoJSON-FeatureCollection aus
 Wetter, Klima-Normalen und Astronomie — jedes Feature mit verpflichtender
 Quellenangabe.
 
@@ -22,6 +22,19 @@ Quellenangabe.
 Dazu kommen ein **Batch-Endpunkt** für viele Punkte auf einmal (synchron oder
 als NDJSON-Stream) und ein eingebautes Web-Frontend unter `/`.
 
+## Datenquelle
+
+Wetter, Aggregate und Klima-Normalen stammen aus der **Reanalyse** von ECMWF IFS
+(9 km, ab 2017) sowie Copernicus ERA5-Land und ERA5 (davor). tempus ruft dafür
+**keine Open-Meteo-API** auf, sondern liest Open-Meteos Open-Data-Bucket
+(`https://openmeteo.s3.amazonaws.com`, AWS Open Data — kein Schlüssel, kein
+Kontingent) per HTTP-Range-Requests, dekodiert das OM-Dateiformat mit einem
+eigenen Clean-Room-Decoder und rechnet die Punktwerte so, wie es Open-Meteos
+Archiv (`best_match`) tut: geländebewusste Zellwahl, Höhenkorrektur der
+Temperatur mit 0,0065 K/m auf die angefragte Höhe, Modell-Priorität. Deshalb ist
+die **Höhe (m über NN) Pflichtparameter**. Details:
+[Datenquelle](docs/explanation/data-source.md).
+
 ## Schnellstart
 
 ```bash
@@ -35,11 +48,15 @@ Oder als Container:
 docker run --rm -p 8080:8080 ghcr.io/jobrunner/tempus:latest
 ```
 
-Eine Abfrage — München am 20. Juli 1960, mittags:
+Eine Abfrage — München (520 m über NN) am 20. Juli 1960, mittags:
 
 ```bash
-curl "http://localhost:8080/api/v1/query?lat=48.1351&lon=11.5820&datetime=1960-07-20T12:00:00Z"
+curl "http://localhost:8080/api/v1/query?lat=48.1351&lon=11.5820&elevation=520&datetime=1960-07-20T12:00:00Z"
 ```
+
+`elevation` ist die Höhe über dem Meeresspiegel (orthometrisch, wie auf der
+Karte oder als „Höhe über NN“ eines GPS-Geräts) — nicht die ellipsoidische Höhe
+eines rohen GNSS-Fixes.
 
 Viele Punkte auf einmal:
 
@@ -48,8 +65,8 @@ curl -X POST http://localhost:8080/api/v1/query/batch \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/x-ndjson' \
   -d '{"points":[
-        {"id":"fund-1","lat":48.1351,"lon":11.5820,"datetime":"1960-07-20T12:00:00Z"},
-        {"id":"fund-2","lat":47.4200,"lon":10.9800,"datetime":"1984-08-14T09:30:00Z"}
+        {"id":"fund-1","lat":48.1351,"lon":11.5820,"elevation":520,"datetime":"1960-07-20T12:00:00Z"},
+        {"id":"fund-2","lat":47.4200,"lon":10.9800,"elevation":1523,"datetime":"1984-08-14T09:30:00Z"}
       ]}'
 ```
 
@@ -57,7 +74,7 @@ curl -X POST http://localhost:8080/api/v1/query/batch \
 
 | Pfad | Zweck |
 |---|---|
-| `/` | Web-Frontend (Einzelabfrage und Batch-Tab) |
+| `/` | Web-Frontend (Einzelabfrage mit Pflichtfeld „Höhe (m über NN)“; Batch-Tab mit Zeilen `[id;] lat; lon; höhe; datetime`; Vorbelegung per `?lat=…&lon=…&elevation=…&datetime=…`) |
 | `/api/v1/query` | Einzelne Koordinate + Zeitpunkt |
 | `/api/v1/query/batch` | Batch, synchron oder als NDJSON-Stream |
 | `/api/v1/providers` | Verfügbare Provider samt Lizenzangaben |
@@ -84,7 +101,7 @@ Die vollständige Dokumentation liegt in [`docs/`](docs/index.md) und ist nach
 | [Tutorials](docs/tutorials/index.md) | Erste Schritte: Dienst starten, erste Abfrage |
 | [How-to](docs/how-to/index.md) | Rezepte: lokal betreiben, historisches Wetter abfragen, Provider konfigurieren |
 | [Reference](docs/reference/http-api.md) | HTTP-API, Konfigurationsschlüssel, Observability |
-| [Explanation](docs/explanation/architecture.md) | Architektur, Retry-Semantik, Caching-Modell |
+| [Explanation](docs/explanation/architecture.md) | Architektur, Datenquelle, Retry-Semantik, Caching-Modell |
 
 ## Entwicklung
 
@@ -111,8 +128,11 @@ Drei Ebenen, die nicht vermischt werden dürfen:
 MIT deckt **ausschließlich** den Code dieses Repositorys. Die verwendeten
 Verfahren und Daten gehören ihren Urhebern und Anbietern: Magnus-Tetens mit
 Sonntag-1990-Koeffizienten für den Taupunkt, die WorldClim-Definitionen und
-Köppen-Geiger für die BIO-Variablen, ERA5 über Copernicus/ECMWF und Open-Meteo
-für die Wetterdaten.
+Köppen-Geiger für die BIO-Variablen; die Wetterdaten stammen von ECMWF (IFS,
+CC-BY 4.0) und dem Copernicus Climate Change Service (ERA5, ERA5-Land; „contains
+modified Copernicus Climate Change Service information“), aufbereitet und als
+Open Data verteilt von Open-Meteo.com (CC-BY 4.0). Diese Kette steht im
+`license.attribution` jedes Wetter-, Aggregat- und Bioclim-Features.
 
 Die Zuschreibung reist mit den Daten und ist **erzwungen**, nicht nur
 dokumentiert: jedes Feature trägt einen `license`-Block (`name`, `url`,

@@ -12,6 +12,7 @@ paths:
       parameters:
         - {name: lat, in: query, required: true, schema: {type: number}}
         - {name: lon, in: query, required: true, schema: {type: number}}
+        - {name: elevation, in: query, required: true, schema: {type: number, minimum: -500, maximum: 9000}, description: "Height of the location in metres above sea level (orthometric, e.g. from a DEM or a GNSS receiver's MSL altitude — not the ellipsoidal height). Selects the reanalysis grid cell and drives the lapse-rate correction of temperature and dew point."}
         - {name: datetime, in: query, required: true, schema: {type: string}, description: "RFC3339 or YYYY-MM-DDTHH:MM[:SS]; no offset => UTC. Future instants are allowed: astronomy providers (sun/moon) compute for any date, while providers that cannot serve the future (weather) report a non-retryable error status in the envelope."}
         - {name: providers, in: query, required: false, schema: {type: string}, description: comma-separated provider ids}
         - {name: gddBase, in: query, required: false, schema: {type: number}, description: "Optional base temperature (°C, [-50,50]) for the aggregate provider's growing-degree-day accumulation. Omit to use the server default (10 °C)."}
@@ -54,9 +55,13 @@ paths:
         Accept: application/x-ndjson; otherwise a synchronous JSON envelope
         is returned, capped at query.batch.max_sync_points points (413 above
         that, with a hint to retry streaming). Invalid points become per-item
-        error objects and never abort the batch. Batch traffic is
-        rate-limited and budget-guarded against the Open-Meteo free tier;
-        exhausted budget surfaces as retryable per-provider errors.
+        error objects and never abort the batch. Points sharing a rounded
+        coordinate, elevation (whole metres), instant and options are fetched
+        once. There is no upstream quota or daily budget: the weather,
+        aggregate and bioclim providers read Open-Meteo's open-data bucket,
+        bounded only by query.batch.concurrency and
+        providers.reanalysis.max_parallel; an upstream failure surfaces as a
+        retryable per-provider status.
       requestBody:
         required: true
         content:
@@ -113,8 +118,9 @@ components:
           type: object
           description: >
             GeoJSON geometry of the feature; always a Point for the current
-            providers, carrying the coordinate the provider resolved the query
-            to (which may differ from the requested one, e.g. a grid cell).
+            providers, carrying the requested coordinate. The model grid
+            points behind weather values are listed separately in the weather
+            feature's modelCells.
         properties:
           description: >
             The feature's properties. Which schema applies is decided by the
@@ -209,8 +215,11 @@ components:
             (e.g. {"temperature2m": "°C", "windSpeed10m": "km/h"}).
     WeatherFeatureProperties:
       description: >
-        Properties of a weather feature (kind "weather") returned by the
-        Open-Meteo provider. In addition to numeric measurements such as
+        Properties of a weather feature (kind "weather"). The values come from
+        the reanalysis archive (ECMWF IFS from 2017, ERA5-Land and ERA5 before),
+        read from Open-Meteo's open-data bucket and combined exactly as the
+        Open-Meteo archive's best_match does, corrected to the request's
+        elevation. In addition to numeric measurements such as
         temperature2m, relativeHumidity2m, precipitation, windSpeed10m,
         cloudCover, and weatherCode, the feature carries isDay (computed from
         the sun's elevation angle via the NOAA approximation, not from the
@@ -227,6 +236,28 @@ components:
             kind:
               type: string
               enum: [weather]
+            elevation:
+              type: number
+              description: The request's elevation (m above sea level) the values are corrected to.
+            modelCells:
+              type: array
+              description: >
+                The model grid points the values were read from, in priority
+                order (ecmwf_ifs, copernicus_era5_land, copernicus_era5). elevation
+                is the height the cell's series refers to — the target elevation
+                where the model needed no lapse-rate correction.
+              items:
+                type: object
+                required: [model, lat, lon, elevation]
+                properties:
+                  model:
+                    type: string
+                  lat:
+                    type: number
+                  lon:
+                    type: number
+                  elevation:
+                    type: number
             windBeaufort:
               type: integer
               minimum: 0
@@ -436,7 +467,10 @@ components:
     AggregateFeatureProperties:
       description: >
         Properties of a weather-aggregate feature (kind "aggregate"), computed
-        by tempus from an Open-Meteo archive range: antecedent precipitation
+        by tempus from a range of the reanalysis archive (ECMWF IFS, ERA5-Land,
+        ERA5; corrected to the request's elevation; daily min/max are the
+        extrema of a Hermite curve through the hourly temperatures):
+        antecedent precipitation
         sums, the fund day's temperature extrema, growing-degree-days, and an
         Arrhenius thermal-time site index accumulated up to the instant. Needs
         past data — a future instant makes the provider report a non-retryable
@@ -502,10 +536,12 @@ components:
       description: >
         Properties of a bioclim feature (kind "bioclim"): the 19 WorldClim
         bioclimatic variables and the Köppen-Geiger class, computed by tempus
-        from ERA5 monthly climate normals. Values are time-independent for a
-        location and reference period; the period is chosen contemporaneously to
-        the datetime's year (or via refPeriod), so historical records get
-        period-appropriate values. Cached per coordinate + period.
+        from monthly climate normals of the reanalysis archive (ECMWF IFS,
+        ERA5-Land, ERA5), corrected to the request's elevation. Values are
+        time-independent for a location, elevation and reference period; the
+        period is chosen contemporaneously to the datetime's year (or via
+        refPeriod), so historical records get period-appropriate values.
+        Cached per coordinate + elevation + period.
       allOf:
         - $ref: "#/components/schemas/FeaturePropertiesBase"
         - type: object
@@ -527,7 +563,8 @@ components:
             koppen:
               type: object
               description: >
-                Köppen-Geiger classification (Beck et al. 2018), computed from ERA5.
+                Köppen-Geiger classification (Beck et al. 2018), computed from the
+                reanalysis normals.
                 coldestMonthMeanC is the value that decides the C/D boundary (0 °C).
                 borderline flags that the point is within ~1.5 °C of a main-class
                 temperature boundary, so a different dataset (e.g. a station-based
@@ -553,9 +590,10 @@ components:
                 (kollin … alpin … nival), isotherm-defined (treeline 6.4 °C, Paulsen
                 & Körner 2014) and Central-Europe-calibrated so the names are directly
                 comparable to FHL/Hegi belt statements — valid across all of Europe
-                and globally. The belt takes no elevation input; temperature encodes
-                altitude. Only the Rivas-Martínez macrobioclimate key uses the
-                grid-cell elevation (see macrobioclimate).
+                and globally. The belt reads only the temperature normals (already
+                corrected to the request's elevation); the Rivas-Martínez
+                macrobioclimate key additionally uses the elevation itself (see
+                macrobioclimate).
               properties:
                 belt:
                   type: object
@@ -603,15 +641,13 @@ components:
                     Rivas-Martínez macrobioclimate from the key of the Worldwide
                     Bioclimatic Classification System (2008 online edition, key
                     5.1): latitude belts, thermal limits reduced to 200 m with the
-                    grid-cell elevation, continentality and summer drought (Ios
-                    compensation after Rivas-Martínez et al. 2011). Without an
-                    elevation no altitude reduction is applied and elevationM is
-                    absent.
+                    request's elevation, continentality and summer drought (Ios
+                    compensation after Rivas-Martínez et al. 2011).
                   properties:
                     code: {type: string, enum: [tropical, mediterranean, temperate, boreal, polar]}
                     de: {type: string, description: "tropisch, mediterran, temperat, boreal or polar."}
                     en: {type: string}
-                    elevationM: {type: number, description: "Elevation (m) of the Open-Meteo grid cell the normals are downscaled to; used for the altitude reduction."}
+                    elevationM: {type: number, description: "The request's elevation (m above sea level) the normals are corrected to; used for the altitude reduction."}
                 source: {type: string, description: "Citation for the belt/thermotype computation."}
     QueryResult:
       type: object
@@ -646,7 +682,7 @@ components:
             $ref: "#/components/schemas/ProviderStatus"
     BatchQueryPoint:
       type: object
-      required: [lat, lon, datetime]
+      required: [lat, lon, elevation, datetime]
       properties:
         id:
           type: string
@@ -655,6 +691,11 @@ components:
           type: number
         lon:
           type: number
+        elevation:
+          type: number
+          minimum: -500
+          maximum: 9000
+          description: Same as GET /query's elevation parameter (metres above sea level).
         datetime:
           type: string
           description: Same formats as GET /query's datetime parameter.

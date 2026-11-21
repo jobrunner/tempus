@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/jobrunner/tempus/internal/domain"
 )
@@ -51,10 +52,14 @@ func (p *Provider) cacheFeature(ctx context.Context, key string, feat domain.Fea
 	}
 }
 
-// cacheKey rounds the coordinate to ~10 m (4 decimals). This is far finer than
-// ERA5's native grid (~0.1–0.25°), so two coordinates that share a key resolve
-// to the same ERA5 cell and thus the same climate — no incorrect collisions —
-// while co-located records (same georeference) still share a cache entry.
-func cacheKey(coord domain.Coordinate, startY, endY int) string {
-	return fmt.Sprintf("%s|%s|%.4f|%.4f|%d-%d", providerID, cacheVersion, coord.Lat, coord.Lon, startY, endY)
+// cacheKey rounds the coordinate to ~10 m (4 decimals) and keeps the
+// elevation exact. The coordinate step is far finer than the reanalysis grids
+// (~9–25 km), so two coordinates that share a key resolve to the same cells,
+// while co-located records (same georeference) still share a cache entry. The
+// elevation is part of the key, unrounded, because the reanalysis corrects
+// temperatures to it (with a sharp 100 m cell-selection threshold), the
+// Rivas-Martínez altitude reduction starts from it and the feature reports it.
+func cacheKey(p domain.GeoPoint, startY, endY int) string {
+	return fmt.Sprintf("%s|%s|%.4f|%.4f|%s|%d-%d",
+		providerID, cacheVersion, p.Lat, p.Lon, strconv.FormatFloat(p.Elevation, 'g', -1, 64), startY, endY)
 }

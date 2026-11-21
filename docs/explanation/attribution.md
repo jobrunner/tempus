@@ -4,11 +4,15 @@ Every `Feature` in a tempus response carries a `license` block:
 
 ```json
 "license": {
-  "name": "Open-Meteo",
-  "url": "https://open-meteo.com",
-  "attribution": "Weather data by Open-Meteo.com"
+  "name": "CC-BY 4.0",
+  "url": "https://open-meteo.com/en/license",
+  "attribution": "Weather data: ECMWF IFS (CC-BY 4.0) and Copernicus Climate Change Service ERA5/ERA5-Land (contains modified Copernicus Climate Change Service information), processed and distributed by Open-Meteo.com (CC-BY 4.0 open data)"
 }
 ```
+
+(The block of a weather feature. Who stands behind that text — ECMWF, the
+Copernicus Climate Change Service and Open-Meteo — is explained in
+[Data source](data-source.md#attribution-chain).)
 
 All three fields are **required**, and the service enforces it at the port
 boundary rather than trusting providers.
@@ -46,8 +50,11 @@ partially attributed batch is not a meaningful thing to publish.
 
 ## Why mandatory attribution?
 
-Many open data sources require attribution as a condition of use (Open-Meteo, for
-example, requires attribution on its free tier). Without the `license` block baked
+Many open data sources require attribution as a condition of use. The
+reanalysis archive tempus reads is a case in point: ECMWF's IFS data and
+Open-Meteo's open dataset are CC-BY 4.0, and Copernicus requires that derived
+products state they contain modified Copernicus Climate Change Service
+information. Without the `license` block baked
 into every feature, the downstream application must know which provider produced
 which feature and look up the attribution separately. This is error-prone and easy
 to forget.

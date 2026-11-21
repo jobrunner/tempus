@@ -64,8 +64,8 @@ func TestHandleQueryBatch_SyncEnvelope(t *testing.T) {
 	// a missing id falls back to its index as a string, total == 2, and
 	// processing_time_ms is populated (asserted below).
 	body := `{"points":[
-		{"id":"x","lat":49.79,"lon":9.95,"datetime":"2025-06-03T14:00:00Z"},
-		{"lat":47.42,"lon":10.98,"datetime":"2025-06-03T14:00:00Z"}]}`
+		{"id":"x","lat":49.79,"lon":9.95,"elevation":200,"datetime":"2025-06-03T14:00:00Z"},
+		{"lat":47.42,"lon":10.98,"elevation":200,"datetime":"2025-06-03T14:00:00Z"}]}`
 	rr := postBatch(t, newBatchTestServer(t, BatchLimits{}), body, "")
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body %s", rr.Code, rr.Body.String())
@@ -107,14 +107,14 @@ func batchBody(n int) string {
 		if i > 0 {
 			b.WriteString(",")
 		}
-		fmt.Fprintf(&b, `{"id":"p%d","lat":49.79,"lon":9.95,"datetime":"2025-06-03T14:00:00Z"}`, i)
+		fmt.Fprintf(&b, `{"id":"p%d","lat":49.79,"lon":9.95,"elevation":200,"datetime":"2025-06-03T14:00:00Z"}`, i)
 	}
 	b.WriteString(`]}`)
 	return b.String()
 }
 
 func TestHandleQueryBatch_InvalidPointBecomesErrorItem(t *testing.T) {
-	body := `{"points":[{"id":"bad","lat":999,"lon":9.95,"datetime":"2025-06-03T14:00:00Z"}]}`
+	body := `{"points":[{"id":"bad","lat":999,"lon":9.95,"elevation":200,"datetime":"2025-06-03T14:00:00Z"}]}`
 	rr := postBatch(t, newBatchTestServer(t, BatchLimits{}), body, "")
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (per-item errors never abort)", rr.Code)
@@ -204,3 +204,20 @@ func TestHandleQueryBatch_BodyTooLargeIs413(t *testing.T) {
 		t.Fatalf("status = %d, want 413", rr.Code)
 	}
 }
+
+// A point without elevation is rejected as a per-point error, like any other
+// invalid point; the rest of the batch is still answered.
+func TestBatch_PointWithoutElevationIsAPointError(t *testing.T) {
+	points := resolveBatchPoints(batchRequest{Points: []batchPoint{
+		{ID: "no-elev", Lat: ptr(49.79), Lon: ptr(9.95), Datetime: "2025-06-03T14:00:00Z"},
+		{ID: "ok", Lat: ptr(49.79), Lon: ptr(9.95), Elevation: ptr(180), Datetime: "2025-06-03T14:00:00Z"},
+	}})
+	if points[0].ParseError == "" || !strings.Contains(points[0].ParseError, "elevation") {
+		t.Fatalf("missing elevation: %+v", points[0])
+	}
+	if points[1].Req == nil || points[1].Req.Elevation != 180 {
+		t.Fatalf("valid point: %+v", points[1])
+	}
+}
+
+func ptr(v float64) *float64 { return &v }

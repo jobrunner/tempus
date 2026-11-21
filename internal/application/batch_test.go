@@ -11,7 +11,6 @@ import (
 	"github.com/jobrunner/tempus/internal/application"
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/input"
-	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
 // countingFeatures records Query calls and returns an envelope echoing the
@@ -22,13 +21,9 @@ type countingFeatures struct {
 	inflight atomic.Int32
 	maxInfl  atomic.Int32
 	block    chan struct{} // nil ⇒ no blocking
-	sawBatch atomic.Bool
 }
 
 func (f *countingFeatures) Query(ctx context.Context, req domain.QueryRequest) (domain.QueryResult, error) {
-	if output.IsBatchOrigin(ctx) {
-		f.sawBatch.Store(true)
-	}
 	cur := f.inflight.Add(1)
 	for {
 		m := f.maxInfl.Load()
@@ -112,7 +107,7 @@ func TestBatchService_ParseErrorsBecomeErrorItems(t *testing.T) {
 	}
 }
 
-func TestBatchService_BoundsConcurrencyAndMarksBatchOrigin(t *testing.T) {
+func TestBatchService_BoundsConcurrency(t *testing.T) {
 	f := &countingFeatures{block: make(chan struct{})}
 	svc := application.NewBatchService(f, 2, 2)
 	done := make(chan struct{})
@@ -129,9 +124,6 @@ func TestBatchService_BoundsConcurrencyAndMarksBatchOrigin(t *testing.T) {
 	<-done
 	if m := f.maxInfl.Load(); m > 2 {
 		t.Errorf("max in-flight = %d, want <= 2", m)
-	}
-	if !f.sawBatch.Load() {
-		t.Error("Query contexts must be batch-origin-marked")
 	}
 }
 

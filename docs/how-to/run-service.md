@@ -16,9 +16,14 @@ for the full variable reference.
 ```bash
 docker run --rm \
   -p 8080:8080 \
-  -e TEMPUS_PROVIDERS_OPENMETEO_ENABLED=true \
+  -v tempus-cache:/data \
   ghcr.io/jobrunner/tempus:latest
 ```
+
+The container needs outbound HTTPS to `openmeteo.s3.amazonaws.com` (the
+reanalysis archive, see [Data source](../explanation/data-source.md)) — no API
+key or account. The volume keeps the result cache (`/data/cache.bolt` in the
+image) across restarts; it is the only state tempus writes.
 
 ## Verify startup
 

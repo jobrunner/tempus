@@ -225,18 +225,24 @@ with Tp > 800 is still thermoboreal).
 
 ## Elevation input
 
-The key needs the site elevation. tempus reads it from the Open-Meteo archive
-response, field `elevation`: "The elevation from a 90 meter digital elevation
-model. Statistical downscaling is used to adapt weather conditions for this
-elevation." (OM). The archive temperatures are downscaled to exactly that
-elevation, so it is the right starting point for the reduction to 200 m.
+The key needs the site elevation. tempus takes the request's required
+`elevation` parameter (metres above sea level). The reanalysis temperatures the
+normals are built from are corrected to exactly that elevation (lapse rate
+0.0065 K/m from the selected model cell, see
+[Data source](../explanation/data-source.md)), so it is the right starting
+point for the reduction to 200 m, and `macrobioclimate.elevationM` echoes it.
 
-**Fallback:** when the response has no (or a NaN) elevation, no altitude
-reduction is applied — the key treats the site as lying at or below 200 m,
-step 3 cannot fire, and `macrobioclimate.elevationM` is omitted. High-mountain
-sites then lean polar or boreal (Säntis: polar instead of temperate; pinned by
-`TestMacrobioclimate_WithoutElevation` and
-`TestFetch_MissingElevationFallsBackToNoReduction`).
+Until the switch to the reanalysis archive, tempus used the `elevation` field
+of the Open-Meteo archive API response instead ("The elevation from a 90 meter
+digital elevation model. Statistical downscaling is used to adapt weather
+conditions for this elevation." — OM).
+
+**Fallback (domain only):** the domain function still supports an unknown
+elevation — no altitude reduction is applied, the key treats the site as lying
+at or below 200 m, step 3 cannot fire, and `elevationM` is omitted.
+High-mountain sites then lean polar or boreal (Säntis: polar instead of
+temperate; pinned by `TestMacrobioclimate_WithoutElevation`). The bioclim
+provider never takes that path, because every request carries an elevation.
 
 ## Reference stations: before → after
 

@@ -49,10 +49,9 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 	}
 
 	clk := clock.System{}
-	clients := buildOpenMeteoClients(cfg, clk, tp)
-	registry := buildRegistry(cfg, cache, clk, clients)
+	registry := buildRegistry(cfg, cache, clk, buildReanalysis(cfg, tp))
 
-	serverOpts, err := a.wireObservability(version, tp, clients.budget)
+	serverOpts, err := a.wireObservability(version, tp)
 	if err != nil {
 		return nil, err
 	}

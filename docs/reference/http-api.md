@@ -20,6 +20,7 @@ Query registered feature providers for a coordinate and point in time.
 |---|---|---|---|---|
 | `lat` | query | yes | number | WGS84 latitude |
 | `lon` | query | yes | number | WGS84 longitude |
+| `elevation` | query | yes | number | Height of the location in metres **above sea level** (orthometric — from a map, a DEM or a GNSS receiver's MSL altitude; not the ellipsoidal height), range [-500, 9000]. Selects the reanalysis grid cell and drives the lapse-rate correction — see [Data source](../explanation/data-source.md). |
 | `datetime` | query | yes | string | RFC 3339 (`2025-07-01T12:00:00Z`) **or** offset-less (`2025-07-01T12:00:00`, treated as UTC). Future instants are allowed — see [Future datetimes](../explanation/no-future-datetimes.md). |
 | `providers` | query | no | string | Comma-separated provider IDs. Omit to query all enabled providers. |
 | `gddBase` | query | no | number | Base temperature (°C, [-50,50]) for the aggregate provider's growing-degree-days. Omit for the server default (10 °C). See [Weather aggregates](../explanation/aggregates.md). |
@@ -43,14 +44,21 @@ unavailable. Per-provider errors are encoded in `providers[].status`.
       "type": "Feature",
       "geometry": {"type": "Point", "coordinates": [11.576, 48.137]},
       "properties": {
-        "temperature_2m": 24.3,
+        "provider": "open-meteo",
+        "kind": "weather",
+        "observedAt": "2025-07-01T12:00:00Z",
+        "elevation": 520,
+        "modelCells": [
+          {"model": "ecmwf_ifs", "lat": 48.13, "lon": 11.57, "elevation": 520}
+        ],
+        "temperature2m": 24.3,
         "precipitation": 0.0,
-        "wind_speed_10m": 5.1
+        "windSpeed10m": 5.1
       },
       "license": {
-        "name": "Open-Meteo",
-        "url": "https://open-meteo.com",
-        "attribution": "Weather data by Open-Meteo.com"
+        "name": "CC-BY 4.0",
+        "url": "https://open-meteo.com/en/license",
+        "attribution": "Weather data: ECMWF IFS (CC-BY 4.0) and Copernicus Climate Change Service ERA5/ERA5-Land (contains modified Copernicus Climate Change Service information), processed and distributed by Open-Meteo.com (CC-BY 4.0 open data)"
       }
     }
   ],
@@ -80,13 +88,16 @@ actually queried:
 | Field | Type | Description |
 |---|---|---|
 | `type` | string | Always `"Feature"` |
-| `geometry` | object | GeoJSON geometry (Point at provider-resolved location) |
+| `geometry` | object | GeoJSON Point at the requested coordinate |
 | `properties` | object | Provider-specific data (e.g. weather variables) |
 | `license.name` | string | **Required.** Human-readable data source name |
 | `license.url` | string | **Required.** URL to the provider's terms / site |
 | `license.attribution` | string | **Required.** Attribution string to display to end-users |
 
-The `properties.kind` discriminates the feature type: `weather` (Open-Meteo),
+The `properties.kind` discriminates the feature type: `weather` (provider id
+`open-meteo`, read from the reanalysis archive — see
+[Data source](../explanation/data-source.md); it also reports the request
+`elevation` and the `modelCells` the values came from),
 `dewpoint` (derived — see [Derived features](../explanation/derived-features.md)),
 `sun` / `moon` (computed — see [Sun and moon](../explanation/astronomy.md)), and
 `aggregate` (antecedent precipitation, day extrema, growing-degree-days — see
@@ -116,6 +127,9 @@ unparseable datetime):
 {"error": "invalid_request", "message": "invalid lat: must be a number in [-90,90]"}
 ```
 
+A missing or out-of-range `elevation` is rejected the same way:
+`"invalid elevation: is required: metres above sea level in [-500,9000]"`.
+
 A future datetime is **not** a client error: the request returns `200 OK`, the
 weather provider reports a non-retryable `error` status, and the `sun`/`moon`
 features are still computed.
@@ -126,7 +140,7 @@ features are still computed.
 
 Query many coordinate+time points in one request through the same provider
 pipeline as `GET /api/v1/query`. Points that share a rounded coordinate,
-instant, and options are fetched once and fanned out to every matching
+elevation (whole metres), instant, and options are fetched once and fanned out to every matching
 result, so duplicate points in a batch cost nothing extra.
 
 ### Request — `BatchQueryRequest`
@@ -137,8 +151,8 @@ result, so duplicate points in a batch cost nothing extra.
   "gddBase": 7,
   "refPeriod": "1991-2020",
   "points": [
-    {"id": "a", "lat": 48.137, "lon": 11.576, "datetime": "2025-07-01T12:00:00Z"},
-    {"id": "b", "lat": 52.520, "lon": 13.405, "datetime": "2025-07-02T12:00:00Z"}
+    {"id": "a", "lat": 48.137, "lon": 11.576, "elevation": 520, "datetime": "2025-07-01T12:00:00Z"},
+    {"id": "b", "lat": 52.520, "lon": 13.405, "elevation": 34, "datetime": "2025-07-02T12:00:00Z"}
   ]
 }
 ```
@@ -151,10 +165,11 @@ result, so duplicate points in a batch cost nothing extra.
 | `points` | array | yes | 1..`query.batch.max_points` points (default cap 10000, see [configuration](configuration.md)). |
 | `points[].id` | string | no | Opaque echo id. Defaults to the 0-based input index as a string. |
 | `points[].lat` / `.lon` | number | yes | WGS84 coordinate. |
+| `points[].elevation` | number | yes | Metres above sea level, same rules as `GET /api/v1/query`'s `elevation`. |
 | `points[].datetime` | string | yes | Same formats as `GET /api/v1/query`'s `datetime`. |
 
-An invalid point (bad coordinate, unparseable datetime, out-of-range
-`gddBase`, …) does **not** fail the whole request: it becomes a per-item
+An invalid point (bad coordinate, missing or out-of-range elevation,
+unparseable datetime, out-of-range `gddBase`, …) does **not** fail the whole request: it becomes a per-item
 error result (see below) and every other point is still processed.
 
 ### Response modes
@@ -243,23 +258,17 @@ Two distinct causes share this status:
   `"more than 1000 points require streaming; retry with Accept:
   application/x-ndjson"`.
 
-### Throttling and the daily budget
+### Upstream load
 
-The shared Open-Meteo token-bucket rate limiter applies to every Open-Meteo
-call — `GET /api/v1/query` included — not only batch traffic. The weighted
-daily call budget, however, is batch-only (see
-[configuration](configuration.md#providers-open-meteo) for the knobs). The
-aggregate provider makes two upstream calls per fetch, so a point costs 2×
-its configured weight against the budget. The astronomy providers
-(`sun`/`moon`) are never budget-checked. When the day's weighted budget is
-spent, the affected provider(s) report a transient failure per point rather
-than failing the batch:
-
-```json
-{"id": "a", "providers": [{"id": "open-meteo", "kind": "weather", "status": "unavailable", "retryable": true, "error": "Get \"https://api.open-meteo.com/v1/forecast?...\": open-meteo daily budget exhausted; retry tomorrow"}]}
-```
-
-Both the rate limiter and the daily budget are per-process, in-memory state: running multiple replicas multiplies the effective rate and daily budget, and restarting a replica resets its share of the day's spent count.
+There is no rate limiter and no daily budget: the weather, aggregate and bioclim
+providers read the reanalysis archive from a public bucket without quota (see
+[Data source](../explanation/data-source.md)). What bounds a batch is the
+worker pool (`query.batch.concurrency`) and the cap on concurrent range
+requests (`providers.reanalysis.max_parallel`, see
+[configuration](configuration.md#providers-reanalysis-archive)). A bucket
+failure that survives the retries surfaces per point as a transient provider
+status (`"status": "unavailable"`, `"retryable": true`), never as a failed
+batch.
 
 ---
 
@@ -276,9 +285,9 @@ List all registered providers and their attribution metadata.
       "id": "open-meteo",
       "kind": "weather",
       "license": {
-        "name": "Open-Meteo",
-        "url": "https://open-meteo.com",
-        "attribution": "Weather data by Open-Meteo.com"
+        "name": "CC-BY 4.0",
+        "url": "https://open-meteo.com/en/license",
+        "attribution": "Weather data: ECMWF IFS (CC-BY 4.0) and Copernicus Climate Change Service ERA5/ERA5-Land (contains modified Copernicus Climate Change Service information), processed and distributed by Open-Meteo.com (CC-BY 4.0 open data)"
       }
     }
   ]

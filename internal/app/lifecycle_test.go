@@ -30,7 +30,7 @@ func testConfig(t *testing.T) *config.Config {
 	// tests assert on is pinned here: otherwise a developer machine or runner
 	// with, say, TEMPUS_PROVIDERS_BIOCLIM_ENABLED=false would fail the registry
 	// test for reasons that have nothing to do with the code.
-	cfg.Providers.OpenMeteo.Enabled = true
+	cfg.Providers.Reanalysis.Enabled = true
 	cfg.Providers.Aggregate.Enabled = true
 	cfg.Providers.Bioclim.Enabled = true
 	cfg.Tracing.Enabled = false
@@ -170,8 +170,7 @@ func TestBuildRegistry_RespectsConfiguration(t *testing.T) {
 
 	kinds := func(cfg *config.Config) map[string]bool {
 		out := map[string]bool{}
-		clients := buildOpenMeteoClients(cfg, stoppedClock{}, nil)
-		for _, p := range buildRegistry(cfg, cache, stoppedClock{}, clients).Providers(context.Background()) {
+		for _, p := range buildRegistry(cfg, cache, stoppedClock{}, buildReanalysis(cfg, nil)).Providers(context.Background()) {
 			out[p.Kind] = true
 		}
 		return out
@@ -185,18 +184,18 @@ func TestBuildRegistry_RespectsConfiguration(t *testing.T) {
 	}
 
 	// Sun and moon are pure computation and stay registered whatever else is off;
-	// everything that needs Open-Meteo goes away with it.
+	// everything that needs the reanalysis archive goes away with it.
 	off := testConfig(t)
-	off.Providers.OpenMeteo.Enabled = false
+	off.Providers.Reanalysis.Enabled = false
 	got := kinds(off)
 	for _, want := range []string{"sun", "moon"} {
 		if !got[want] {
-			t.Errorf("with Open-Meteo disabled: %s should still be registered (got %v)", want, got)
+			t.Errorf("with the reanalysis archive disabled: %s should still be registered (got %v)", want, got)
 		}
 	}
 	for _, unwanted := range []string{"weather", "aggregate", "bioclim"} {
 		if got[unwanted] {
-			t.Errorf("with Open-Meteo disabled: %s should not be registered (got %v)", unwanted, got)
+			t.Errorf("with the reanalysis archive disabled: %s should not be registered (got %v)", unwanted, got)
 		}
 	}
 }

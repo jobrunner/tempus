@@ -22,3 +22,14 @@ func TestAsProviderError(t *testing.T) {
 		t.Error("permanent must not be retryable")
 	}
 }
+
+func TestProviderError_MessageAndUnwrap(t *testing.T) {
+	cause := errors.New("bucket down")
+	pe := NewPermanentError(cause)
+	if !errors.Is(pe, cause) {
+		t.Error("ProviderError must unwrap to its cause")
+	}
+	if msg := pe.Error(); msg != "provider error (class 2): bucket down" {
+		t.Errorf("Error() = %q", msg)
+	}
+}

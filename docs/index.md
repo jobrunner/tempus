@@ -14,7 +14,11 @@ per-feature mandatory attribution.
   violation that the service enforces at the port boundary.
 - **Batch queries** — `POST /api/v1/query/batch` processes many coordinate + time
   points through the same provider pipeline, as a synchronous envelope or an NDJSON
-  stream, self-throttled against the Open-Meteo free tier.
+  stream, deduplicated by rounded coordinate, elevation and instant.
+- **No third-party API in the hot path** — weather, aggregates and climate
+  normals come from the ECMWF IFS / ERA5 / ERA5-Land reanalysis, read straight
+  from Open-Meteo's open-data bucket (no key, no quota) and corrected to the
+  request's elevation. See [Data source](explanation/data-source.md).
 - **Future datetimes are provider-scoped** — astronomy providers (sun/moon) compute
   for any date, while providers that cannot serve the future (weather, aggregate)
   report a non-retryable per-provider error in the envelope instead of failing the
@@ -27,4 +31,4 @@ per-feature mandatory attribution.
 | [Tutorials](tutorials/index.md) | Getting started — run the service, make your first query |
 | [How-to guides](how-to/index.md) | Practical recipes: run locally, query past weather, configure providers |
 | [Reference](reference/http-api.md) | Full HTTP API contract, configuration keys, observability |
-| [Explanation](explanation/architecture.md) | Design decisions, retry semantics, caching model |
+| [Explanation](explanation/architecture.md) | Design decisions, data source, retry semantics, caching model |

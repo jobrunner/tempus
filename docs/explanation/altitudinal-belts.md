@@ -68,9 +68,9 @@ its 2008 online edition; the 2011 print edition could not be obtained).
    limits evaluated as if the site lay at 200 m, continentality `Ic`, and the
    summer-drought indices `Ios2/Ios3/Ios4` that separate Mediterranean from
    temperate climates. The reduction to 200 m needs the site elevation; tempus
-   takes the elevation of the Open-Meteo grid cell the normals are downscaled
-   to and returns it as `elevationM`. Without it no reduction is applied
-   (summits then come out polar or boreal).
+   uses the request's `elevation` — the height the normals are corrected to —
+   and returns it as `elevationM`. Since the elevation is a required request
+   parameter, the reduction is always applied.
 2. **Thermotype** (`altitudinalBelt.thermotype`): a prefix — infra-, thermo-,
    meso-, supra-, oro-, cryoro- — on the ladder of that macrobioclimate, or
    **gelid** when no month is above 0 °C. Each macrobioclimate has its own

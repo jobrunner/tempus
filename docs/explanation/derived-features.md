@@ -19,7 +19,8 @@ a `dewPoint2m` property (°C, rounded to one decimal place).  The feature's
 `license.attribution` traces back to the source weather provider so
 attribution is always preserved.
 
-If the weather provider has not yet returned data (e.g. archive delay), the
+If the weather provider has no data yet (e.g. the reanalysis archive has not
+filled in that hour), the
 dew-point entry in `providers[]` has `status: "unavailable"` and
 `retryable: true`.  If the required fields are present but invalid, the status
 is `error` with `retryable: false`.
@@ -48,7 +49,8 @@ client can link the citation rather than only display it.
 
 ## Weather Code Descriptions (WMO Code Table 4677)
 
-Each weather feature (kind `"weather"`) returned by the Open-Meteo provider
+Each weather feature (kind `"weather"`) returned by the weather provider
+(`open-meteo`)
 carries a numeric `weatherCode` (WMO Code Table 4677 subset). The feature now
 also includes:
 

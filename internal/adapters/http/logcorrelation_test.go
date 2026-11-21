@@ -92,7 +92,7 @@ func TestLogCorrelation_PanicRecoveredCarriesTraceID(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet,
-		"/api/v1/query?lat=49.79&lon=9.93&datetime=2025-06-15T13:00:00Z", nil))
+		"/api/v1/query?lat=49.79&lon=9.93&elevation=200&datetime=2025-06-15T13:00:00Z", nil))
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rr.Code)

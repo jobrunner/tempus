@@ -1,17 +1,15 @@
-// Package openmeteo implements the weather FeatureProvider using Open-Meteo.
+// Package openmeteo implements the weather FeatureProvider. It reads
+// Open-Meteo's open-data reanalysis archive (ECMWF IFS, ERA5, ERA5-Land)
+// through the output.Reanalysis port rather than calling the Open-Meteo API,
+// and presents the hour the way the API used to: same property names, units
+// and display rounding.
 package openmeteo
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
-	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
@@ -22,83 +20,69 @@ var errFuture = errors.New("no weather available for future dates")
 const (
 	providerID   = "open-meteo"
 	providerKind = "weather"
-	licenseName  = "CC-BY 4.0"
-	licenseURL   = "https://open-meteo.com/en/license"
-
-	// retryFallback is the retry hint for a throttled or failing upstream that
-	// sends no usable Retry-After header.
-	retryFallback = 30 * time.Second
 )
 
-// primaryVar is the variable that decides whether an hour has data yet: when it
-// is in the response but null for the target hour, the hour counts as not yet
-// available. The other variables may legitimately be missing. A response that
-// omits this key entirely is treated as available without it — see
-// hourlyValues, whose behaviour TestHourlyValues_PrimaryVariableHandling pins.
-const primaryVar = "temperature_2m"
+// Output property names, shared by the variable mapping below, the
+// enrichments in feature.go and the tests.
+const (
+	propTemperature = "temperature2m"
+	propHumidity    = "relativeHumidity2m"
+	propPrecip      = "precipitation"
+	propWeatherCode = "weatherCode"
+	propWindSpeed   = "windSpeed10m"
+	propCloudCover  = "cloudCover"
+	propElevation   = "elevation"
+)
 
-// propWeatherCode is the output property name for the WMO code. It is named
-// because both the variable mapping below and the enrichment in feature.go
-// refer to it.
-const propWeatherCode = "weatherCode"
+// Keys of a modelCells entry (plus propElevation for the cell's height).
+const (
+	cellModel = "model"
+	cellLat   = "lat"
+	cellLon   = "lon"
+)
 
-// hourlyVars are requested from Open-Meteo, mapped to output property names.
-var hourlyVars = []struct{ api, prop string }{
-	{"temperature_2m", "temperature2m"},
-	{"relative_humidity_2m", "relativeHumidity2m"},
-	{"precipitation", "precipitation"},
-	{"weather_code", propWeatherCode},
-	{"wind_speed_10m", "windSpeed10m"},
-	{"cloud_cover", "cloudCover"},
+// unitKmh is the wind-speed unit Open-Meteo reported and the Beaufort lookup
+// expects.
+const unitKmh = "km/h"
+
+// hourlyVars are read from the archive, mapped to output property names, the
+// unit the Open-Meteo API reported for them, and the number of decimals its
+// JSON output kept.
+var hourlyVars = []struct {
+	name, prop, unit string
+	decimals         int
+}{
+	{domain.VarTemperature, propTemperature, "°C", 1},
+	{domain.VarHumidity, propHumidity, "%", 0},
+	{domain.VarPrecip, propPrecip, "mm", 1},
+	{domain.VarWeatherCode, propWeatherCode, "wmo code", 0},
+	{domain.VarWind, propWindSpeed, unitKmh, 1},
+	{domain.VarCloud, propCloudCover, "%", 0},
 }
 
 // Options configures the provider.
 type Options struct {
-	ArchiveBaseURL  string
-	ForecastBaseURL string
-	Timeout         time.Duration
-	ArchiveDelay    time.Duration
-	Clock           output.Clock
-	HTTPClient      *http.Client
+	Reanalysis output.Reanalysis
+	Clock      output.Clock
 }
 
-// Provider is the Open-Meteo weather provider.
+// Provider is the weather provider backed by the reanalysis archive.
 type Provider struct {
-	archiveBaseURL  string
-	forecastBaseURL string
-	archiveDelay    time.Duration
-	clock           output.Clock
-	client          *http.Client
+	reanalysis output.Reanalysis
+	clock      output.Clock
 }
 
 // New builds the provider.
 func New(opts Options) *Provider {
-	client := opts.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: opts.Timeout}
-	}
-	return &Provider{
-		archiveBaseURL:  opts.ArchiveBaseURL,
-		forecastBaseURL: opts.ForecastBaseURL,
-		archiveDelay:    opts.ArchiveDelay,
-		clock:           opts.Clock,
-		client:          client,
-	}
+	return &Provider{reanalysis: opts.Reanalysis, clock: opts.Clock}
 }
 
 func (p *Provider) ID() string   { return providerID }
 func (p *Provider) Kind() string { return providerKind }
 
-// Attribution is the base license; Fetch may refine the attribution text.
+// Attribution is the license every weather feature carries.
 func (p *Provider) Attribution() domain.License {
-	return domain.License{Name: licenseName, URL: licenseURL, Attribution: "Weather data by Open-Meteo.com"}
-}
-
-type apiResponse struct {
-	Latitude    float64                    `json:"latitude"`
-	Longitude   float64                    `json:"longitude"`
-	HourlyUnits map[string]string          `json:"hourly_units"`
-	Hourly      map[string]json.RawMessage `json:"hourly"`
+	return domain.ReanalysisLicense()
 }
 
 // Fetch retrieves the weather for the request's hour.
@@ -109,59 +93,18 @@ func (p *Provider) Fetch(ctx context.Context, req domain.QueryRequest) (domain.P
 		return domain.ProviderResult{}, output.NewPermanentError(errFuture)
 	}
 
-	useArchive := p.clock.Now().UTC().Sub(req.Instant) >= p.archiveDelay
-	endpoint := p.forecastBaseURL
-	if useArchive {
-		endpoint = p.archiveBaseURL
-	}
-
-	u, err := p.buildURL(endpoint, req, useArchive)
-	if err != nil {
-		return domain.ProviderResult{}, output.NewPermanentError(err)
-	}
-
-	var data apiResponse
-	if err := omhttp.GetJSON(ctx, p.client, u, &data, retryFallback); err != nil {
-		return domain.ProviderResult{}, err
-	}
-	return p.toFeature(data, req, useArchive)
-}
-
-func (p *Provider) buildURL(base string, req domain.QueryRequest, useArchive bool) (string, error) {
-	u, err := url.Parse(base)
-	if err != nil {
-		return "", err
-	}
-	q := u.Query()
-	q.Set("latitude", fmt.Sprintf("%.5f", req.Coordinate.Lat))
-	q.Set("longitude", fmt.Sprintf("%.5f", req.Coordinate.Lon))
-	q.Set("timezone", "UTC")
+	// Read the whole UTC day, as the Open-Meteo archive request for that date
+	// did: the model selection and elevation correction see the same window,
+	// so the hour comes out identical.
+	day := req.Instant.UTC().Truncate(24 * time.Hour)
 	names := make([]string, len(hourlyVars))
 	for i, v := range hourlyVars {
-		names[i] = v.api
+		names[i] = v.name
 	}
-	q.Set("hourly", strings.Join(names, ","))
-	day := req.Instant.UTC().Format("2006-01-02")
-	if useArchive {
-		q.Set("start_date", day)
-		q.Set("end_date", day)
-	} else {
-		// forecast endpoint: pull recent past so the target hour is covered.
-		q.Set("past_days", "7")
-		q.Set("forecast_days", "1")
+	series, err := p.reanalysis.Hourly(ctx, req.PointOf(), day, day.Add(24*time.Hour), names...)
+	if err != nil {
+		// The port already reports ProviderErrors.
+		return domain.ProviderResult{}, err
 	}
-	u.RawQuery = q.Encode()
-	return u.String(), nil
-}
-
-func (p *Provider) license(useArchive bool) domain.License {
-	src := "GFS/ICON forecast models"
-	if useArchive {
-		src = "ERA5 (Copernicus Climate Change Service / ECMWF)"
-	}
-	return domain.License{
-		Name:        licenseName,
-		URL:         licenseURL,
-		Attribution: "Weather data by Open-Meteo.com; " + src,
-	}
+	return toFeature(series, req)
 }

@@ -44,27 +44,39 @@ All configuration is via environment variables with the prefix `TEMPUS_`.
 | `TEMPUS_CACHE_TYPE` | `disk` | `disk`, `memory` |
 | `TEMPUS_CACHE_PATH` | `./data/cache.bolt` | File path for disk cache (bbolt) |
 
-The cache stores provider responses keyed by (coordinate-grid-cell, datetime-bucket).
+The cache stores provider results keyed by (rounded coordinate, elevation in
+whole metres, hour); see [Caching model](../explanation/caching.md).
 Cached results are served immediately and flagged with `"cached": true` in the
 provider status. This avoids repeat upstream calls for the same query inputs.
 
-## Providers — Open-Meteo
+## Providers — reanalysis archive
+
+Weather, aggregate and bioclim read the ECMWF IFS / ERA5 / ERA5-Land archive
+straight from Open-Meteo's open-data bucket (see
+[Data source](../explanation/data-source.md)). Out of the box nothing needs
+configuring: no API key, no quota, no rate limit to stay under.
 
 | Variable | Default | Description |
 |---|---|---|
-| `TEMPUS_PROVIDERS_OPENMETEO_ENABLED` | `true` | Enable the Open-Meteo provider |
-| `TEMPUS_PROVIDERS_OPENMETEO_ARCHIVE_BASE_URL` | `https://archive-api.open-meteo.com` | Historical data endpoint |
-| `TEMPUS_PROVIDERS_OPENMETEO_FORECAST_BASE_URL` | `https://api.open-meteo.com` | Forecast endpoint (recent past only) |
-| `TEMPUS_PROVIDERS_OPENMETEO_TIMEOUT` | `10s` | Per-request timeout |
-| `TEMPUS_PROVIDERS_OPENMETEO_ARCHIVE_DELAY` | `5d` | How far in the past archive data is available (forecast used before this window) |
-| `TEMPUS_PROVIDERS_OPENMETEO_RATE_PER_MINUTE` | `500` | Shared token-bucket rate limit (calls/minute) applied to every Open-Meteo call, including `GET /api/v1/query`, not only batch traffic |
-| `TEMPUS_PROVIDERS_OPENMETEO_RETRY_ATTEMPTS` | `3` | Retries for 429/5xx/network errors, honoring the upstream `Retry-After` header |
-| `TEMPUS_PROVIDERS_OPENMETEO_DAILY_BUDGET` | `8000` | Weighted daily call budget enforced only for `POST /api/v1/query/batch` traffic |
-| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_WEATHER` | `1` | Budget weight per weather-provider call |
-| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_AGGREGATE` | `2` | Budget weight per aggregate-provider call. The aggregate provider makes two upstream calls per fetch, so a point costs 2× this weight |
-| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_BIOCLIM` | `30` | Budget weight per bioclim-provider call |
+| `TEMPUS_PROVIDERS_REANALYSIS_ENABLED` | `true` | Enable the archive (and with it the weather, aggregate and bioclim providers) |
+| `TEMPUS_PROVIDERS_REANALYSIS_BASE_URL` | `https://openmeteo.s3.amazonaws.com` | Bucket root; set it to a mirror with the same layout |
+| `TEMPUS_PROVIDERS_REANALYSIS_TIMEOUT` | `30s` | Timeout of a single range request |
+| `TEMPUS_PROVIDERS_REANALYSIS_MAX_PARALLEL` | `32` | Concurrent range requests to the bucket |
+| `TEMPUS_PROVIDERS_REANALYSIS_RETRY_ATTEMPTS` | `3` | Retries for 429/5xx/network errors |
+| `TEMPUS_PROVIDERS_REANALYSIS_LIST_TTL` | `1h` | How long a bucket directory listing is trusted |
+| `TEMPUS_PROVIDERS_REANALYSIS_MATURITY` | `72h` | Results for instants older than this are cached for a year, younger ones for an hour |
+| `TEMPUS_PROVIDERS_AGGREGATE_ENABLED` | `true` | Enable the `aggregate` provider |
+| `TEMPUS_PROVIDERS_BIOCLIM_ENABLED` | `true` | Enable the `bioclim` provider |
 
-The rate limiter and the daily budget are per-process, in-memory state: running multiple replicas multiplies the effective rate and daily budget, and restarting a replica resets its share of the day's spent count.
+To run with astronomy only (no outbound traffic at all):
+
+```bash
+TEMPUS_PROVIDERS_REANALYSIS_ENABLED=false ./tempus
+```
+
+The former `TEMPUS_PROVIDERS_OPENMETEO_*` variables (archive/forecast URLs,
+archive delay, rate per minute, daily budget, weights) are gone; remove them
+from deployments.
 
 ## Query
 

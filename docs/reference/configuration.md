@@ -78,7 +78,8 @@ Two caveats worth knowing before turning it on:
 - **Batch requests.** `POST /api/v1/query/batch` is a single request no matter
   how many points it carries, so the rate limit barely constrains it. What
   bounds batch cost is the worker pool (`TEMPUS_QUERY_BATCH_CONCURRENCY`) and
-  the weighted Open-Meteo daily budget.
+  the parallel-read cap of the reanalysis archive
+  (`TEMPUS_PROVIDERS_REANALYSIS_MAX_PARALLEL`).
 
 ## Logging
 
@@ -128,20 +129,28 @@ Bounds for `POST /api/v1/query/batch` — see the
 | `TEMPUS_QUERY_BATCH_MAX_SYNC_POINTS` | `1000` | Cap for the synchronous JSON envelope (`413` above this; stream NDJSON instead) |
 | `TEMPUS_QUERY_BATCH_CONCURRENCY` | `4` | Worker-pool size for deduplicated point fetches |
 
-## Providers — Open-Meteo
+## Providers — reanalysis archive
+
+The weather, aggregate and bioclim providers read the ECMWF IFS / ERA5 /
+ERA5-Land archive from Open-Meteo's open-data bucket — no API, no key, no
+quota. See [Data source](../explanation/data-source.md).
 
 | Variable | Default | Description |
 |---|---|---|
-| `TEMPUS_PROVIDERS_OPENMETEO_ENABLED` | `true` | Enable Open-Meteo |
-| `TEMPUS_PROVIDERS_OPENMETEO_ARCHIVE_BASE_URL` | `https://archive-api.open-meteo.com` | Historical archive endpoint |
-| `TEMPUS_PROVIDERS_OPENMETEO_FORECAST_BASE_URL` | `https://api.open-meteo.com` | Forecast endpoint (recent past) |
-| `TEMPUS_PROVIDERS_OPENMETEO_TIMEOUT` | `10s` | Per-request HTTP timeout |
-| `TEMPUS_PROVIDERS_OPENMETEO_ARCHIVE_DELAY` | `5d` | Age threshold: queries older than this use the archive API |
-| `TEMPUS_PROVIDERS_OPENMETEO_RATE_PER_MINUTE` | `500` | Shared token-bucket rate limit (calls/minute) across all Open-Meteo adapters |
-| `TEMPUS_PROVIDERS_OPENMETEO_RETRY_ATTEMPTS` | `3` | Retries for 429/5xx/network errors, honoring the upstream `Retry-After` header |
-| `TEMPUS_PROVIDERS_OPENMETEO_DAILY_BUDGET` | `8000` | Weighted daily call budget enforced **only** for batch-originated requests (`GET /api/v1/query` and the astronomy providers are never budget-checked); exhausted budget surfaces as a retryable per-provider error |
-| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_WEATHER` | `1` | Budget weight charged per weather-provider call |
-| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_AGGREGATE` | `2` | Budget weight charged per aggregate-provider call (now cached, keyed by `gddBase`). The aggregate provider itself makes two upstream calls per fetch (daily range + hourly precipitation), so a point costs 2× this weight against the daily budget |
-| `TEMPUS_PROVIDERS_OPENMETEO_WEIGHTS_BIOCLIM` | `30` | Budget weight charged per bioclim-provider call |
+| `TEMPUS_PROVIDERS_REANALYSIS_ENABLED` | `true` | Enable the archive. When `false`, the `open-meteo` (weather), `aggregate` and `bioclim` providers are not registered; `sun`, `moon` stay. |
+| `TEMPUS_PROVIDERS_REANALYSIS_BASE_URL` | `https://openmeteo.s3.amazonaws.com` | Bucket root served over HTTPS (AWS Open Data). Point it at a mirror with the same layout if needed. |
+| `TEMPUS_PROVIDERS_REANALYSIS_TIMEOUT` | `30s` | Timeout of a single range request |
+| `TEMPUS_PROVIDERS_REANALYSIS_MAX_PARALLEL` | `32` | Maximum concurrent range requests to the bucket (per process) |
+| `TEMPUS_PROVIDERS_REANALYSIS_RETRY_ATTEMPTS` | `3` | Retries for 429/5xx/network errors, honoring a `Retry-After` header |
+| `TEMPUS_PROVIDERS_REANALYSIS_LIST_TTL` | `1h` | How long a bucket directory listing is trusted; the newest files are rewritten daily |
+| `TEMPUS_PROVIDERS_REANALYSIS_MATURITY` | `72h` | Age after which an hour's values are final: results for older instants are cached for a year, younger ones (still revised IFS hours) for an hour |
+| `TEMPUS_PROVIDERS_AGGREGATE_ENABLED` | `true` | Enable the `aggregate` provider (needs the archive) |
+| `TEMPUS_PROVIDERS_BIOCLIM_ENABLED` | `true` | Enable the `bioclim` provider (needs the archive) |
 
-The rate limiter and the daily budget are per-process, in-memory state: running multiple replicas multiplies the effective rate and daily budget (each replica enforces its own), and restarting a replica resets its share of the day's spent count.
+There is no rate limiter and no daily budget: the bucket has no quota. What
+bounds upstream load is `MAX_PARALLEL` and, for batches, the worker pool
+(`TEMPUS_QUERY_BATCH_CONCURRENCY`).
+
+The `TEMPUS_PROVIDERS_OPENMETEO_*` variables (archive/forecast URLs, archive
+delay, rate per minute, daily budget, weights) no longer exist and are
+ignored if set.

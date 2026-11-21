@@ -51,10 +51,11 @@ type batchRequest struct {
 }
 
 type batchPoint struct {
-	ID       string   `json:"id"`
-	Lat      *float64 `json:"lat"`
-	Lon      *float64 `json:"lon"`
-	Datetime string   `json:"datetime"`
+	ID        string   `json:"id"`
+	Lat       *float64 `json:"lat"`
+	Lon       *float64 `json:"lon"`
+	Elevation *float64 `json:"elevation"`
+	Datetime  string   `json:"datetime"`
 }
 
 func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
@@ -109,14 +110,7 @@ func resolveBatchPoints(breq batchRequest) []input.BatchPoint {
 		if id == "" {
 			id = strconv.Itoa(i)
 		}
-		lat, lon := "", ""
-		if p.Lat != nil {
-			lat = strconv.FormatFloat(*p.Lat, 'f', -1, 64)
-		}
-		if p.Lon != nil {
-			lon = strconv.FormatFloat(*p.Lon, 'f', -1, 64)
-		}
-		req, err := domain.ParseQueryRequest(lat, lon, p.Datetime, gdd, breq.Providers)
+		req, err := domain.ParseQueryRequest(formatOptional(p.Lat), formatOptional(p.Lon), formatOptional(p.Elevation), p.Datetime, gdd, breq.Providers)
 		if err != nil {
 			out = append(out, input.BatchPoint{ID: id, ParseError: err.Error()})
 			continue
@@ -130,4 +124,13 @@ func resolveBatchPoints(breq batchRequest) []input.BatchPoint {
 // prefersNDJSON reports whether the client asked for the NDJSON stream.
 func prefersNDJSON(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "application/x-ndjson")
+}
+
+// formatOptional renders an optional JSON number for the string-based request
+// parser; a missing value becomes "", which the parser rejects.
+func formatOptional(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*v, 'f', -1, 64)
 }

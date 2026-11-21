@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 )
@@ -11,7 +12,12 @@ import (
 // GDDBaseCelsius optionally overrides the growing-degree-day base temperature
 // used by the aggregate provider (nil ⇒ provider default).
 type QueryRequest struct {
-	Coordinate     Coordinate
+	Coordinate Coordinate
+	// Elevation is the height of the location in metres above sea level
+	// (orthometric, as from a DEM or a GNSS receiver's MSL output — not the
+	// ellipsoidal height). Required: the reanalysis cell selection and the
+	// lapse-rate correction depend on it.
+	Elevation      float64
 	Instant        time.Time
 	Providers      []string
 	GDDBaseCelsius *float64
@@ -33,8 +39,13 @@ func (e ValidationError) Error() string {
 // Field name constants used in ValidationError — kept here so test assertions
 // on Field values never drift from the production strings.
 const (
-	fieldDatetime = "datetime"
-	fieldGDDBase  = "gddBase"
+	fieldDatetime  = "datetime"
+	fieldGDDBase   = "gddBase"
+	fieldElevation = "elevation"
+
+	// Elevation bounds in metres: below the Dead Sea shore, above Everest.
+	minElevation = -500
+	maxElevation = 9000
 )
 
 // datetimeLayouts are tried in order. RFC3339 (with offset) first; the
@@ -49,14 +60,18 @@ var datetimeLayouts = []string{
 // Future instants are allowed here: astronomy providers (sun/moon) compute for
 // any date. Providers that cannot serve the future (e.g. weather) reject it
 // themselves and report it in the response envelope.
-func ParseQueryRequest(lat, lon, datetime, gddBase string, providers []string) (QueryRequest, error) {
-	latF, err := strconv.ParseFloat(lat, 64)
-	if err != nil || latF < -90 || latF > 90 {
+func ParseQueryRequest(lat, lon, elevation, datetime, gddBase string, providers []string) (QueryRequest, error) {
+	latF, ok := parseBounded(lat, -90, 90)
+	if !ok {
 		return QueryRequest{}, ValidationError{"lat", "must be a number in [-90,90]"}
 	}
-	lonF, err := strconv.ParseFloat(lon, 64)
-	if err != nil || lonF < -180 || lonF > 180 {
+	lonF, ok := parseBounded(lon, -180, 180)
+	if !ok {
 		return QueryRequest{}, ValidationError{"lon", "must be a number in [-180,180]"}
+	}
+	elev, ok := parseBounded(elevation, minElevation, maxElevation)
+	if !ok {
+		return QueryRequest{}, ValidationError{fieldElevation, "is required: metres above sea level in [-500,9000]"}
 	}
 
 	instant, ok := parseInstant(datetime)
@@ -72,10 +87,21 @@ func ParseQueryRequest(lat, lon, datetime, gddBase string, providers []string) (
 
 	return QueryRequest{
 		Coordinate:     Coordinate{Lat: latF, Lon: lonF},
+		Elevation:      elev,
 		Instant:        instant,
 		Providers:      providers,
 		GDDBaseCelsius: gdd,
 	}, nil
+}
+
+// parseBounded parses a number in [lo, hi]. NaN fails every comparison, so it
+// is rejected explicitly: it would otherwise slip through a range check.
+func parseBounded(s string, lo, hi float64) (float64, bool) {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(v) || v < lo || v > hi {
+		return 0, false
+	}
+	return v, true
 }
 
 // parseGDDBase parses the optional gddBase override. Empty ⇒ nil (use default).

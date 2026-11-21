@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseQueryRequest_OK_AssumesUTCAndTruncatesHour(t *testing.T) {
-	req, err := ParseQueryRequest("49.79", "9.93", "2025-06-15T13:45:00", "", nil)
+	req, err := ParseQueryRequest("49.79", "9.93", "200", "2025-06-15T13:45:00", "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -19,7 +19,7 @@ func TestParseQueryRequest_OK_AssumesUTCAndTruncatesHour(t *testing.T) {
 // Future instants are now accepted by the parser: astronomy providers serve any
 // date, and weather rejects the future itself (reported in the envelope).
 func TestParseQueryRequest_FutureAccepted(t *testing.T) {
-	req, err := ParseQueryRequest("0", "0", "2099-01-01T13:00:00Z", "", nil)
+	req, err := ParseQueryRequest("0", "0", "200", "2099-01-01T13:00:00Z", "", nil)
 	if err != nil {
 		t.Fatalf("future instant should parse, got error: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestParseQueryRequest_FutureAccepted(t *testing.T) {
 
 func TestParseQueryRequest_GDDBase(t *testing.T) {
 	// Valid override is parsed into the pointer.
-	req, err := ParseQueryRequest("0", "0", "2025-01-01T00:00:00Z", "7.5", nil)
+	req, err := ParseQueryRequest("0", "0", "200", "2025-01-01T00:00:00Z", "7.5", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -38,12 +38,12 @@ func TestParseQueryRequest_GDDBase(t *testing.T) {
 		t.Errorf("GDDBaseCelsius = %v, want 7.5", req.GDDBaseCelsius)
 	}
 	// Empty leaves it nil (provider default applies).
-	req, _ = ParseQueryRequest("0", "0", "2025-01-01T00:00:00Z", "", nil)
+	req, _ = ParseQueryRequest("0", "0", "200", "2025-01-01T00:00:00Z", "", nil)
 	if req.GDDBaseCelsius != nil {
 		t.Errorf("GDDBaseCelsius = %v, want nil", req.GDDBaseCelsius)
 	}
 	// Out-of-range is a validation error.
-	if _, err := ParseQueryRequest("0", "0", "2025-01-01T00:00:00Z", "999", nil); err == nil {
+	if _, err := ParseQueryRequest("0", "0", "200", "2025-01-01T00:00:00Z", "999", nil); err == nil {
 		t.Error("want ValidationError for gddBase=999")
 	}
 }
@@ -56,11 +56,35 @@ func TestParseQueryRequest_BadInputs(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := ParseQueryRequest(c.lat, c.lon, c.dt, "", nil)
+			_, err := ParseQueryRequest(c.lat, c.lon, "200", c.dt, "", nil)
 			var ve ValidationError
 			if !errors.As(err, &ve) || ve.Field != c.field {
 				t.Fatalf("want ValidationError on %q, got %v", c.field, err)
 			}
 		})
+	}
+}
+
+func TestParseQueryRequest_ElevationIsRequired(t *testing.T) {
+	req, err := ParseQueryRequest("47.4", "11.0", "1523.5", "2025-01-01T00:00:00Z", "", nil)
+	if err != nil || req.Elevation != 1523.5 {
+		t.Fatalf("valid elevation: %+v, %v", req, err)
+	}
+	for _, e := range []string{"", "abc", "-501", "9001", "NaN", "Inf"} {
+		_, err := ParseQueryRequest("47.4", "11.0", e, "2025-01-01T00:00:00Z", "", nil)
+		var ve ValidationError
+		if !errors.As(err, &ve) || ve.Field != fieldElevation {
+			t.Errorf("elevation %q: err = %v, want a ValidationError on %q", e, err, fieldElevation)
+		}
+	}
+}
+
+// NaN passes plain range comparisons; it must be rejected before it reaches
+// the grid selection.
+func TestParseQueryRequest_RejectsNaNCoordinates(t *testing.T) {
+	for _, c := range [][2]string{{"NaN", "11"}, {"47", "NaN"}, {"nan", "11"}} {
+		if _, err := ParseQueryRequest(c[0], c[1], "500", "2025-01-01T00:00:00Z", "", nil); err == nil {
+			t.Errorf("lat %q lon %q: accepted", c[0], c[1])
+		}
 	}
 }

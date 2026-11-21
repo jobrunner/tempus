@@ -52,7 +52,7 @@ func testServer() *Server {
 
 func TestHandleQuery_OK(t *testing.T) {
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=49.79&lon=9.93&datetime=2025-06-15T13:00:00Z", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=49.79&lon=9.93&elevation=200&datetime=2025-06-15T13:00:00Z", nil)
 	testServer().Router().ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rr.Code)
@@ -70,7 +70,7 @@ func TestHandleQuery_OK(t *testing.T) {
 // weather rejects the future itself via its provider status in the envelope.
 func TestHandleQuery_FutureAccepted(t *testing.T) {
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=0&lon=0&datetime=2099-01-01T13:00:00Z", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/query?lat=0&lon=0&elevation=200&datetime=2099-01-01T13:00:00Z", nil)
 	testServer().Router().ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rr.Code)

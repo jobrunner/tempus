@@ -1,0 +1,146 @@
+[
+ {
+  "lab": "lowland",
+  "lat": 52.91674,
+  "lon": 9.60678,
+  "elevation": 11.0
+ },
+ {
+  "lab": "south",
+  "lat": -40.3705,
+  "lon": 148.34326,
+  "elevation": 10.0
+ },
+ {
+  "lab": "lowland",
+  "lat": 52.8823,
+  "lon": 13.63396,
+  "elevation": 460.0
+ },
+ {
+  "lab": "greenwich",
+  "lat": 51.57048,
+  "lon": -0.1784,
+  "elevation": 171.0
+ },
+ {
+  "lab": "lowland",
+  "lat": 51.54218,
+  "lon": 11.0712,
+  "elevation": 588.0
+ },
+ {
+  "lab": "coast",
+  "lat": 53.97978,
+  "lon": 8.54918,
+  "elevation": 400.0
+ },
+ {
+  "lab": "pyrenees",
+  "lat": 42.59269,
+  "lon": 1.52856,
+  "elevation": 1599.0
+ },
+ {
+  "lab": "norway",
+  "lat": 61.19776,
+  "lon": 8.53354,
+  "elevation": 1229.0
+ },
+ {
+  "lab": "lowland",
+  "lat": 52.73131,
+  "lon": 9.77676,
+  "elevation": 33.0
+ },
+ {
+  "lab": "greenwich",
+  "lat": 51.34141,
+  "lon": 0.05372,
+  "elevation": 148.0
+ },
+ {
+  "lab": "alps",
+  "lat": 45.87499,
+  "lon": 9.46917,
+  "elevation": 1629.0
+ },
+ {
+  "lab": "lowland",
+  "lat": 51.43277,
+  "lon": 7.82455,
+  "elevation": 215.0
+ },
+ {
+  "lab": "greenwich",
+  "lat": 51.64981,
+  "lon": 0.11915,
+  "elevation": 430.0
+ },
+ {
+  "lab": "dateline",
+  "lat": -17.91666,
+  "lon": 178.71241,
+  "elevation": 0.0
+ },
+ {
+  "lab": "pyrenees",
+  "lat": 42.98612,
+  "lon": -1.02774,
+  "elevation": 1324.0
+ },
+ {
+  "lab": "norway",
+  "lat": 60.5638,
+  "lon": 8.48569,
+  "elevation": 939.0
+ },
+ {
+  "lab": "norway",
+  "lat": 61.19776,
+  "lon": 8.53354,
+  "elevation": 1289.0
+ },
+ {
+  "lab": "norway",
+  "lat": 62.27712,
+  "lon": 8.45594,
+  "elevation": 1810.0
+ },
+ {
+  "lab": "pyrenees",
+  "lat": 42.32745,
+  "lon": 1.17286,
+  "elevation": 1884.0
+ },
+ {
+  "lab": "south",
+  "lat": -39.31082,
+  "lon": 148.32076,
+  "elevation": 60.0
+ },
+ {
+  "lab": "greenwich",
+  "lat": 51.5062,
+  "lon": 0.04704,
+  "elevation": 4.0
+ },
+ {
+  "lab": "alps",
+  "lat": 46.64904,
+  "lon": 12.61482,
+  "elevation": 2118.0
+ },
+ {
+  "lab": "south",
+  "lat": -37.23445,
+  "lon": 149.96548,
+  "elevation": 131.0
+ },
+ {
+  "lab": "pyrenees",
+  "lat": 42.98612,
+  "lon": -1.02774,
+  "elevation": 1384.0
+ }
+]

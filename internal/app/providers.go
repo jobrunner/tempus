@@ -6,141 +6,97 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/time/rate"
 
 	"github.com/jobrunner/tempus/internal/adapters/aggregate"
 	"github.com/jobrunner/tempus/internal/adapters/astronomy"
 	"github.com/jobrunner/tempus/internal/adapters/bioclim"
 	"github.com/jobrunner/tempus/internal/adapters/omhttp"
+	"github.com/jobrunner/tempus/internal/adapters/omstore"
 	"github.com/jobrunner/tempus/internal/adapters/openmeteo"
+	"github.com/jobrunner/tempus/internal/adapters/reanalysis"
 	"github.com/jobrunner/tempus/internal/application"
 	"github.com/jobrunner/tempus/internal/config"
 	"github.com/jobrunner/tempus/internal/domain"
 	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
-// omClients are the per-adapter HTTP clients sharing one rate limiter and one
-// daily budget. Each client carries its own cost weight and timeout. Budget is
-// nil when Open-Meteo is disabled (no clients are built at all).
-type omClients struct {
-	weather   *http.Client
-	aggregate *http.Client
-	bioclim   *http.Client
-	budget    *omhttp.Budget
-}
-
-// buildOpenMeteoClients wires the shared throttling transport. The limiter and
-// budget are shared across all Open-Meteo traffic; weights differ per call
-// type because Open-Meteo weighs long archive ranges as multiple calls. tp is
-// nil when tracing is disabled; the transports then stay untraced.
-func buildOpenMeteoClients(cfg *config.Config, clk output.Clock, tp trace.TracerProvider) omClients {
-	om := cfg.Providers.OpenMeteo
-	if !om.Enabled {
-		return omClients{}
+// buildReanalysis wires the reanalysis archive: the open-data store behind a
+// retrying (and, with tp, traced) transport, and the service that selects,
+// corrects and mixes the model series. Nil when the archive is disabled.
+func buildReanalysis(cfg *config.Config, tp trace.TracerProvider) output.Reanalysis {
+	r := cfg.Providers.Reanalysis
+	if !r.Enabled {
+		return nil
 	}
-	// Burst 10 keeps a single interactive query (≤4 calls) latency-free while
-	// the sustained rate stays under the free-tier minute limit.
-	limiter := rate.NewLimiter(rate.Limit(float64(om.RatePerMinute)/60.0), 10)
-	budget := omhttp.NewBudget(om.DailyBudget, clk)
-	client := func(weight int, timeout time.Duration) *http.Client {
-		return &http.Client{
-			Timeout: timeout,
-			Transport: omhttp.NewTransport(omhttp.Options{
-				Limiter:        limiter,
-				Budget:         budget,
-				Weight:         weight,
-				RetryAttempts:  om.RetryAttempts,
-				TracerProvider: tp,
-			}),
-		}
+	client := &http.Client{
+		Timeout: r.Timeout,
+		// No limiter and no budget: the bucket has no quota. The transport
+		// still retries 5xx/network failures and traces each attempt.
+		Transport: omhttp.NewTransport(omhttp.Options{RetryAttempts: r.RetryAttempts, TracerProvider: tp}),
 	}
-	return omClients{
-		weather:   client(om.Weights.Weather, om.Timeout),
-		aggregate: client(om.Weights.Aggregate, om.Timeout),
-		// The 30-year daily fetch is large; allow more time than a single-hour
-		// call (matches the previous hardcoded bioclim timeout).
-		bioclim: client(om.Weights.Bioclim, 60*time.Second),
-		budget:  budget,
-	}
+	return reanalysis.NewService(omstore.New(omstore.Options{
+		BaseURL:     r.BaseURL,
+		HTTPClient:  client,
+		MaxParallel: r.MaxParallel,
+		ListTTL:     r.ListTTL,
+	}))
 }
 
 // buildRegistry decides which providers this configuration runs. It is separate
 // from New because "which providers exist and under what conditions" is its own
 // question, told once, rather than four conditionals inside the composition root.
-// clients is built once by the caller (app.New) so the budget it carries can
-// also be handed to the metrics wiring.
-func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, clients omClients) *application.Registry {
+// archive is nil when the reanalysis archive is disabled; every provider that
+// needs it goes away with it.
+func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, archive output.Reanalysis) *application.Registry {
 	registry := application.NewRegistry()
-
-	if cfg.Providers.OpenMeteo.Enabled {
-		registry.Register(cachedWeatherProvider(cfg, cache, clk, clients.weather))
-	}
 
 	// Sun and moon are pure computations: no external call, no cache, and they
 	// work for any date (past or future).
 	registry.Register(astronomy.NewSun())
 	registry.Register(astronomy.NewMoon())
 
-	// Weather aggregates: cached like the weather provider; the per-request
-	// gddBase override is part of the cache key via KeyParams.
-	if cfg.Providers.Aggregate.Enabled && cfg.Providers.OpenMeteo.Enabled {
-		agg := aggregate.New(aggregate.Options{
-			ArchiveBaseURL:  cfg.Providers.OpenMeteo.ArchiveBaseURL,
-			ForecastBaseURL: cfg.Providers.OpenMeteo.ForecastBaseURL,
-			Timeout:         cfg.Providers.OpenMeteo.Timeout,
-			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
-			Clock:           clk,
-			HTTPClient:      clients.aggregate,
-		})
-		registry.Register(application.NewCachingProvider(agg, cache, clk, application.CachingOptions{
-			Version:         "1",
-			ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
-			MatureTTL:       365 * 24 * time.Hour,
-			ImmatureTTL:     time.Hour,
-			LatLonPrecision: 2,
-			KeyParams: func(req domain.QueryRequest) string {
+	if archive == nil {
+		return registry
+	}
+	maturity := cfg.Providers.Reanalysis.Maturity
+
+	registry.Register(application.NewCachingProvider(
+		openmeteo.New(openmeteo.Options{Reanalysis: archive, Clock: clk}),
+		cache, clk, cachingOptions(maturity, nil)))
+
+	// Weather aggregates: the per-request gddBase override is part of the cache
+	// key via KeyParams.
+	if cfg.Providers.Aggregate.Enabled {
+		agg := aggregate.New(aggregate.Options{Reanalysis: archive, Clock: clk})
+		registry.Register(application.NewCachingProvider(agg, cache, clk, cachingOptions(maturity,
+			func(req domain.QueryRequest) string {
 				if req.GDDBaseCelsius == nil {
 					return ""
 				}
 				return fmt.Sprintf("gdd=%.2f", *req.GDDBaseCelsius)
-			},
-		}))
+			})))
 	}
 
-	// Bioclim (19 BIO variables + Köppen-Geiger) from ERA5 monthly normals.
-	// Time-independent for a location+period, so it caches per coordinate itself
-	// (its own cache key includes the reference period, ignoring the instant).
-	if cfg.Providers.Bioclim.Enabled && cfg.Providers.OpenMeteo.Enabled {
-		registry.Register(bioclim.New(bioclim.Options{
-			ArchiveBaseURL: cfg.Providers.OpenMeteo.ArchiveBaseURL,
-			// The 30-year daily fetch is large; allow more time than a single-hour
-			// call. The query timeout still governs overall via context. The
-			// Timeout field is superseded by clients.bioclim's own timeout once
-			// HTTPClient is set, but is kept as the adapter's documented default.
-			Timeout:    60 * time.Second,
-			Cache:      cache,
-			HTTPClient: clients.bioclim,
-		}))
+	// Bioclim (19 BIO variables + Köppen-Geiger) from 30-year normals. Time-
+	// independent for a location+period, so it caches per coordinate itself
+	// (its own key includes the reference period and elevation, not the instant).
+	if cfg.Providers.Bioclim.Enabled {
+		registry.Register(bioclim.New(bioclim.Options{Reanalysis: archive, Cache: cache}))
 	}
 
 	return registry
 }
 
-// cachedWeatherProvider is the Open-Meteo provider behind the caching decorator.
-func cachedWeatherProvider(cfg *config.Config, cache output.Cache, clk output.Clock, client *http.Client) output.FeatureProvider {
-	om := openmeteo.New(openmeteo.Options{
-		ArchiveBaseURL:  cfg.Providers.OpenMeteo.ArchiveBaseURL,
-		ForecastBaseURL: cfg.Providers.OpenMeteo.ForecastBaseURL,
-		Timeout:         cfg.Providers.OpenMeteo.Timeout,
-		ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
-		Clock:           clk,
-		HTTPClient:      client,
-	})
-	return application.NewCachingProvider(om, cache, clk, application.CachingOptions{
-		Version:         "1",
-		ArchiveDelay:    cfg.Providers.OpenMeteo.ArchiveDelay,
+// cachingOptions: hours older than maturity are final and cached for a year;
+// younger ones (the archive's newest IFS hours are still revised) for an hour.
+// Version 2 retires every entry computed from the Open-Meteo API.
+func cachingOptions(maturity time.Duration, keyParams func(domain.QueryRequest) string) application.CachingOptions {
+	return application.CachingOptions{
+		Version:         "2",
+		ArchiveDelay:    maturity,
 		MatureTTL:       365 * 24 * time.Hour,
 		ImmatureTTL:     time.Hour,
 		LatLonPrecision: 2,
-	})
+		KeyParams:       keyParams,
+	}
 }

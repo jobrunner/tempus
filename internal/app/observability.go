@@ -4,25 +4,20 @@ import (
 	"context"
 	"time"
 
-	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
 	httpapi "github.com/jobrunner/tempus/internal/adapters/http"
 	"github.com/jobrunner/tempus/internal/adapters/metrics"
-	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 	"github.com/jobrunner/tempus/internal/adapters/telemetry"
 )
 
 // metricsShutdownTimeout bounds the metrics server's graceful shutdown.
 const metricsShutdownTimeout = 5 * time.Second
 
-// omhttpMeterName is the instrumentation scope for the daily-budget gauges.
-const omhttpMeterName = "tempus/omhttp"
-
 // startTracing builds the TracerProvider when tracing is enabled and registers
 // its shutdown. It returns a nil interface (never a typed nil) when tracing is
 // disabled, so every consumer's "tp != nil" check means what it says. It runs
-// before the Open-Meteo clients are built, which trace their outbound calls.
+// before the reanalysis store's HTTP client is built, which trace their outbound calls.
 func (a *App) startTracing() (trace.TracerProvider, error) {
 	if !a.cfg.Tracing.Enabled {
 		return nil, nil
@@ -38,10 +33,9 @@ func (a *App) startTracing() (trace.TracerProvider, error) {
 // wireObservability starts the metrics server as configured and returns the
 // server options carrying the tracer. Both are optional: tp is nil with
 // tracing disabled, and the HTTP server skips the tracing middleware then (see
-// setupRoutes). budget is nil when Open-Meteo is disabled; the budget gauges
-// are then skipped. Anything that needs closing is appended to the app's
+// setupRoutes). Anything that needs closing is appended to the app's
 // closers, which is why this is a method rather than a free function.
-func (a *App) wireObservability(version string, tp trace.TracerProvider, budget *omhttp.Budget) (httpapi.Options, error) {
+func (a *App) wireObservability(version string, tp trace.TracerProvider) (httpapi.Options, error) {
 	opts := httpapi.Options{ServiceName: "tempus", Version: version}
 	opts.Batch = httpapi.BatchLimits{
 		MaxPoints:     a.cfg.Query.Batch.MaxPoints,
@@ -59,7 +53,7 @@ func (a *App) wireObservability(version string, tp trace.TracerProvider, budget 
 	opts.TracerProvider = tp
 
 	if a.cfg.Metrics.Enabled {
-		if err := a.startMetricsServer(budget); err != nil {
+		if err := a.startMetricsServer(); err != nil {
 			return httpapi.Options{}, err
 		}
 	}
@@ -69,15 +63,10 @@ func (a *App) wireObservability(version string, tp trace.TracerProvider, budget 
 // startMetricsServer runs the metrics endpoint in the background and registers
 // its shutdown. A serve error is logged, not returned: the metrics endpoint
 // failing must not take the service down with it.
-func (a *App) startMetricsServer(budget *omhttp.Budget) error {
+func (a *App) startMetricsServer() error {
 	srv, err := metrics.New(a.cfg.Metrics)
 	if err != nil {
 		return err
-	}
-	if budget != nil {
-		if err := registerBudgetGauges(srv.Provider().Meter(omhttpMeterName), budget); err != nil {
-			return err
-		}
 	}
 	go func() {
 		if err := srv.Start(); err != nil {
@@ -90,32 +79,4 @@ func (a *App) startMetricsServer(budget *omhttp.Budget) error {
 		return srv.Shutdown(ctx)
 	})
 	return nil
-}
-
-// registerBudgetGauges exposes the daily Open-Meteo call budget as two
-// observable gauges so operators can see remaining budget without deriving it
-// from logs.
-func registerBudgetGauges(meter metric.Meter, budget *omhttp.Budget) error {
-	spent, err := meter.Int64ObservableGauge(
-		"tempus.openmeteo.daily_budget.spent",
-		metric.WithDescription("Weighted Open-Meteo calls spent from today's daily budget."),
-		metric.WithUnit("{weighted_call}"),
-	)
-	if err != nil {
-		return err
-	}
-	limit, err := meter.Int64ObservableGauge(
-		"tempus.openmeteo.daily_budget.limit",
-		metric.WithDescription("Configured daily weighted-call budget for Open-Meteo."),
-		metric.WithUnit("{weighted_call}"),
-	)
-	if err != nil {
-		return err
-	}
-	_, err = meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
-		o.ObserveInt64(spent, int64(budget.Spent()))
-		o.ObserveInt64(limit, int64(budget.Limit()))
-		return nil
-	}, spent, limit)
-	return err
 }

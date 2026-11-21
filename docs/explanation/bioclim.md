@@ -8,8 +8,9 @@ in the same variables the species-distribution/ecology community uses (WorldClim
 
 ## How it is computed
 
-tempus fetches the daily ERA5 archive (Open-Meteo) for the reference period,
-aggregates it to **12-month climate normals** (mean daily min/max/mean
+tempus reads the daily series of the reanalysis archive (ECMWF IFS from 2017,
+ERA5-Land and ERA5 before — see [Data source](data-source.md)) for the
+reference period, corrected to the request's elevation, aggregates it to **12-month climate normals** (mean daily min/max/mean
 temperature per calendar month; mean monthly precipitation total), then:
 
 - **BIO1–BIO19** via the standard WorldClim/ANUCLIM definitions (quarters are
@@ -40,12 +41,14 @@ the classifier, and the earlier deviations are documented in the
 [Köppen-Geiger reference dossier](../research/koppen-reference.md).
 
 The values are **time-independent** for a location and period, so the provider
-**caches per coordinate + period** with a long TTL. The first query for a
-location triggers a ~30-year fetch; subsequent queries (e.g. many records at the
+**caches per coordinate + elevation + period** with a long TTL (one year). The
+first query for a location triggers a ~30-year read (about 2.6 s cold, about
+1 s once the archive's file metadata is in memory); subsequent queries (e.g. many records at the
 same locality) are served from cache.
 
-!!! note "ERA5-based, not identical to WorldClim"
-    The *definitions* match WorldClim, but the *values* come from ERA5, so they
+!!! note "Reanalysis-based, not identical to WorldClim"
+    The *definitions* match WorldClim, but the *values* come from the
+    reanalysis (mostly ERA5/ERA5-Land for 30-year normals), so they
     are close to — not bit-identical with — WorldClim (interpolated station data)
     or CHELSA. Attribution states this explicitly.
 
@@ -53,7 +56,7 @@ same locality) are served from cache.
 
 The Köppen main-class boundaries are knife-edge isotherms — the C/D
 (temperate/cold) boundary is the **mean temperature of the coldest month = 0 °C**.
-Near such a boundary, ERA5 and a high-resolution station/downscaled Köppen raster
+Near such a boundary, the reanalysis and a high-resolution station/downscaled Köppen raster
 (what a GeoTIFF map is built from) routinely differ by ~1–1.5 °C in winter, which
 is enough to flip the **main class** (e.g. Cfb ↔ Dfb). This is the usual reason a
 raster map and tempus disagree at one point even for the same period — neither is
@@ -102,7 +105,11 @@ but **Dfb** for a 1954 find — the mid-century normal was colder.
 
 ## Data source and limits
 
-Computed from the **Open-Meteo archive (ERA5, Copernicus/ECMWF)**. The 30-year
-fetch is large; repeated bursts for many distinct coordinates can hit Open-Meteo
-rate limits (HTTP 429), reported as a retryable provider status. Per-coordinate
-caching keeps repeat queries cheap.
+Computed from the **reanalysis archive (ECMWF IFS, Copernicus ERA5 and
+ERA5-Land)**, read from Open-Meteo's open-data bucket — no API and no quota
+(see [Data source](data-source.md)). A 30-year read for a new location costs
+about 90 range requests and about 1.2 MB per variable; a bucket failure that
+survives the retries is reported as a retryable provider status. Caching per
+coordinate, elevation and period keeps repeat queries cheap. Because the
+temperatures are corrected to the request elevation, two records at the same
+coordinate but different heights get different normals.
