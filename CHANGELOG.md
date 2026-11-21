@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.26.0](https://github.com/jobrunner/tempus/compare/v0.25.1...v0.26.0) (2026-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* elevation (metres above sea level) is now required on GET /api/v1/query and on every batch point; requests without it get 400. Config keys providers.openmeteo.* are replaced by providers.reanalysis.*.
+
+### Features
+
+* **omfile:** add a clean-room decoder for Open-Meteo OM files ([c0f1a56](https://github.com/jobrunner/tempus/commit/c0f1a5677669c8a84c8ff30ff38ac902834e0f10))
+* read weather from the reanalysis open data and require elevation ([1163857](https://github.com/jobrunner/tempus/commit/1163857c0390c42256f0778f145f9d9173a213c3))
+
+
+### Bug Fixes
+
+* **reanalysis:** address review findings on keys, rounding and cancellation ([e983155](https://github.com/jobrunner/tempus/commit/e983155a6d8a22a58f668d0f8b8eaf664c743739))
+* **reanalysis:** build the regular-grid window in a fixed array ([cc475bc](https://github.com/jobrunner/tempus/commit/cc475bc31d26118a35fcb68ca05a68cbe401811d))
+* **reanalysis:** reject NaN coordinates and detach shared bucket work ([6b201a1](https://github.com/jobrunner/tempus/commit/6b201a1f94b4c7e7cd3c6032e0d5c51b05bcfe41))
+
 ## [0.25.1](https://github.com/jobrunner/tempus/compare/v0.25.0...v0.25.1) (2026-11-14)
 
 
