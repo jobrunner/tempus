@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jobrunner/tempus/internal/adapters/omhttp"
+	"github.com/jobrunner/tempus/internal/adapters/bucketio"
 	"github.com/jobrunner/tempus/internal/adapters/omstore"
 	"github.com/jobrunner/tempus/internal/domain"
 	ra "github.com/jobrunner/tempus/internal/domain/reanalysis"
@@ -45,7 +45,7 @@ func skipUnlessLive(t *testing.T) {
 func liveService() *Service {
 	client := &http.Client{
 		Timeout:   60 * time.Second,
-		Transport: omhttp.NewTransport(omhttp.Options{RetryAttempts: 3}),
+		Transport: bucketio.NewTransport(bucketio.Options{RetryAttempts: 3}),
 	}
 	return NewService(omstore.New(omstore.Options{BaseURL: bucketURL, HTTPClient: client, MaxParallel: 32}))
 }

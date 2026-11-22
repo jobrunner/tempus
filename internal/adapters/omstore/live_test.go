@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jobrunner/tempus/internal/adapters/omhttp"
+	"github.com/jobrunner/tempus/internal/adapters/bucketio"
 )
 
 // TestLive_ThirtyYears reads 1991–2020 hourly temperature for one ERA5 cell
@@ -19,7 +19,7 @@ func TestLive_ThirtyYears(t *testing.T) {
 	}
 	// The retrying transport of the composition root: a reset connection is
 	// retried as in production instead of failing the run.
-	client := &http.Client{Timeout: 30 * time.Second, Transport: omhttp.NewTransport(omhttp.Options{RetryAttempts: 3})}
+	client := &http.Client{Timeout: 30 * time.Second, Transport: bucketio.NewTransport(bucketio.Options{RetryAttempts: 3})}
 	s := New(Options{BaseURL: "https://openmeteo.s3.amazonaws.com", HTTPClient: client, MaxParallel: 32})
 	from := time.Date(1991, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
