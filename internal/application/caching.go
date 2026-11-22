@@ -15,11 +15,10 @@ import (
 
 // CachingOptions configures the caching decorator.
 type CachingOptions struct {
-	Version         string        // cache schema version — bump to invalidate
-	ArchiveDelay    time.Duration // instants older than this are immutable
-	MatureTTL       time.Duration // TTL for immutable (mature) data
-	ImmatureTTL     time.Duration // TTL for data still inside the maturity window
-	LatLonPrecision int           // decimal places for the cache-key coordinate rounding
+	Version      string        // cache schema version — bump to invalidate
+	ArchiveDelay time.Duration // instants older than this are immutable
+	MatureTTL    time.Duration // TTL for immutable (mature) data
+	ImmatureTTL  time.Duration // TTL for data still inside the maturity window
 
 	// KeyParams optionally contributes provider-specific request parameters to
 	// the cache key (e.g. the aggregate provider's gddBase). Empty/nil keeps
@@ -52,7 +51,7 @@ func (c *CachingProvider) Fetch(ctx context.Context, req domain.QueryRequest) (d
 	if c.opts.KeyParams != nil {
 		params = c.opts.KeyParams(req)
 	}
-	key := CacheKey(c.inner.ID(), c.opts.Version, req, c.opts.LatLonPrecision, params)
+	key := CacheKey(c.inner.ID(), c.opts.Version, req, params)
 
 	if raw, ok, err := c.cache.Get(ctx, key); err == nil && ok {
 		var f domain.Feature
@@ -93,18 +92,16 @@ func (c *CachingProvider) ttlFor(instant time.Time) time.Duration {
 	return c.opts.ImmatureTTL
 }
 
-// CacheKey derives a deterministic key. Coordinates are rounded to precision
-// decimals so nearby points share the coarse weather grid cell (better hit rate);
-// the exact elevation is part of the key because it selects the model cell
-// (with a sharp 100 m threshold) and drives the lapse-rate correction, and the
-// weather feature reports it back. Determinism preserves
-// idempotency. params, when non-empty, partitions the key further (e.g. by a
-// provider-specific request parameter).
-func CacheKey(providerID, version string, req domain.QueryRequest, precision int, params string) string {
-	lat := roundTo(req.Coordinate.Lat, precision)
-	lon := roundTo(req.Coordinate.Lon, precision)
-	raw := fmt.Sprintf("%s|%s|%.*f|%.*f|%s|%s",
-		providerID, version, precision, lat, precision, lon, elevationKey(req.Elevation), req.Instant.UTC().Format(time.RFC3339))
+// CacheKey derives a deterministic key from the exact request. Every feature
+// carries its point — the geometry, and values that follow from the latitude
+// or the elevation — so nearby points must not share an entry. What they do
+// share, the archive reads of their model cells, is cached one layer down by
+// CachingSeriesReader. params, when non-empty, partitions the key further
+// (e.g. by a provider-specific request parameter).
+func CacheKey(providerID, version string, req domain.QueryRequest, params string) string {
+	raw := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
+		providerID, version, exact(req.Coordinate.Lat), exact(req.Coordinate.Lon),
+		exact(req.Elevation), req.Instant.UTC().Format(time.RFC3339))
 	if params != "" {
 		raw += "|" + params
 	}
@@ -112,17 +109,5 @@ func CacheKey(providerID, version string, req domain.QueryRequest, precision int
 	return hex.EncodeToString(sum[:])
 }
 
-// elevationKey renders the elevation exactly (shortest round-trip form).
-func elevationKey(e float64) string { return strconv.FormatFloat(e, 'g', -1, 64) }
-
-func roundTo(v float64, precision int) float64 {
-	p := 1.0
-	for i := 0; i < precision; i++ {
-		p *= 10
-	}
-	// round half away from zero
-	if v >= 0 {
-		return float64(int64(v*p+0.5)) / p
-	}
-	return float64(int64(v*p-0.5)) / p
-}
+// exact renders a number in its shortest round-trip form.
+func exact(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }

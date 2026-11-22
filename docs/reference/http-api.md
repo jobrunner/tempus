@@ -115,7 +115,7 @@ The `sun` and `moon` features are available for any date, including the future;
 | `status` | string | `ok` \| `unavailable` \| `error` |
 | `cached` | bool | `true` if the feature was served from cache |
 | `retryable` | bool | `true` when `status` is `unavailable` and retrying will help |
-| `retryAfter` | string | Go duration to wait before retrying, e.g. `"30s"` (optional) |
+| `retryAfter` | string | RFC 3339 hint for when to retry (optional) |
 | `error` | string | Error message when `status` is `error` |
 
 #### `400 Bad Request` — `Error`
@@ -139,8 +139,8 @@ features are still computed.
 ## `POST /api/v1/query/batch`
 
 Query many coordinate+time points in one request through the same provider
-pipeline as `GET /api/v1/query`. Points that share a rounded coordinate,
-exact elevation, instant, and options are fetched once and fanned out to every matching
+pipeline as `GET /api/v1/query`. Points that share coordinate,
+elevation, instant, and options are fetched once and fanned out to every matching
 result, so duplicate points in a batch cost nothing extra.
 
 ### Request — `BatchQueryRequest`
