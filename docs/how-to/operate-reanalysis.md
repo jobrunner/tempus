@@ -40,8 +40,11 @@ The knobs (see [Configure providers](configure-providers.md#providers-reanalysis
 - `TEMPUS_PROVIDERS_REANALYSIS_MAX_PARALLEL` (default `32`) — concurrent range
   requests per tempus process. Raise it for many concurrent cold bioclim
   queries; lower it on a thin uplink.
-- `TEMPUS_PROVIDERS_REANALYSIS_TIMEOUT` (default `30s`) — per request,
-  including each retry attempt.
+- `TEMPUS_PROVIDERS_REANALYSIS_TIMEOUT` (default `30s`) — the whole budget of
+  one range request: all its attempts **and** the backoff waits between them
+  share it, so a slow first attempt or a long `Retry-After` can use it up
+  before a retry starts. Size it for attempts plus backoff, not for one
+  attempt.
 - `TEMPUS_PROVIDERS_REANALYSIS_RETRY_ATTEMPTS` (default `3`) — retries of 429,
   5xx and network failures, with exponential backoff from 2 s (or the
   `Retry-After` the bucket sends).
@@ -69,8 +72,12 @@ the image).
   The bbolt file has **no size cap**: an expired entry is removed only when it
   is read again, and bbolt never returns freed pages to the file system — the
   file stays at its high-water mark and reuses the space.
-- **Sizing:** plan the volume from the number of distinct
-  (coordinate rounded to 0.01°, elevation, hour) keys your clients ask for. To
+- **Sizing:** plan the volume from the number of distinct keys your clients
+  produce. Weather and aggregate key on (coordinate rounded to 0.01°, elevation
+  in whole metres, hour), and aggregate additionally on a `gddBase` override;
+  bioclim keys on (coordinate rounded to 0.0001°, elevation, reference
+  period) — about 11 m apart, so dense spatial bioclim queries produce far
+  more entries than the same points for weather. To
   reclaim space, stop tempus and delete the file; it is a cache, nothing in it
   is authoritative. `TEMPUS_CACHE_TYPE=memory` avoids the file entirely at the
   price of a cold cache after every restart.
@@ -82,17 +89,21 @@ says so per provider, never as an HTTP error of the whole query:
 
 | What happens | Provider status in the response |
 |---|---|
-| Network error, timeout, 429 or 5xx after all retries | `unavailable`, `retryable: true`, `retryAfter` about 30 s ahead |
-| The hour is not in the archive yet (the newest IFS hours) | `unavailable`, `retryable: true`, `retryAfter` 2 h (weather) or 6 h (aggregate) ahead |
+| Network error, timeout, 429 or 5xx after all retries | `unavailable`, `retryable: true`, `retryAfter: "30s"` |
+| The hour is not in the archive yet (the newest IFS hours) | `unavailable`, `retryable: true`, `retryAfter: "2h0m0s"` (weather) or `"6h0m0s"` (aggregate) |
 | A file is corrupt or uses an unknown format version or codec | `error`, `retryable: false` — loud on purpose, see below |
 
 Clients follow the [retry recipe](../explanation/retry-semantics.md); cached
 results keep being served during an outage.
 
-A permanent `error` from the reanalysis providers means the data no longer
-decodes as expected — typically Open-Meteo changed the file layout. Check the
-logs for the decoder message, then run the conformance check below; do not
-just raise retries.
+A permanent `error` is not always the bucket: it is also the answer to a
+request the provider cannot serve (for example an instant in the future, or an
+invalid bioclim reference period). Classified provider
+errors are not logged; read the provider's `error` field in the response.
+Only when that message comes from the decoder or the store (`omfile`,
+`omstore`: unknown format version or codec, corrupt chunk) does the data no
+longer decode as expected — typically Open-Meteo changed the file layout. Then
+run the conformance check below; do not just raise retries.
 
 ## Attribution
 
@@ -130,8 +141,10 @@ It runs three tests, all against the public bucket and API (no secrets):
   cases (coast, date line, Greenwich, mountains, southern hemisphere), hourly
   and daily.
 
-The log lists every miss with point, window, variable and hour, and counts
-misses of one step in the last decimal apart from larger ones. Any miss fails
+The log shows the first 20 misses of each test with point, window, variable
+and hour; the per-variable and per-window counts below it include every
+comparison, and count misses of one step in the last decimal apart from larger
+ones. To see the misses of one window in detail, rerun with fewer points. Any miss fails
 the sweep. A miss that appears only in the `recent` window can mean the
 archive revised its newest IFS hours between the two reads; rerun before
 investigating. A miss in old windows points at a change on Open-Meteo's side
