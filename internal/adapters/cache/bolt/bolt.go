@@ -22,9 +22,11 @@ const touchInterval = time.Hour
 
 // Options configures a Cache.
 type Options struct {
-	// MaxBytes caps the stored entries (keys, values and bookkeeping).
-	// Zero or negative means unbounded. The file itself does not shrink:
-	// bbolt reuses freed pages, so it settles a little above the cap.
+	// MaxBytes caps the live entries (keys, values and bookkeeping), not
+	// the file. Zero or negative means unbounded. bbolt never shrinks its
+	// file: freed pages are reused, so the file keeps its high-water mark —
+	// a little above the cap in steady state, more if it once held more
+	// (an uncapped or larger-capped cache, or the pre-cap format).
 	MaxBytes int64
 	// Now is the clock for expiry and access times; nil means time.Now.
 	Now func() time.Time
@@ -87,19 +89,21 @@ func (c *Cache) Get(_ context.Context, key string) ([]byte, bool, error) {
 		found bool
 		h     header
 	)
+	now := c.now().UnixNano()
 	err := c.db.View(func(tx *bolt.Tx) error {
 		rec := tx.Bucket(entriesBucket).Get(k)
 		if len(rec) < headerLen {
 			return nil
 		}
 		found, h = true, decodeHeader(rec)
-		out = append([]byte(nil), rec[headerLen:]...)
+		if !h.expired(now) { // an expired value is never copied
+			out = append([]byte(nil), rec[headerLen:]...)
+		}
 		return nil
 	})
 	if err != nil || !found {
 		return nil, false, err
 	}
-	now := c.now().UnixNano()
 	if h.expired(now) {
 		return nil, false, c.db.Update(func(tx *bolt.Tx) error { return removeIfExpired(tx, k, now) })
 	}

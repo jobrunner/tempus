@@ -234,3 +234,14 @@ func TestBoltCache_StaleTouchDoesNotRewind(t *testing.T) {
 		return nil
 	})
 }
+
+func TestBoltCache_ExpiredReadReturnsNoValue(t *testing.T) {
+	clk := &fakeClock{t: time.Unix(1_700_000_000, 0)}
+	c := openCapped(t, filepath.Join(t.TempDir(), "c.bolt"), 0, clk)
+	defer c.Close()
+	_ = c.Set(context.Background(), "k", value(100), time.Minute)
+	clk.advance(time.Hour)
+	if v, ok, err := c.Get(context.Background(), "k"); ok || v != nil || err != nil {
+		t.Errorf("expired read = (%v, %v, %v), want (nil, false, nil)", v, ok, err)
+	}
+}

@@ -71,6 +71,13 @@ that are.
 
 The bbolt backend rewrites an entry's access time at most once an hour, so a
 warm read stays a read-only transaction; eviction is least-recently-used at
-that granularity. The file does not shrink when entries go — bbolt reuses the
-freed pages — so it settles a little above the cap. A cache file written before
-the cap existed is emptied on the first start.
+that granularity.
+
+The cap counts **live entries, not the file**. bbolt never gives disk space
+back: pages freed by eviction are reused for new entries, so in steady state
+the file sits a little above the cap, but it keeps whatever size it once
+reached. A cache file written before the cap existed is emptied on the first
+start, and a file filled under a larger cap is trimmed to the new one — in
+both cases the entries go, the file size stays. To reclaim the space, stop
+the service and delete the file (`TEMPUS_CACHE_PATH`); it is only a cache and
+is rebuilt on demand.
