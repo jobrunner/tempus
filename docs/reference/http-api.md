@@ -115,7 +115,7 @@ The `sun` and `moon` features are available for any date, including the future;
 | `status` | string | `ok` \| `unavailable` \| `error` |
 | `cached` | bool | `true` if the feature was served from cache |
 | `retryable` | bool | `true` when `status` is `unavailable` and retrying will help |
-| `retryAfter` | string | RFC 3339 hint for when to retry (optional) |
+| `retryAfter` | string | Go duration to wait before retrying, e.g. `"30s"` (optional) |
 | `error` | string | Error message when `status` is `error` |
 
 #### `400 Bad Request` — `Error`
