@@ -8,7 +8,7 @@
       "internal/adapters/aggregate/aggregate.go": 37,
       "internal/adapters/bioclim/bioclim.go": 26,
       "internal/domain/koppen.go": 45,
-      "internal/domain/lunar.go": 39,
+      "internal/domain/lunar.go": 30,
       "internal/domain/bioclim.go": 35
     },
     "_round1_note": "Refactoring round 1 (v0.20.0 -> next): toFeature was split into hourIndex/hourlyValues/enrichWeatherCode/enrichBeaufort and moved to a new feature.go, and app.New's provider wiring and observability setup moved to providers.go and observability.go. openmeteo.go 47->23 and app.go 30->18 dropped below default_cap, so their entries are gone; the relocated mapping logic in feature.go is baselined at 29 (its worst function is 7). The split cost ~5 total file complexity in function overhead and bought a per-function max of 8 instead of 18.",
