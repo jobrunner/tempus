@@ -69,13 +69,14 @@ Far from Greenwich the two differ. In Thailand (longitude 100°E, UTC+7) an
 instant at 06:30 local time on 19 May is 23:30 UTC on 18 May; the events
 returned are those of the 19 May morning — sunrise just before the instant —
 not those around 18 May's UTC noon. Westwards, an evening at 18:30 local in
-Mexico (00:30 UTC the next day) gets that evening's sunset. Near Greenwich
-nothing changes. Wherever the sun rises and sets, the instant therefore lies
-between the events of its day, and a client that compares it with them gets
-the light regime it sees.
+Mexico (00:30 UTC the next day) gets that evening's sunset. Near Greenwich the
+day is the same as the UTC day for most of it; only instants within the
+minutes between local midnight and UTC midnight can switch to the neighbour.
 
-`elevationDeg`, `azimuthDeg` and `lightPhase` are exact for the instant and
-not tied to any day.
+The instant need not lie between the events: at 02:00 local time it belongs to
+the day whose dawn is still ahead, at 23:00 to the one whose dusk is past. Do
+not derive day or night from the events; use `lightPhase` (or `elevationDeg`),
+which are exact for the instant and not tied to any day, as is `azimuthDeg`.
 
 ## Time zones
 

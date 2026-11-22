@@ -106,8 +106,9 @@ type SunTimes struct {
 // SolarEvents computes sunrise, sunset, solar noon and the three twilight
 // phases for the solar day t falls into at the given coordinate: the day
 // whose solar noon is nearest to t. Far from Greenwich that differs from the
-// UTC calendar day of t; the events are UTC instants either way, and t lies
-// between the day's events wherever the sun rises and sets.
+// UTC calendar day of t; the events are UTC instants either way. t need not
+// lie between them: before dawn or after dusk it is still night on its local
+// day (SunLightPhase gives the regime at t itself).
 func SolarEvents(latDeg, lonDeg float64, t time.Time) SunTimes {
 	day, noonMin, decl := localSolarDay(lonDeg, t)
 	noon := day.Add(time.Duration(noonMin * float64(time.Minute)))
@@ -127,54 +128,6 @@ func SolarEvents(latDeg, lonDeg float64, t time.Time) SunTimes {
 	st.NauticalDawn, st.NauticalDusk = sunEvent(latDeg, day, decl, noonMin, altNautical)
 	st.AstronomicalDawn, st.AstronomicalDusk = sunEvent(latDeg, day, decl, noonMin, altAstronomic)
 	return st
-}
-
-// localSolarDay picks the UTC day whose local day (see dayBounds) holds t
-// and returns it with its solar noon in minutes after the day's 00:00 UTC and
-// the solar declination. That is the day whose solar noon is nearest to t,
-// at most about twelve hours away. The UTC day of t and its neighbours are
-// the only candidates: solar noon lies within ±12 h 16 min of 12:00 UTC.
-func localSolarDay(lonDeg float64, t time.Time) (day time.Time, noonMin, declRad float64) {
-	day = t.UTC().Truncate(24 * time.Hour)
-	for _, offset := range []int{-1, 1} {
-		d := day.AddDate(0, 0, offset)
-		if from, to := dayBounds(lonDeg, d); !t.Before(from) && t.Before(to) {
-			day = d
-		}
-	}
-	noonMin, declRad = solarNoonMin(lonDeg, day)
-	return day, noonMin, declRad
-}
-
-// solarNoonMin returns the solar noon of the UTC day in minutes after its
-// 00:00 UTC, with the declination; both use the declination and equation of
-// time at 12:00 UTC of the day.
-func solarNoonMin(lonDeg float64, day time.Time) (noonMin, declRad float64) {
-	decl, eqTime := solarGeom(day.Add(12 * time.Hour))
-	return 720 - 4*lonDeg - eqTime, decl
-}
-
-// solarNoonOf returns the solar noon of the UTC day as an instant.
-func solarNoonOf(lonDeg float64, day time.Time) time.Time {
-	nm, _ := solarNoonMin(lonDeg, day)
-	return day.Add(time.Duration(nm * float64(time.Minute)))
-}
-
-// dayBounds returns the local day around the solar noon of the UTC day:
-// from halfway after the previous solar noon to halfway before the next.
-// Adjacent days share their bounds, so consecutive local days tile time
-// without gaps or overlaps — solar noons are not exactly 24 h apart.
-func dayBounds(lonDeg float64, day time.Time) (from, to time.Time) {
-	prev := solarNoonOf(lonDeg, day.AddDate(0, 0, -1))
-	noon := solarNoonOf(lonDeg, day)
-	next := solarNoonOf(lonDeg, day.AddDate(0, 0, 1))
-	return prev.Add(noon.Sub(prev) / 2), noon.Add(next.Sub(noon) / 2)
-}
-
-// localDayBounds returns the bounds of the local day t falls into.
-func localDayBounds(lonDeg float64, t time.Time) (from, to time.Time) {
-	day, _, _ := localSolarDay(lonDeg, t)
-	return dayBounds(lonDeg, day)
 }
 
 // sunEvent returns the rising and setting instants (UTC) at which the sun
