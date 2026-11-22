@@ -95,6 +95,13 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, arc
 	return registry
 }
 
+// resultMaturityMargin delays "final" for results past the maturity the
+// series cache uses. An archive block is never served once one of its hours
+// has turned final, but a result computed from it just before that moment is
+// written moments after; the margin keeps such a result on the short TTL. It
+// only has to exceed one query (query.timeout), not a fill.
+const resultMaturityMargin = 10 * time.Minute
+
 // cachingOptions: hours older than maturity are final and cached for a year;
 // younger ones (the archive's newest IFS hours are still revised) for an hour.
 // Version 3 keys on the exact point; version 2 entries (0.01° keys) carried
@@ -102,7 +109,7 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, arc
 func cachingOptions(maturity time.Duration, keyParams func(domain.QueryRequest) string) application.CachingOptions {
 	return application.CachingOptions{
 		Version:      "3",
-		ArchiveDelay: maturity,
+		ArchiveDelay: maturity + resultMaturityMargin,
 		MatureTTL:    365 * 24 * time.Hour,
 		ImmatureTTL:  time.Hour,
 		KeyParams:    keyParams,

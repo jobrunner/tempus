@@ -15,12 +15,19 @@ func hourValue(t time.Time) float32 { return float32(t.Unix()/3600%100000) / 10 
 type readCall struct{ from, to time.Time }
 
 type fakeSeries struct {
-	calls []readCall
-	err   error
+	mu     sync.Mutex
+	calls  []readCall
+	err    error
+	onRead func() // runs inside every read, e.g. to move a clock
 }
 
 func (f *fakeSeries) ReadSeries(_ context.Context, _, _ string, _ []uint64, from, to time.Time) ([]float32, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls = append(f.calls, readCall{from, to})
+	if f.onRead != nil {
+		f.onRead()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -51,7 +58,7 @@ func checkSeries(t *testing.T, got []float32, from, to time.Time) {
 }
 
 func TestSeriesCache_SecondReadHitsCache(t *testing.T) {
-	inner, cache := &fakeSeries{}, newFakeCache()
+	inner, cache := &fakeSeries{}, newFakeLockedCache()
 	r := NewCachingSeriesReader(inner, cache, fixedClock{seriesNow}, seriesOpts())
 	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
 	to := from.Add(24 * time.Hour)
@@ -85,7 +92,7 @@ func TestSeriesCache_SecondReadHitsCache(t *testing.T) {
 
 func TestSeriesCache_KeysSeparateCellsVariablesAndDomains(t *testing.T) {
 	inner := &fakeSeries{}
-	r := NewCachingSeriesReader(inner, newFakeCache(), fixedClock{seriesNow}, seriesOpts())
+	r := NewCachingSeriesReader(inner, newFakeLockedCache(), fixedClock{seriesNow}, seriesOpts())
 	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
 	ctx := context.Background()
 	_, _ = r.ReadSeries(ctx, "era5", "temperature_2m", []uint64{1, 2}, from, from.Add(time.Hour))
@@ -99,7 +106,7 @@ func TestSeriesCache_KeysSeparateCellsVariablesAndDomains(t *testing.T) {
 }
 
 func TestSeriesCache_MergesMissingMonthsIntoOneRead(t *testing.T) {
-	inner, cache := &fakeSeries{}, newFakeCache()
+	inner, cache := &fakeSeries{}, newFakeLockedCache()
 	r := NewCachingSeriesReader(inner, cache, fixedClock{seriesNow}, seriesOpts())
 	ctx := context.Background()
 	coord := []uint64{7}
@@ -119,18 +126,21 @@ func TestSeriesCache_MergesMissingMonthsIntoOneRead(t *testing.T) {
 		{time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC)},
 		{time.Date(2020, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 1, 0, 0, 0, 0, time.UTC)},
 	}
+	// The two gaps are read concurrently, so their order is not fixed.
 	if len(inner.calls) != len(want) {
 		t.Fatalf("inner reads = %v, want %v", inner.calls, want)
 	}
-	for i := range want {
-		if inner.calls[i] != want[i] {
-			t.Errorf("read %d = %v, want %v", i, inner.calls[i], want[i])
-		}
+	if inner.calls[0] != want[0] {
+		t.Errorf("first read = %v, want %v", inner.calls[0], want[0])
+	}
+	reads := map[readCall]bool{inner.calls[1]: true, inner.calls[2]: true}
+	if !reads[want[1]] || !reads[want[2]] {
+		t.Errorf("gap reads = %v, want %v and %v", inner.calls[1:], want[1], want[2])
 	}
 }
 
 func TestSeriesCache_ImmatureMonthGetsShortTTL(t *testing.T) {
-	inner, cache := &fakeSeries{}, newFakeCache()
+	inner, cache := &fakeSeries{}, newFakeLockedCache()
 	r := NewCachingSeriesReader(inner, cache, fixedClock{seriesNow}, seriesOpts())
 	from := seriesNow.Add(-48 * time.Hour)
 	if _, err := r.ReadSeries(context.Background(), "ecmwf_ifs", "t", []uint64{1}, from, from.Add(time.Hour)); err != nil {
@@ -142,7 +152,7 @@ func TestSeriesCache_ImmatureMonthGetsShortTTL(t *testing.T) {
 }
 
 func TestSeriesCache_LongReadsBypassTheCache(t *testing.T) {
-	inner, cache := &fakeSeries{}, newFakeCache()
+	inner, cache := &fakeSeries{}, newFakeLockedCache()
 	r := NewCachingSeriesReader(inner, cache, fixedClock{seriesNow}, seriesOpts())
 	from := time.Date(1991, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -158,7 +168,7 @@ func TestSeriesCache_LongReadsBypassTheCache(t *testing.T) {
 
 func TestSeriesCache_ErrorsAreNotCached(t *testing.T) {
 	boom := errors.New("bucket down")
-	inner, cache := &fakeSeries{err: boom}, newFakeCache()
+	inner, cache := &fakeSeries{err: boom}, newFakeLockedCache()
 	r := NewCachingSeriesReader(inner, cache, fixedClock{seriesNow}, seriesOpts())
 	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
 	if _, err := r.ReadSeries(context.Background(), "era5", "t", []uint64{1}, from, from.Add(time.Hour)); !errors.Is(err, boom) {
@@ -170,7 +180,7 @@ func TestSeriesCache_ErrorsAreNotCached(t *testing.T) {
 }
 
 func TestSeriesCache_CorruptEntryIsAMiss(t *testing.T) {
-	inner, cache := &fakeSeries{}, newFakeCache()
+	inner, cache := &fakeSeries{}, newFakeLockedCache()
 	r := NewCachingSeriesReader(inner, cache, fixedClock{seriesNow}, seriesOpts())
 	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
 	_, _ = r.ReadSeries(context.Background(), "era5", "t", []uint64{1}, from, from.Add(time.Hour))
@@ -188,7 +198,7 @@ func TestSeriesCache_CorruptEntryIsAMiss(t *testing.T) {
 }
 
 func TestSeriesCache_KeepsNaN(t *testing.T) {
-	cache := newFakeCache()
+	cache := newFakeLockedCache()
 	nan := float32(math.NaN())
 	r := NewCachingSeriesReader(nanSeries{nan}, cache, fixedClock{seriesNow}, seriesOpts())
 	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
@@ -214,7 +224,7 @@ func (n nanSeries) ReadSeries(_ context.Context, _, _ string, _ []uint64, from, 
 // at 12:20 holds hours that turn final at 13:00; it must not outlive that, or
 // a year-long result could be computed from a pre-final value.
 func TestSeriesCache_ImmatureBlockExpiresWhenItsNextHourTurnsFinal(t *testing.T) {
-	inner, cache := &fakeSeries{}, newFakeCache()
+	inner, cache := &fakeSeries{}, newFakeLockedCache()
 	now := seriesNow.Add(20 * time.Minute)
 	r := NewCachingSeriesReader(inner, cache, fixedClock{now}, seriesOpts())
 	from := seriesNow.Add(-48 * time.Hour)
@@ -229,14 +239,11 @@ func TestSeriesCache_ImmatureBlockExpiresWhenItsNextHourTurnsFinal(t *testing.T)
 // blockingSeries holds every read until release is closed.
 type blockingSeries struct {
 	fakeSeries
-	mu      sync.Mutex
 	release chan struct{}
 }
 
 func (b *blockingSeries) ReadSeries(ctx context.Context, d, v string, c []uint64, from, to time.Time) ([]float32, error) {
 	<-b.release
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	return b.fakeSeries.ReadSeries(ctx, d, v, c, from, to)
 }
 
@@ -293,4 +300,80 @@ func (c *lockedCache) Set(ctx context.Context, k string, v []byte, ttl time.Dura
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.fakeCache.Set(ctx, k, v, ttl)
+}
+
+// TestSeriesCache_OverlappingReadsShareMonths: a weather day and an aggregate
+// season of the same cell overlap; the shared month is read once.
+func TestSeriesCache_OverlappingReadsShareMonths(t *testing.T) {
+	inner := &blockingSeries{release: make(chan struct{})}
+	r := NewCachingSeriesReader(inner, newFakeLockedCache(), fixedClock{seriesNow}, seriesOpts())
+	day := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
+	season := [2]time.Time{time.Date(2020, 2, 10, 0, 0, 0, 0, time.UTC), time.Date(2020, 4, 20, 0, 0, 0, 0, time.UTC)}
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		got, err := r.ReadSeries(context.Background(), "era5", "t", []uint64{1}, day, day.Add(24*time.Hour))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkSeries(t, got, day, day.Add(24*time.Hour))
+	})
+	wg.Go(func() {
+		got, err := r.ReadSeries(context.Background(), "era5", "t", []uint64{1}, season[0], season[1])
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		checkSeries(t, got, season[0], season[1])
+	})
+	time.Sleep(50 * time.Millisecond)
+	close(inner.release)
+	wg.Wait()
+	march := time.Date(2020, 3, 15, 0, 0, 0, 0, time.UTC)
+	n := 0
+	for _, c := range inner.calls {
+		if !march.Before(c.from) && march.Before(c.to) {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("March read %d times (reads %v), want once", n, inner.calls)
+	}
+}
+
+// stepClock is a clock a read can move forward.
+type stepClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *stepClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *stepClock) set(t time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = t
+}
+
+// TestSeriesCache_ReadCrossingFinalityIsNotCached: a read that starts at
+// 12:59:30 sees an hour that turns final at 13:00; if it ends after 13:00 the
+// block may hold the pre-final value and must not be cached.
+func TestSeriesCache_ReadCrossingFinalityIsNotCached(t *testing.T) {
+	clk := &stepClock{t: seriesNow.Add(59*time.Minute + 30*time.Second)}
+	inner, cache := &fakeSeries{}, newFakeLockedCache()
+	inner.onRead = func() { clk.set(seriesNow.Add(60*time.Minute + 15*time.Second)) }
+	r := NewCachingSeriesReader(inner, cache, clk, seriesOpts())
+	from := seriesNow.Add(-48 * time.Hour)
+	got, err := r.ReadSeries(context.Background(), "ecmwf_ifs", "t", []uint64{1}, from, from.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkSeries(t, got, from, from.Add(time.Hour))
+	if cache.sets != 0 {
+		t.Errorf("a block read across a finality boundary was cached (TTL %v)", cache.setTTL)
+	}
 }

@@ -72,7 +72,9 @@ day — so maturity only decides how long something is cached:
   holds by then. An archive month still holding young hours expires sooner if
   one of them turns final first (at the next whole hour), so a result cached
   for a year as final is never computed from a value read while its hour was
-  still being revised.
+  still being revised. A read that crosses that moment is not cached at all,
+  and results count as final only ten minutes after their hour does, so a
+  result computed from a block served just before the moment stays short-lived.
 
 Concurrent misses for the same month of the same cell — nearby points in one
 batch, typically — share a single upstream read.
