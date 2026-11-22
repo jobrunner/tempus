@@ -32,8 +32,14 @@ memory. Measured against the bucket:
 | Read | Range requests | Cost |
 |---|---|---|
 | One weather day for one location | a few per model | tens of kB transferred |
-| 30 years for bioclim, cold | about 90 per variable | about 2.6 s |
-| 30 years for bioclim, metadata cached | one per file | about 1 s |
+| 30 years of one variable in one cell, cold | about 90 | about 2.6 s, 1.2 MB |
+| The same, metadata cached | one per file | about 1 s |
+
+A bioclim query reads 30 years of several variables, each from more than one
+model, in parallel; its end-to-end time is therefore a multiple of one series
+read and depends on `MAX_PARALLEL`. The series figures come from
+`TestLive_ThirtyYears` (see below) and are the thing to compare when the
+uplink changes.
 
 The knobs (see [Configure providers](configure-providers.md#providers-reanalysis-archive)):
 
