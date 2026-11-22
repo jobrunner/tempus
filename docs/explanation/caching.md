@@ -64,8 +64,10 @@ restart costs a few extra range requests, nothing more.
 
 Both backends are capped by `TEMPUS_CACHE_MAX_BYTES` (default 256 MiB; `0`
 means unbounded). Every entry records when it was last read; going over the cap
-evicts the least recently used entries until the cache is back at 90 % of the
-cap, so a full cache does not evict on every write. A year-long TTL is therefore
+evicts the least recently used entries. The bbolt backend evicts down to 90 %
+of the cap (best effort: the entry just written is never evicted), so a full
+disk cache does not run an eviction transaction on every write; the in-memory
+backend, where eviction is cheap, evicts just enough to fit. A year-long TTL is therefore
 an upper bound, not a promise: a result nobody asks for again gives way to ones
 that are.
 

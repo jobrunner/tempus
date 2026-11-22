@@ -1,77 +1,10 @@
 package bolt
 
 import (
-	"bytes"
 	"encoding/binary"
-	"math"
 
 	bolt "go.etcd.io/bbolt"
 )
-
-// Layout:
-//
-//	entries: key → exp (8) | atime (8) | value   (unix nanoseconds, big-endian)
-//	lru:     atime (8) | key → ∅                 (iterates oldest access first)
-//	meta:    "bytes" → accounted size (8)
-var (
-	entriesBucket = []byte("entries")
-	lruBucket     = []byte("lru")
-	metaBucket    = []byte("meta")
-	bytesKey      = []byte("bytes")
-
-	// legacyBucket held the uncapped format (exp | value, no index).
-	legacyBucket = []byte("cache")
-)
-
-const headerLen = 16
-
-type header struct{ exp, atime int64 }
-
-func (h header) expired(now int64) bool { return h.exp != 0 && now > h.exp }
-
-// toU64 and toI64 convert timestamps and byte counts, which are never
-// negative, between the int64 the code computes with and the uint64 it stores.
-func toU64(v int64) uint64 {
-	if v < 0 {
-		return 0
-	}
-	return uint64(v)
-}
-
-func toI64(v uint64) int64 {
-	if v > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(v)
-}
-
-func decodeHeader(rec []byte) header {
-	return header{
-		exp:   toI64(binary.BigEndian.Uint64(rec[:8])),
-		atime: toI64(binary.BigEndian.Uint64(rec[8:16])),
-	}
-}
-
-func encodeRecord(h header, value []byte) []byte {
-	rec := make([]byte, headerLen+len(value))
-	binary.BigEndian.PutUint64(rec[:8], toU64(h.exp))
-	binary.BigEndian.PutUint64(rec[8:16], toU64(h.atime))
-	copy(rec[headerLen:], value)
-	return rec
-}
-
-func indexKey(atime int64, key []byte) []byte {
-	ik := make([]byte, 8+len(key))
-	binary.BigEndian.PutUint64(ik[:8], toU64(atime))
-	copy(ik[8:], key)
-	return ik
-}
-
-// entryCost is what one entry accounts for: the record under its key plus
-// its index key.
-func entryCost(key []byte, valueLen int) int64 {
-	return int64(len(key) + headerLen + valueLen + 8 + len(key))
-}
 
 func prepare(tx *bolt.Tx) error {
 	if tx.Bucket(legacyBucket) != nil {
@@ -156,34 +89,4 @@ func touch(tx *bolt.Tx, key []byte, now int64) error {
 	}
 	h.atime = now
 	return insert(tx, key, h, value)
-}
-
-// evict removes least recently used entries until the cache is at 90 % of
-// limit, so a full cache does not evict on every single Set. keep (the entry
-// just written, if any) is never evicted: Set only stores entries that fit
-// the cap, so evicting all others is enough, and the 90 % target is best
-// effort when keep alone exceeds it.
-func evict(tx *bolt.Tx, limit int64, keep []byte) error {
-	total := storedBytes(tx)
-	if limit <= 0 || total <= limit {
-		return nil
-	}
-	target := limit / 10 * 9
-	var victims [][]byte
-	entries := tx.Bucket(entriesBucket)
-	c := tx.Bucket(lruBucket).Cursor()
-	for ik, _ := c.First(); ik != nil && total > target; ik, _ = c.Next() {
-		if bytes.Equal(ik[8:], keep) {
-			continue
-		}
-		key := append([]byte(nil), ik[8:]...)
-		total -= entryCost(key, len(entries.Get(key))-headerLen)
-		victims = append(victims, key)
-	}
-	for _, key := range victims {
-		if err := remove(tx, key); err != nil {
-			return err
-		}
-	}
-	return nil
 }
