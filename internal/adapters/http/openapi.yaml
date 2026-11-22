@@ -56,7 +56,7 @@ paths:
         is returned, capped at query.batch.max_sync_points points (413 above
         that, with a hint to retry streaming). Invalid points become per-item
         error objects and never abort the batch. Points sharing a rounded
-        coordinate, elevation (whole metres), instant and options are fetched
+        coordinate, exact elevation, instant and options are fetched
         once. There is no upstream quota or daily budget: the weather,
         aggregate and bioclim providers read Open-Meteo's open-data bucket,
         bounded only by query.batch.concurrency and

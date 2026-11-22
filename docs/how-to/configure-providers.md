@@ -44,8 +44,8 @@ All configuration is via environment variables with the prefix `TEMPUS_`.
 | `TEMPUS_CACHE_TYPE` | `disk` | `disk`, `memory` |
 | `TEMPUS_CACHE_PATH` | `./data/cache.bolt` | File path for disk cache (bbolt) |
 
-The cache stores provider results keyed by (rounded coordinate, elevation in
-whole metres, hour); see [Caching model](../explanation/caching.md).
+The cache stores provider results keyed by (rounded coordinate, exact
+elevation, hour); see [Caching model](../explanation/caching.md).
 Cached results are served immediately and flagged with `"cached": true` in the
 provider status. This avoids repeat upstream calls for the same query inputs.
 

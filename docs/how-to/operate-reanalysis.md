@@ -73,11 +73,14 @@ the image).
   is read again, and bbolt never returns freed pages to the file system — the
   file stays at its high-water mark and reuses the space.
 - **Sizing:** plan the volume from the number of distinct keys your clients
-  produce. Weather and aggregate key on (coordinate rounded to 0.01°, elevation
-  in whole metres, hour), and aggregate additionally on a `gddBase` override;
-  bioclim keys on (coordinate rounded to 0.0001°, elevation, reference
+  produce. Weather and aggregate key on (coordinate rounded to 0.01°, exact
+  elevation, hour), and aggregate additionally on a `gddBase` override;
+  bioclim keys on (coordinate rounded to 0.0001°, exact elevation, reference
   period) — about 11 m apart, so dense spatial bioclim queries produce far
-  more entries than the same points for weather. To
+  more entries than the same points for weather. The elevation is not
+  rounded: 182.6 m and 182.7 m are two entries, so clients sending
+  fractional GNSS heights grow the cache faster than ones sending whole
+  metres. To
   reclaim space, stop tempus and delete the file; it is a cache, nothing in it
   is authoritative. `TEMPUS_CACHE_TYPE=memory` avoids the file entirely at the
   price of a cold cache after every restart.

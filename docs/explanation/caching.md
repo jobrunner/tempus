@@ -17,7 +17,8 @@ aggregate providers) derives its key from:
    bumping the version retires every old entry. The current version (`2`)
    ignores all entries computed from the former Open-Meteo API.
 2. **Coordinate rounded to 0.01°** (about 1 km) — nearby points share an entry.
-3. **Elevation rounded to whole metres** — it selects the model cell and drives
+3. **Elevation, exactly as sent** (not rounded; 182.6 m and 182.7 m are two
+   entries) — it selects the model cell and drives
    the lapse-rate correction, so two heights at the same coordinate are
    different results (see [Data source](data-source.md)).
 4. **Instant** — truncated to the hour when the request is parsed, so
@@ -25,10 +26,10 @@ aggregate providers) derives its key from:
 5. **Provider parameters** — e.g. the aggregate provider's `gddBase`.
 
 The bioclim provider keeps its own entries, keyed by the coordinate rounded to
-0.0001°, the elevation in whole metres and the reference period (not the
+0.0001°, the exact elevation and the reference period (not the
 instant), cached for one year.
 
-Batch deduplication uses the same rounding of coordinate and elevation, so
+Batch deduplication uses the same coordinate rounding and exact elevation, so
 points that would share a cache entry are also fetched only once within a
 batch.
 
