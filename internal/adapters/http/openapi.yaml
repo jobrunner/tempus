@@ -55,9 +55,8 @@ paths:
         Accept: application/x-ndjson; otherwise a synchronous JSON envelope
         is returned, capped at query.batch.max_sync_points points (413 above
         that, with a hint to retry streaming). Invalid points become per-item
-        error objects and never abort the batch. Points sharing a rounded
-        coordinate, elevation (whole metres), instant and options are fetched
-        once. There is no upstream quota or daily budget: the weather,
+        error objects and never abort the batch. Points sharing coordinate,
+        elevation, instant and options are fetched once. There is no upstream quota or daily budget: the weather,
         aggregate and bioclim providers read Open-Meteo's open-data bucket,
         bounded only by query.batch.concurrency and
         providers.reanalysis.max_parallel; an upstream failure surfaces as a

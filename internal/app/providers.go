@@ -21,9 +21,10 @@ import (
 )
 
 // buildReanalysis wires the reanalysis archive: the open-data store behind a
-// retrying (and, with tp, traced) transport, and the service that selects,
-// corrects and mixes the model series. Nil when the archive is disabled.
-func buildReanalysis(cfg *config.Config, tp trace.TracerProvider) output.Reanalysis {
+// retrying (and, with tp, traced) transport, its month blocks cached per
+// model cell, and the service that selects, corrects and mixes the model
+// series. Nil when the archive is disabled.
+func buildReanalysis(cfg *config.Config, cache output.Cache, clk output.Clock, tp trace.TracerProvider) output.Reanalysis {
 	r := cfg.Providers.Reanalysis
 	if !r.Enabled {
 		return nil
@@ -34,11 +35,18 @@ func buildReanalysis(cfg *config.Config, tp trace.TracerProvider) output.Reanaly
 		// still retries 5xx/network failures and traces each attempt.
 		Transport: bucketio.NewTransport(bucketio.Options{RetryAttempts: r.RetryAttempts, TracerProvider: tp}),
 	}
-	return reanalysis.NewService(omstore.New(omstore.Options{
+	store := omstore.New(omstore.Options{
 		BaseURL:     r.BaseURL,
 		HTTPClient:  client,
 		MaxParallel: r.MaxParallel,
 		ListTTL:     r.ListTTL,
+	})
+	return reanalysis.NewService(application.NewCachingSeriesReader(store, cache, clk, application.SeriesCacheOptions{
+		Version:     "1",
+		Maturity:    r.Maturity,
+		MatureTTL:   365 * 24 * time.Hour,
+		ImmatureTTL: time.Hour,
+		MaxSpan:     400 * 24 * time.Hour,
 	}))
 }
 
@@ -68,13 +76,7 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, arc
 	// key via KeyParams.
 	if cfg.Providers.Aggregate.Enabled {
 		agg := aggregate.New(aggregate.Options{Reanalysis: archive, Clock: clk})
-		registry.Register(application.NewCachingProvider(agg, cache, clk, cachingOptions(maturity,
-			func(req domain.QueryRequest) string {
-				if req.GDDBaseCelsius == nil {
-					return ""
-				}
-				return fmt.Sprintf("gdd=%.2f", *req.GDDBaseCelsius)
-			})))
+		registry.Register(application.NewCachingProvider(agg, cache, clk, cachingOptions(maturity, gddKeyParam)))
 	}
 
 	// Bioclim (19 BIO variables + Köppen-Geiger) from 30-year normals. Time-
@@ -87,16 +89,31 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, arc
 	return registry
 }
 
+// gddKeyParam puts the aggregate provider's per-request gddBase override
+// into its cache key.
+func gddKeyParam(req domain.QueryRequest) string {
+	if req.GDDBaseCelsius == nil {
+		return ""
+	}
+	return fmt.Sprintf("gdd=%.2f", *req.GDDBaseCelsius)
+}
+
 // cachingOptions: hours older than maturity are final and cached for a year;
 // younger ones (the archive's newest IFS hours are still revised) for an hour.
-// Version 2 retires every entry computed from the Open-Meteo API.
+// Version 3 keys on the exact point; version 2 entries (0.01° keys) carried
+// the geometry of whichever nearby point asked first.
+//
+// Results turn final ten minutes after the maturity the series cache uses.
+// An archive block is never served once one of its hours has turned final,
+// but a result computed from it just before that moment is written moments
+// after; the margin keeps such a result on the short TTL. It only has to
+// exceed one query (query.timeout), not a fill.
 func cachingOptions(maturity time.Duration, keyParams func(domain.QueryRequest) string) application.CachingOptions {
 	return application.CachingOptions{
-		Version:         "2",
-		ArchiveDelay:    maturity,
-		MatureTTL:       365 * 24 * time.Hour,
-		ImmatureTTL:     time.Hour,
-		LatLonPrecision: 2,
-		KeyParams:       keyParams,
+		Version:      "3",
+		ArchiveDelay: maturity + 10*time.Minute,
+		MatureTTL:    365 * 24 * time.Hour,
+		ImmatureTTL:  time.Hour,
+		KeyParams:    keyParams,
 	}
 }
