@@ -99,7 +99,7 @@ Die vollständige Dokumentation liegt in [`docs/`](docs/index.md) und ist nach
 | Abschnitt | Inhalt |
 |---|---|
 | [Tutorials](docs/tutorials/index.md) | Erste Schritte: Dienst starten, erste Abfrage |
-| [How-to](docs/how-to/index.md) | Rezepte: lokal betreiben, historisches Wetter abfragen, Provider konfigurieren |
+| [How-to](docs/how-to/index.md) | Rezepte: lokal betreiben, historisches Wetter abfragen, Provider konfigurieren, Reanalyse-Archiv betreiben |
 | [Reference](docs/reference/http-api.md) | HTTP-API, Konfigurationsschlüssel, Observability |
 | [Explanation](docs/explanation/architecture.md) | Architektur, Datenquelle, Retry-Semantik, Caching-Modell |
 
@@ -109,6 +109,7 @@ Die vollständige Dokumentation liegt in [`docs/`](docs/index.md) und ist nach
 make verify   # fmt, vet, lint, Tests, Architektur- und Debt-Gates
 make test     # nur Tests
 make docs     # Dokumentations-Site bauen
+make om-conformance  # opt-in, live: Abgleich mit der Open-Meteo-Archiv-API
 ```
 
 Gebaut mit Go 1.26 in hexagonaler Architektur (Ports und Adapter); die
