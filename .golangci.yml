@@ -47,13 +47,13 @@ linters:
             - '**/internal/adapters/**'
           # lax: everything not denied is allowed, and an allow entry more
           # specific than a deny wins. Two exceptions, both plumbing rather
-          # than ports: omhttp — the shared HTTP transport (throttling,
-          # retries, GetJSON) — and omfile — the pure OM file codec (no I/O)
+          # than ports: bucketio — the shared HTTP transport to the open-data
+          # bucket (retries, tracing) — and omfile — the pure OM file codec (no I/O)
           # the open-data store decodes with. The trailing $ makes each an
           # exact match, so no sibling slips through.
           list-mode: lax
           allow:
-            - github.com/jobrunner/tempus/internal/adapters/omhttp$
+            - github.com/jobrunner/tempus/internal/adapters/bucketio$
             - github.com/jobrunner/tempus/internal/adapters/omfile$
           deny:
             - pkg: github.com/jobrunner/tempus/internal/application

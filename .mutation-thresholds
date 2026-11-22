@@ -18,7 +18,7 @@
 # wird, wird ignoriert. Aspirative Schwellen sind genau das, was den Zustand
 # oben erzeugt hat.
 #
-# AUSREISSER MIT MEHR LUFT: internal/adapters/omhttp schwankt zwischen Laeufen
+# AUSREISSER MIT MEHR LUFT: internal/adapters/bucketio (vormals omhttp) schwankt zwischen Laeufen
 # spuerbar (gemessen 85,71 % und 80,00 % an aufeinanderfolgenden CI-Laeufen, 3
 # bzw. 4 ueberlebende Mutanten). Es ist ein HTTP-Client-Adapter mit
 # timing-sensitiven Tests; ein Mutant, der in einem Lauf ins Timeout geht,
@@ -73,9 +73,9 @@ internal/adapters/dewpoint              80           82
 internal/adapters/http                  97           89
 internal/adapters/metrics               37           80
 internal/adapters/omfile                88           91
-internal/adapters/omhttp                76           93
+internal/adapters/bucketio              76           93
 internal/adapters/omstore               83           93
-internal/adapters/openmeteo             66           76
+internal/adapters/weather               66           76
 internal/adapters/reanalysis            93           82
 internal/adapters/telemetry             17           97
 internal/app                            37           88
