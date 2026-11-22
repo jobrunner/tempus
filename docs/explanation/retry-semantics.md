@@ -25,8 +25,9 @@ This is an intentional design decision that enables **idempotent clients**:
 ## The `retryable` flag
 
 When `status` is `unavailable`, `retryable: true` signals that a later retry
-**should** produce a result. The optional `retryAfter` field carries an RFC 3339
-timestamp as a hint for when to retry. In the absence of `retryAfter`, clients
+**should** produce a result. The optional `retryAfter` field carries a Go duration
+string (e.g. `"30s"`, `"2h0m0s"`) as a hint for how long to wait before
+retrying. In the absence of `retryAfter`, clients
 should apply exponential back-off starting from a few seconds.
 
 When `status` is `error`, `retryable` will be `false` (or absent). Retrying will
@@ -39,7 +40,7 @@ repeat:
   result = GET /api/v1/query?...
   for each provider in result.providers:
     if provider.retryable:
-      wait until max(now + backoff, provider.retryAfter)
+      wait max(backoff, provider.retryAfter)
       goto repeat
   return result   # all providers either ok or permanently errored
 ```
