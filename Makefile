@@ -1,6 +1,6 @@
 .PHONY: all build run test test-coverage lint vet fmt fmt-check arch debt \
         debt-guard debt-coverage mutation codecharta verify docs docs-serve docs-openapi-check \
-        doc-drift hooks security vuln licenses release-dry harness help
+        doc-drift hooks security vuln licenses release-dry harness om-conformance help
 
 BINARY_NAME := tempus
 MODULE      := github.com/jobrunner/tempus
@@ -34,6 +34,12 @@ test-coverage: ## Tests with coverage report
 	@mkdir -p $(COVERAGE_DIR)
 	$(GO) test -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./...
 	$(GO) tool cover -func=$(COVERAGE_DIR)/coverage.out
+
+## Conformance (opt-in, live): the open-data bucket and the Open-Meteo archive
+## API are both public and anonymous; no secrets needed.
+om-conformance: ## Live check: bucket reads + tempus vs. the Open-Meteo archive API (TEMPUS_OM_POINTS=n, default 20)
+	TEMPUS_OM_LIVE=1 $(GO) test -run 'Live|Conformance' -count=1 -v -timeout 60m \
+		./internal/adapters/omstore/ ./internal/adapters/reanalysis/
 
 ## Lint / format
 lint: ## golangci-lint

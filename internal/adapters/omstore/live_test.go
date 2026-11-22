@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/jobrunner/tempus/internal/adapters/omhttp"
 )
 
 // TestLive_ThirtyYears reads 1991–2020 hourly temperature for one ERA5 cell
@@ -15,7 +17,10 @@ func TestLive_ThirtyYears(t *testing.T) {
 	if os.Getenv("TEMPUS_OM_LIVE") != "1" {
 		t.Skip("set TEMPUS_OM_LIVE=1 to read from the public bucket")
 	}
-	s := New(Options{BaseURL: "https://openmeteo.s3.amazonaws.com", HTTPClient: &http.Client{Timeout: 30 * time.Second}, MaxParallel: 32})
+	// The retrying transport of the composition root: a reset connection is
+	// retried as in production instead of failing the run.
+	client := &http.Client{Timeout: 30 * time.Second, Transport: omhttp.NewTransport(omhttp.Options{RetryAttempts: 3})}
+	s := New(Options{BaseURL: "https://openmeteo.s3.amazonaws.com", HTTPClient: client, MaxParallel: 32})
 	from := time.Date(1991, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, run := range []string{"cold", "warm"} {
