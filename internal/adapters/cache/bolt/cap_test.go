@@ -175,3 +175,62 @@ func TestBoltCache_ValueExactlyAtCapIsStored(t *testing.T) {
 		t.Error("an entry exactly at the cap must be stored")
 	}
 }
+
+func TestBoltCache_ReopenWithLowerCapTrims(t *testing.T) {
+	clk := &fakeClock{t: time.Unix(1_700_000_000, 0)}
+	path := filepath.Join(t.TempDir(), "c.bolt")
+	c := openCapped(t, path, 0, clk)
+	for i := range 10 {
+		clk.advance(time.Second)
+		_ = c.Set(context.Background(), fmt.Sprintf("k%d", i), value(1000), 0)
+	}
+	_ = c.Close()
+
+	c = openCapped(t, path, 5_000, clk)
+	defer c.Close()
+	if got := c.Bytes(); got > 5_000 {
+		t.Errorf("bytes after reopen with a lower cap = %d, want <= 5000", got)
+	}
+	if _, ok, _ := c.Get(context.Background(), "k9"); !ok {
+		t.Error("most recent entry must survive the trim")
+	}
+}
+
+// TestBoltCache_EntryAtCapEvictsOthersNotItself: an entry exactly at the cap
+// exceeds the 90 % target on its own; it must evict the rest, not itself.
+func TestBoltCache_EntryAtCapEvictsOthersNotItself(t *testing.T) {
+	clk := &fakeClock{t: time.Unix(1_700_000_000, 0)}
+	c := openCapped(t, filepath.Join(t.TempDir(), "c.bolt"), 1_000, clk)
+	defer c.Close()
+	ctx := context.Background()
+	_ = c.Set(ctx, "old", value(100), 0)
+	clk.advance(time.Second)
+	_ = c.Set(ctx, "k", value(int(1_000-entryCost([]byte("k"), 0))), 0)
+	if _, ok, _ := c.Get(ctx, "k"); !ok {
+		t.Error("the entry just written must be kept")
+	}
+	if _, ok, _ := c.Get(ctx, "old"); ok {
+		t.Error("older entry must make room")
+	}
+	if got := c.Bytes(); got != 1_000 {
+		t.Errorf("bytes = %d, want 1000", got)
+	}
+}
+
+// TestBoltCache_StaleTouchDoesNotRewind: a touch computed from an older
+// clock reading must not move the access time backwards.
+func TestBoltCache_StaleTouchDoesNotRewind(t *testing.T) {
+	clk := &fakeClock{t: time.Unix(1_700_000_000, 0)}
+	c := openCapped(t, filepath.Join(t.TempDir(), "c.bolt"), 0, clk)
+	defer c.Close()
+	_ = c.Set(context.Background(), "k", value(10), 0)
+	setAt := clk.t.UnixNano()
+
+	_ = c.db.Update(func(tx *bolt.Tx) error { return touch(tx, []byte("k"), setAt-int64(2*touchInterval)) })
+	_ = c.db.View(func(tx *bolt.Tx) error {
+		if got := decodeHeader(tx.Bucket(entriesBucket).Get([]byte("k"))).atime; got != setAt {
+			t.Errorf("atime = %d, want %d (not rewound)", got, setAt)
+		}
+		return nil
+	})
+}

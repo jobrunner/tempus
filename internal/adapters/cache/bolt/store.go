@@ -1,6 +1,7 @@
 package bolt
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 
@@ -136,13 +137,20 @@ func removeIfExpired(tx *bolt.Tx, key []byte, now int64) error {
 	return remove(tx, key)
 }
 
-// touch moves key to the most recently used end.
+// touch moves key to the most recently used end. It re-checks the access
+// time inside the write transaction: concurrent readers that all saw the same
+// stale time rewrite the entry once, and a delayed touch never moves the time
+// backwards past a newer touch or Set.
 func touch(tx *bolt.Tx, key []byte, now int64) error {
 	rec := tx.Bucket(entriesBucket).Get(key)
 	if len(rec) < headerLen {
 		return nil
 	}
-	h, value := decodeHeader(rec), append([]byte(nil), rec[headerLen:]...)
+	h := decodeHeader(rec)
+	if now-h.atime < int64(touchInterval) {
+		return nil
+	}
+	value := append([]byte(nil), rec[headerLen:]...)
 	if err := remove(tx, key); err != nil {
 		return err
 	}
@@ -151,8 +159,11 @@ func touch(tx *bolt.Tx, key []byte, now int64) error {
 }
 
 // evict removes least recently used entries until the cache is at 90 % of
-// limit, so a full cache does not evict on every single Set.
-func evict(tx *bolt.Tx, limit int64) error {
+// limit, so a full cache does not evict on every single Set. keep (the entry
+// just written, if any) is never evicted: Set only stores entries that fit
+// the cap, so evicting all others is enough, and the 90 % target is best
+// effort when keep alone exceeds it.
+func evict(tx *bolt.Tx, limit int64, keep []byte) error {
 	total := storedBytes(tx)
 	if limit <= 0 || total <= limit {
 		return nil
@@ -162,6 +173,9 @@ func evict(tx *bolt.Tx, limit int64) error {
 	entries := tx.Bucket(entriesBucket)
 	c := tx.Bucket(lruBucket).Cursor()
 	for ik, _ := c.First(); ik != nil && total > target; ik, _ = c.Next() {
+		if bytes.Equal(ik[8:], keep) {
+			continue
+		}
 		key := append([]byte(nil), ik[8:]...)
 		total -= entryCost(key, len(entries.Get(key))-headerLen)
 		victims = append(victims, key)

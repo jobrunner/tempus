@@ -38,7 +38,8 @@ type Cache struct {
 }
 
 // Open opens (creating parent dirs and buckets as needed) the cache at path.
-// A file written by the uncapped format is emptied: it is a cache.
+// A file written by the uncapped format is emptied: it is a cache. A file
+// over opts.MaxBytes (written under a larger cap) is trimmed right away.
 func Open(path string, opts Options) (*Cache, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -49,7 +50,12 @@ func Open(path string, opts Options) (*Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Update(prepare); err != nil {
+	if err := db.Update(func(tx *bolt.Tx) error {
+		if err := prepare(tx); err != nil {
+			return err
+		}
+		return evict(tx, opts.MaxBytes, nil)
+	}); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -122,6 +128,6 @@ func (c *Cache) Set(_ context.Context, key string, value []byte, ttl time.Durati
 		if err := insert(tx, k, h, value); err != nil {
 			return err
 		}
-		return evict(tx, c.max)
+		return evict(tx, c.max, k)
 	})
 }
