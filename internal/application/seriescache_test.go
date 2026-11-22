@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"sync"
 	"testing"
 	"time"
 )
@@ -207,4 +208,89 @@ func (n nanSeries) ReadSeries(_ context.Context, _, _ string, _ []uint64, from, 
 		out[i] = n.v
 	}
 	return out, nil
+}
+
+// TestSeriesCache_ImmatureBlockExpiresWhenItsNextHourTurnsFinal: a block read
+// at 12:20 holds hours that turn final at 13:00; it must not outlive that, or
+// a year-long result could be computed from a pre-final value.
+func TestSeriesCache_ImmatureBlockExpiresWhenItsNextHourTurnsFinal(t *testing.T) {
+	inner, cache := &fakeSeries{}, newFakeCache()
+	now := seriesNow.Add(20 * time.Minute)
+	r := NewCachingSeriesReader(inner, cache, fixedClock{now}, seriesOpts())
+	from := seriesNow.Add(-48 * time.Hour)
+	if _, err := r.ReadSeries(context.Background(), "ecmwf_ifs", "t", []uint64{1}, from, from.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if cache.setTTL != 40*time.Minute {
+		t.Errorf("TTL = %v, want 40m (until 13:00, when the next hour turns final)", cache.setTTL)
+	}
+}
+
+// blockingSeries holds every read until release is closed.
+type blockingSeries struct {
+	fakeSeries
+	mu      sync.Mutex
+	release chan struct{}
+}
+
+func (b *blockingSeries) ReadSeries(ctx context.Context, d, v string, c []uint64, from, to time.Time) ([]float32, error) {
+	<-b.release
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.fakeSeries.ReadSeries(ctx, d, v, c, from, to)
+}
+
+func TestSeriesCache_ConcurrentMissesShareOneRead(t *testing.T) {
+	inner := &blockingSeries{release: make(chan struct{})}
+	r := NewCachingSeriesReader(inner, newFakeLockedCache(), fixedClock{seriesNow}, seriesOpts())
+	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Go(func() {
+			got, err := r.ReadSeries(context.Background(), "era5", "t", []uint64{1}, from, from.Add(24*time.Hour))
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			checkSeries(t, got, from, from.Add(24*time.Hour))
+		})
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(inner.release)
+	wg.Wait()
+	if n := len(inner.calls); n != 1 {
+		t.Errorf("inner reads = %d, want 1 (concurrent misses coalesced)", n)
+	}
+}
+
+func TestSeriesCache_WaiterHonoursItsOwnContext(t *testing.T) {
+	inner := &blockingSeries{release: make(chan struct{})}
+	defer close(inner.release)
+	r := NewCachingSeriesReader(inner, newFakeLockedCache(), fixedClock{seriesNow}, seriesOpts())
+	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := r.ReadSeries(ctx, "era5", "t", []uint64{1}, from, from.Add(time.Hour)); !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
+	}
+}
+
+// lockedCache is fakeCache safe for concurrent use.
+type lockedCache struct {
+	mu sync.Mutex
+	*fakeCache
+}
+
+func newFakeLockedCache() *lockedCache { return &lockedCache{fakeCache: newFakeCache()} }
+
+func (c *lockedCache) Get(ctx context.Context, k string) ([]byte, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.fakeCache.Get(ctx, k)
+}
+
+func (c *lockedCache) Set(ctx context.Context, k string, v []byte, ttl time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.fakeCache.Set(ctx, k, v, ttl)
 }

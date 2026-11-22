@@ -69,7 +69,13 @@ day — so maturity only decides how long something is cached:
 - Instants (and archive months whose last hour is) **older than
   `TEMPUS_PROVIDERS_REANALYSIS_MATURITY`** (default 72 h) → cached for a year.
 - Younger ones → cached for an hour, then re-read with whatever the archive
-  holds by then.
+  holds by then. An archive month still holding young hours expires sooner if
+  one of them turns final first (at the next whole hour), so a result cached
+  for a year as final is never computed from a value read while its hour was
+  still being revised.
+
+Concurrent misses for the same month of the same cell — nearby points in one
+batch, typically — share a single upstream read.
 
 Errors (including "not yet available" for an hour the archive has not filled
 in) are never cached.

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jobrunner/tempus/internal/ports/output"
@@ -32,10 +33,11 @@ type SeriesCacheOptions struct {
 // is cheap and stays exact for the requested point; this is the expensive
 // part, and every point in the same model cell shares it.
 type CachingSeriesReader struct {
-	inner output.SeriesReader
-	cache output.Cache
-	clock output.Clock
-	opts  SeriesCacheOptions
+	inner  output.SeriesReader
+	cache  output.Cache
+	clock  output.Clock
+	opts   SeriesCacheOptions
+	flight seriesFlight
 }
 
 var _ output.SeriesReader = (*CachingSeriesReader)(nil)
@@ -76,23 +78,61 @@ func (c *CachingSeriesReader) ReadSeries(ctx context.Context, domain, variable s
 }
 
 // fill reads the adjacent months upstream in one call and caches each.
+// Concurrent fills of the same months share one upstream read: nearby
+// points of a batch land in the same cells and would otherwise each read
+// the same month.
 func (c *CachingSeriesReader) fill(ctx context.Context, domain, variable string, coord []uint64, months []time.Time, blocks [][]float32) error {
-	end := nextMonth(months[len(months)-1])
-	vals, err := c.inner.ReadSeries(ctx, domain, variable, coord, months[0], end)
+	last := months[len(months)-1]
+	key := c.key(domain, variable, coord, months[0]) + "…" + last.Format("2006-01")
+	vals, err := c.flight.do(ctx, key, func(ctx context.Context) ([]float32, error) {
+		return c.readMonths(ctx, domain, variable, coord, months)
+	})
 	if err != nil {
 		return err
-	}
-	if len(vals) != hoursBetween(months[0], end) {
-		return fmt.Errorf("series cache: %s/%s: read %d hours, want %d", domain, variable, len(vals), hoursBetween(months[0], end))
 	}
 	off := 0
 	for i, m := range months {
 		n := hoursBetween(m, nextMonth(m))
 		blocks[i] = vals[off : off+n]
 		off += n
-		_ = c.cache.Set(ctx, c.key(domain, variable, coord, m), encodeFloats(blocks[i]), c.ttlFor(nextMonth(m)))
 	}
 	return nil
+}
+
+// readMonths reads the months upstream and caches each. It first re-checks
+// the cache: a fill that finished just before this one started has them.
+func (c *CachingSeriesReader) readMonths(ctx context.Context, domain, variable string, coord []uint64, months []time.Time) ([]float32, error) {
+	end := nextMonth(months[len(months)-1])
+	if vals, ok := c.loadAll(ctx, domain, variable, coord, months); ok {
+		return vals, nil
+	}
+	vals, err := c.inner.ReadSeries(ctx, domain, variable, coord, months[0], end)
+	if err != nil {
+		return nil, err
+	}
+	if len(vals) != hoursBetween(months[0], end) {
+		return nil, fmt.Errorf("series cache: %s/%s: read %d hours, want %d", domain, variable, len(vals), hoursBetween(months[0], end))
+	}
+	off := 0
+	for _, m := range months {
+		n := hoursBetween(m, nextMonth(m))
+		_ = c.cache.Set(ctx, c.key(domain, variable, coord, m), encodeFloats(vals[off:off+n]), c.ttlFor(nextMonth(m)))
+		off += n
+	}
+	return vals, nil
+}
+
+// loadAll returns the months joined when every one of them is cached.
+func (c *CachingSeriesReader) loadAll(ctx context.Context, domain, variable string, coord []uint64, months []time.Time) ([]float32, bool) {
+	var out []float32
+	for _, m := range months {
+		b := c.load(ctx, c.key(domain, variable, coord, m), m)
+		if b == nil {
+			return nil, false
+		}
+		out = append(out, b...)
+	}
+	return out, true
 }
 
 // load returns the cached month, or nil on a miss or an unusable entry.
@@ -105,11 +145,18 @@ func (c *CachingSeriesReader) load(ctx context.Context, key string, month time.T
 }
 
 // ttlFor: a month is final once its last hour is older than the maturity.
+// A month still holding younger hours expires no later than the moment the
+// next of them turns final (the next whole hour past now − maturity): the
+// result cache keeps a result for a final hour for a year, so it must never
+// be computed from a block read while that hour was still being revised.
+// This assumes a maturity of whole hours, as hours are the archive's unit.
 func (c *CachingSeriesReader) ttlFor(monthEnd time.Time) time.Duration {
-	if c.clock.Now().UTC().Sub(monthEnd) >= c.opts.Maturity {
+	now := c.clock.Now().UTC()
+	if now.Sub(monthEnd) >= c.opts.Maturity {
 		return c.opts.MatureTTL
 	}
-	return c.opts.ImmatureTTL
+	nextFinal := now.Add(-c.opts.Maturity).Truncate(time.Hour).Add(time.Hour + c.opts.Maturity)
+	return min(c.opts.ImmatureTTL, nextFinal.Sub(now))
 }
 
 func (c *CachingSeriesReader) key(domain, variable string, coord []uint64, month time.Time) string {
@@ -121,6 +168,54 @@ func (c *CachingSeriesReader) key(domain, variable string, coord []uint64, month
 		c.opts.Version, domain, variable, strings.Join(parts, ","), month.Format("2006-01"))
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
+}
+
+// seriesFlightTimeout bounds a shared fill. It runs detached from the caller
+// that started it, so one caller giving up never fails the others.
+const seriesFlightTimeout = 2 * time.Minute
+
+// seriesFlight collapses concurrent fills with the same key into one.
+type seriesFlight struct {
+	mu    sync.Mutex
+	calls map[string]*seriesCall
+}
+
+type seriesCall struct {
+	done chan struct{}
+	vals []float32
+	err  error
+}
+
+// do runs fn once per key at a time; every caller waits only as long as its
+// own context allows.
+func (g *seriesFlight) do(ctx context.Context, key string, fn func(context.Context) ([]float32, error)) ([]float32, error) {
+	g.mu.Lock()
+	if g.calls == nil {
+		g.calls = map[string]*seriesCall{}
+	}
+	call, ok := g.calls[key]
+	if !ok {
+		call = &seriesCall{done: make(chan struct{})}
+		g.calls[key] = call
+		go g.run(context.WithoutCancel(ctx), key, call, fn)
+	}
+	g.mu.Unlock()
+	select {
+	case <-call.done:
+		return call.vals, call.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (g *seriesFlight) run(detached context.Context, key string, call *seriesCall, fn func(context.Context) ([]float32, error)) {
+	ctx, cancel := context.WithTimeout(detached, seriesFlightTimeout)
+	defer cancel()
+	call.vals, call.err = fn(ctx)
+	g.mu.Lock()
+	delete(g.calls, key)
+	g.mu.Unlock()
+	close(call.done)
 }
 
 func monthsCovering(from, to time.Time) []time.Time {
