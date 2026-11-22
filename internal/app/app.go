@@ -67,9 +67,9 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 func buildCache(cfg config.CacheConfig) (output.Cache, func() error, error) {
 	switch cfg.Type {
 	case cacheTypeMemory:
-		return memcache.New(), nil, nil
+		return memcache.New(cfg.MaxBytes), nil, nil
 	default: // "disk" or anything else
-		c, err := boltcache.Open(cfg.Path)
+		c, err := boltcache.Open(cfg.Path, boltcache.Options{MaxBytes: cfg.MaxBytes})
 		if err != nil {
 			return nil, nil, err
 		}

@@ -111,6 +111,7 @@ Two caveats worth knowing before turning it on:
 |---|---|---|
 | `TEMPUS_CACHE_TYPE` | `disk` | `disk` (bbolt) or `memory` |
 | `TEMPUS_CACHE_PATH` | `./data/cache.bolt` | Path for the disk cache file |
+| `TEMPUS_CACHE_MAX_BYTES` | `268435456` | Size cap in bytes for either cache type; going over it evicts the least recently used entries (down to 90 %). `0` or negative = unbounded. The bbolt file does not shrink: freed pages are reused, so it settles slightly above the cap |
 
 ## Query
 
