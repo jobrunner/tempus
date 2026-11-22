@@ -9,7 +9,7 @@ internal/application                                  89
 internal/config                                       86
 internal/adapters/cache/memory                        92
 internal/adapters/cache/bolt                          81
-internal/adapters/openmeteo                           84
+internal/adapters/weather                             84
 internal/adapters/omfile                              91
 internal/adapters/omstore                             84
 internal/adapters/reanalysis                          84
