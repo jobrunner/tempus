@@ -5,25 +5,14 @@
 
 ### Features
 
-* **cache:** cap the cache in bytes and evict least recently used entries ([ca3f3a3](https://github.com/jobrunner/tempus/commit/ca3f3a33e5917e55c5196c7cd199a39bf15038fb))
-* **cache:** cap the cache in bytes and evict least recently used entries ([f5874f6](https://github.com/jobrunner/tempus/commit/f5874f619f18924ec700da04b8fde4e0185d52bf))
+* **cache:** cap the cache in bytes and evict least recently used entries; new `TEMPUS_CACHE_MAX_BYTES`, default 256 MiB ([#104](https://github.com/jobrunner/tempus/pull/104))
 
 
 ### Bug Fixes
 
-* **astronomy:** let consecutive local days share their bounds ([01b06d5](https://github.com/jobrunner/tempus/commit/01b06d51d0880d9e19f05ce8038be8d15b1ded1d))
-* **astronomy:** return sun and moon events for the local day of the instant ([6c8cdcd](https://github.com/jobrunner/tempus/commit/6c8cdcd66fe90caf1ccc18ea7bd1f82d3b73dc2e))
-* **astronomy:** return sun and moon events for the local day of the instant ([3bd727f](https://github.com/jobrunner/tempus/commit/3bd727fa7d9fbcfcfa105e68c1dca8ebfc8e0a0a)), closes [#102](https://github.com/jobrunner/tempus/issues/102)
-* **cache:** cache archive reads per model cell and key results on the exact point ([0ca61db](https://github.com/jobrunner/tempus/commit/0ca61db1c3fe11a60aeb8ba717c24df786842b77))
-* **cache:** cache archive reads per model cell and key results on the exact point ([3e431fd](https://github.com/jobrunner/tempus/commit/3e431fd9ede2f9b1c05fb84617687d5565e5d5e1))
-* **cache:** expire young archive months when their next hour turns final and share concurrent fills ([4cbfa72](https://github.com/jobrunner/tempus/commit/4cbfa725b6d4415d4eb73fe0102b98b71f3a057c))
-* **cache:** let a negative TTL remove what the key held ([dc75703](https://github.com/jobrunner/tempus/commit/dc757035e3c17b750239bb6338625ae3cdf87e4d))
-* **cache:** one reader per archive month, freshness fixed before the read ([aa3a1cf](https://github.com/jobrunner/tempus/commit/aa3a1cfb06ec157d32001f4fd534298923ec15b5))
-* **cache:** skip copying expired values and say the cap is not a file size ([dd018a4](https://github.com/jobrunner/tempus/commit/dd018a40f2080a6d0b6d77be455386f89a912135))
-* **cache:** store nothing for a negative TTL ([6ded543](https://github.com/jobrunner/tempus/commit/6ded5430a34a0b488629a93d85905f24d9bd90cd))
-* **cache:** trim on open, keep the entry just written, never rewind access times ([4f48557](https://github.com/jobrunner/tempus/commit/4f4855773b99ecf68875fb90af9a4f32d934319d))
-* **deps:** patch x/net and the runtime image's Alpine packages ([67eb48d](https://github.com/jobrunner/tempus/commit/67eb48de65f899f78d2ca4ef1826df294f4091c5))
-* **deps:** patch x/net and the runtime image's Alpine packages ([42ef830](https://github.com/jobrunner/tempus/commit/42ef830f7ae61a5420217a0958f03752feca309e)), closes [#99](https://github.com/jobrunner/tempus/issues/99)
+* **astronomy:** return sun and moon events for the local day of the instant, not its UTC calendar day ([#106](https://github.com/jobrunner/tempus/pull/106)), closes [#102](https://github.com/jobrunner/tempus/issues/102)
+* **cache:** cache archive reads per model cell and key results on the exact point; nearby points no longer get each other's feature ([#105](https://github.com/jobrunner/tempus/pull/105))
+* **deps:** patch x/net and the runtime image's Alpine packages ([#108](https://github.com/jobrunner/tempus/pull/108)), closes [#99](https://github.com/jobrunner/tempus/issues/99)
 
 ## [0.26.0](https://github.com/jobrunner/tempus/compare/v0.25.1...v0.26.0) (2026-11-21)
 
