@@ -65,31 +65,32 @@ the place to look when a query is slow.
 
 ## Disk and memory
 
-The archive is **not** mirrored. tempus writes exactly one file: the result
+The archive is **not** mirrored wholesale. tempus writes exactly one file: the
 cache (`TEMPUS_CACHE_PATH`, default `./data/cache.bolt`, `/data/cache.bolt` in
-the image).
+the image). It holds the archive months that queries actually touched (one
+month of one variable at one model cell, about 3 KB) and finished results.
 
 - **Memory:** the store keeps directory listings and up to 4096 file headers
-  and 4096 lookup-table blocks per process (bounded LRU caches). A restart only costs some
-  extra range requests.
-- **Result cache:** results of instants older than
-  `TEMPUS_PROVIDERS_REANALYSIS_MATURITY` (default `72h`) are kept for a year,
-  younger ones for an hour (see [Caching model](../explanation/caching.md)).
-  The bbolt file has **no size cap**: an expired entry is removed only when it
-  is read again, and bbolt never returns freed pages to the file system — the
-  file stays at its high-water mark and reuses the space.
-- **Sizing:** plan the volume from the number of distinct keys your clients
-  produce. Weather and aggregate key on (coordinate rounded to 0.01°, exact
-  elevation, hour), and aggregate additionally on a `gddBase` override;
-  bioclim keys on (coordinate rounded to 0.0001°, exact elevation, reference
-  period) — about 11 m apart, so dense spatial bioclim queries produce far
-  more entries than the same points for weather. The elevation is not
-  rounded: 182.6 m and 182.7 m are two entries, so clients sending
-  fractional GNSS heights grow the cache faster than ones sending whole
-  metres. To
-  reclaim space, stop tempus and delete the file; it is a cache, nothing in it
-  is authoritative. `TEMPUS_CACHE_TYPE=memory` avoids the file entirely at the
-  price of a cold cache after every restart.
+  and 4096 lookup-table blocks per process (bounded LRU caches). A restart only
+  costs some extra range requests.
+- **Cache size:** `TEMPUS_CACHE_MAX_BYTES` (default 256 MiB, `0` = unbounded)
+  caps the live entries of either backend; going over it evicts the least
+  recently used ones. Final data is kept for a year at most, data younger than
+  `TEMPUS_PROVIDERS_REANALYSIS_MATURITY` (default `72h`) for an hour at most
+  (see [Caching model](../explanation/caching.md)).
+- **Disk:** the cap bounds the entries, not the file. bbolt never returns freed
+  pages to the file system — the file stays at its high-water mark, a little
+  above the cap in steady state, and reuses the space. Plan the volume for the
+  cap plus some slack.
+- **What fills it:** archive months are shared by every point in the same
+  model cells; results are per exact point (coordinate, elevation, hour, and
+  aggregate's `gddBase`). Bioclim results key on the coordinate rounded to
+  0.0001° (about 11 m), the exact elevation and the reference period; its
+  30-year reads bypass the archive-month level. Clients sending fractional
+  GNSS heights produce more result entries than ones sending whole metres.
+- **Reclaiming space:** stop tempus and delete the file; it is a cache, nothing
+  in it is authoritative. `TEMPUS_CACHE_TYPE=memory` avoids the file entirely
+  at the price of a cold cache after every restart.
 
 ## When the bucket fails
 
