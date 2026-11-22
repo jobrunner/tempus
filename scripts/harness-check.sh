@@ -25,6 +25,7 @@
 # Exit: 0 green, 1 gap, 2 setup error.
 
 set -uo pipefail
+. "$(dirname "$0")/require-devshell.sh"
 export LC_ALL=C
 
 WAIVERS="${WAIVERS:-.harness-waivers}"
@@ -80,7 +81,7 @@ no_hardcoded_go() {
 # a human look. zizmor's unpinned-uses audit says the same, but only weekly;
 # this runs on every PR. Local actions (`./…`) and docker:// refs are exempt.
 actions_sha_pinned() {
-  ! grep -rhE "^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]" "$WORKFLOWS" 2>/dev/null \
+  ! grep -rhE "^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]" "$WORKFLOWS" .github/actions 2>/dev/null \
     | grep -vE "uses:[[:space:]]*['\"]?(\./|docker://)" \
     | grep -vE "uses:[[:space:]]*['\"]?[^@[:space:]]+@[0-9a-f]{40}([[:space:]'\"]|\$)" \
     | grep -q .
@@ -99,23 +100,26 @@ docker_go_matches_toolchain() {
   [ -n "$have" ] && [ "$have" = "$want" ]
 }
 
-# make lint and CI must run the same golangci-lint. Linter versions differ in
-# what they report (v2.12.2 counts goconst occurrences in test files, 2.13.2
-# does not), so a drift lets a PR pass locally and fail in CI. Every
-# golangci-lint-action step must set `version:` to the Makefile's pin; a step
-# without one would run the action's default, so it counts as <missing>. A step
-# ends at the next list item, at the next file and at EOF.
-golangci_version_matches() {
-  want=$(awk -F':= *' '/^GOLANGCI_LINT_VERSION/ { print $2 }' Makefile)
-  [ -n "$want" ] || return 1
-  ! awk '
-    function flush() { if (inlint) print (ver == "" ? "<missing>" : ver); inlint = 0; ver = "" }
-    FNR == 1                                          { flush() }
-    /^[[:space:]]*-[[:space:]]/                       { flush() }
-    /uses:[[:space:]]*golangci\/golangci-lint-action/ { inlint = 1; next }
-    inlint && /^[[:space:]]+version:/                 { ver = $0; sub(/^[[:space:]]+version:[[:space:]]*/, "", ver); gsub(/["\047]/, "", ver) }
-    END                                               { flush() }
-  ' "$WORKFLOWS"/*.yml | grep -vxF "$want" | grep -q .
+# Local runs and CI share one toolset: the dev shell from flake.nix, pinned by
+# flake.lock (`nix develop`, direnv's `use flake`, and .github/actions/nix-shell
+# in CI). A linter, scanner or diff tool installed on its own drifts: a
+# different local golangci-lint once reported 0 issues where CI found 11.
+#
+# So every job runs in that shell, deny by default: a job outside it must be
+# listed with its reason in .github/nix-exempt-jobs (the release build, the
+# pull_request_target auto-merge, …). Checked on the workflow structure with
+# a YAML parser, never on what the run: scripts say (check-workflow-jobs.sh).
+# Make and the gate scripts back this at run time: under CI they refuse to
+# run outside the dev shell (scripts/require-devshell.sh).
+jobs_in_flake() {
+  [ -f flake.nix ] && [ -f flake.lock ] || return 1
+  bash scripts/check-workflow-jobs.sh "$WORKFLOWS" .github/nix-exempt-jobs
+}
+
+# The Makefile calls tools by name from the dev shell; a `go run …@v` or
+# `go install` there would fetch a second, unpinned copy.
+makefile_tools_from_flake() {
+  ! grep -E '^[^#]*(\$\(GO\)|go) (run [^ ]+@|install )' Makefile | grep -q .
 }
 
 # gremlins must never be handed a `...` wildcard — it does not expand it and
@@ -209,7 +213,8 @@ check license              "LICENSE"                         has_file LICENSE
 echo "— Toolchain hygiene"
 check go-version-file      "no hardcoded go-version"         no_hardcoded_go
 check docker-go-toolchain  "Dockerfile golang = go.mod"      docker_go_matches_toolchain
-check golangci-version     "make lint = CI golangci-lint"    golangci_version_matches
+check jobs-in-flake        "every job in the dev shell"      jobs_in_flake
+check makefile-tools       "Makefile fetches no own tools"   makefile_tools_from_flake
 
 # Waiver ratchet.
 echo

@@ -10,14 +10,16 @@ jobs:
   commitlint:
     name: Commit Lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: nix develop --command bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '20'
+      # node from the dev shell (flake.lock), as everywhere else.
+      - uses: ./.github/actions/nix-shell
       - name: Install commitlint
         run: |
           npm install --save-dev @commitlint/cli @commitlint/config-conventional

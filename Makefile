@@ -8,12 +8,19 @@ VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo 
 BUILD_TIME  := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS     := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 
+# In CI only inside the dev shell; see scripts/require-devshell.sh.
+ifneq ($(CI),)
+ifeq ($(IN_NIX_SHELL),)
+$(error CI runs make only in the flake's dev shell (.github/actions/nix-shell))
+endif
+endif
+
 GO       := go
-# One golangci-lint for local runs and CI: ci.yml pins the same version on its
-# golangci-lint-action steps, and harness-check.sh (golangci-version) fails when
-# they differ. A different local binary reported 0 issues where CI found 11.
-GOLANGCI_LINT_VERSION := v2.12.2
-GOLINT   := $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+# Tools come from the dev shell (flake.nix, `nix develop` or direnv), the same
+# one every CI job runs in, so local and CI use identical versions from
+# flake.lock. A different local golangci-lint once reported 0 issues where CI
+# found 11.
+GOLINT   := golangci-lint
 COVERAGE_DIR := coverage
 MKDOCS   := uvx --with mkdocs-material mkdocs
 
@@ -77,22 +84,25 @@ debt-coverage: ## Per-package coverage floors (own test run)
 	@./scripts/coverage-gate.sh $(COVERAGE_DIR)/coverage.out
 
 mutation: ## Mutation testing (runs locally too — gremlins does not panic on macOS)
-	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
 	@bash scripts/mutation-gate.sh
 # Prefer an already-installed ccsh; otherwise run it through npx, which needs no
-# global install and no admin rights. Needs node and a JRE (ccsh is a JVM tool).
+# global install and no admin rights. node and the JRE come from the dev shell.
 CCSH_VERSION ?= 1.143.0
 CCSH ?= $(shell command -v ccsh 2>/dev/null || echo "npx --yes codecharta-analysis@$(CCSH_VERSION)")
 
+# gcov2lcov from nixpkgs is built with -trimpath and has no GOROOT of its own.
+# Without one, go/build cannot resolve module packages: it warns per file,
+# writes an empty coverage.info and still exits 0, and ccsh merge then waits
+# forever on a prompt about the empty coverage map. Hence the explicit GOROOT.
+# set -e: a failed conversion, import or merge fails the target; only the test
+# run is best effort (a failing test still leaves a usable coverage.out).
 codecharta: ## CodeCharta map (structure+complexity+coverage+git) -> tempus.cc.json.gz, then the ratchet gate (needs node+java)
-	$(GO) install github.com/jandelgado/gcov2lcov@v1.1.1
 	$(CCSH) unifiedparser . -fe=go -e='_test\.go,third_party,\.claude' -nc -o base.cc.json
 	$(CCSH) gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
-	@$(GO) test -coverprofile=coverage.out ./... || true; \
-	 gobin=$$($(GO) env GOBIN); [ -n "$$gobin" ] || gobin=$$($(GO) env GOPATH)/bin; \
+	@set -e; $(GO) test -coverprofile=coverage.out ./... || true; \
 	 inputs="base.cc.json git.cc.json"; \
 	 if [ -s coverage.out ]; then \
-	   "$$gobin"/gcov2lcov -infile=coverage.out -outfile=coverage.info; \
+	   GOROOT=$$($(GO) env GOROOT) gcov2lcov -infile=coverage.out -outfile=coverage.info; \
 	   $(CCSH) coverageimport coverage.info -f lcov -nc -o coverage.cc.json; \
 	   inputs="$$inputs coverage.cc.json"; \
 	 else echo "WARN: no coverage.out — map without coverage"; fi; \

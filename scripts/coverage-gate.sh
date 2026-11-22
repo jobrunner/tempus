@@ -7,6 +7,7 @@
 # if any floored package (from .coverage-floors) drops below its floor. Raise
 # floors as coverage improves; never lower without justification.
 set -euo pipefail
+. "$(dirname "$0")/require-devshell.sh"
 
 # LC_ALL=C forces a dot decimal separator so awk's numeric string compares work
 # in comma-locale environments (e.g. de_DE would stringify "100,0").

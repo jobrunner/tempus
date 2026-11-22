@@ -1,0 +1,36 @@
+name: Nix dev shell
+description: >
+  Install Nix and provide the flake's dev shell (flake.nix, flake.lock), the
+  same shell `make verify` runs in locally. Run the job's steps through it
+  with `defaults.run.shell: nix develop --command bash -e {0}`.
+
+runs:
+  using: composite
+  steps:
+    - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+
+    # The Nix store in the Actions cache, keyed by the flake: after the first
+    # run the shell is unpacked instead of downloaded from cache.nixos.org,
+    # and gremlins (built from source, not in nixpkgs) is not rebuilt.
+    - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+      with:
+        primary-key: nix-devshell-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+        restore-prefixes-first-match: nix-devshell-${{ runner.os }}-${{ runner.arch }}-
+        gc-max-store-size-linux: 3G
+
+    # Modules, build cache and the toolchain GOTOOLCHAIN=auto fetches for
+    # go.mod's toolchain directive (it lives in the module cache) — what
+    # setup-go's cache: true used to keep.
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
+        restore-keys: go-${{ runner.os }}-${{ runner.arch }}-
+
+    # --profile makes the shell a GC root, so the store GC that
+    # cache-nix-action runs before saving keeps it.
+    - name: Build the dev shell
+      shell: bash
+      run: nix develop --profile "$RUNNER_TEMP/devshell" --command go version
