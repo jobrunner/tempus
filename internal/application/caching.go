@@ -15,10 +15,10 @@ import (
 
 // CachingOptions configures the caching decorator.
 type CachingOptions struct {
-	Version         string        // cache schema version — bump to invalidate
-	ArchiveDelay    time.Duration // instants older than this are immutable
-	MatureTTL       time.Duration // TTL for immutable (mature) data
-	ImmatureTTL     time.Duration // TTL for data still inside the maturity window
+	Version      string        // cache schema version — bump to invalidate
+	ArchiveDelay time.Duration // instants older than this are immutable
+	MatureTTL    time.Duration // TTL for immutable (mature) data
+	ImmatureTTL  time.Duration // TTL for data still inside the maturity window
 
 	// KeyParams optionally contributes provider-specific request parameters to
 	// the cache key (e.g. the aggregate provider's gddBase). Empty/nil keeps
