@@ -47,11 +47,14 @@ func (c *Cache) Get(_ context.Context, key string) ([]byte, bool, error) {
 }
 
 // Set stores value under key. ttl == 0 means never expire; a negative ttl
-// is already expired and stores nothing. A value that alone exceeds the cap
-// is not stored.
+// is already expired, so it only removes what the key held. A value that
+// alone exceeds the cap is not stored.
 func (c *Cache) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
 	k := []byte(key)
-	if ttl < 0 || (c.max > 0 && entryCost(k, len(value)) > c.max) {
+	if ttl < 0 {
+		return c.db.Update(func(tx *bolt.Tx) error { return remove(tx, k) })
+	}
+	if c.max > 0 && entryCost(k, len(value)) > c.max {
 		return nil
 	}
 	now := c.now()

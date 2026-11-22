@@ -60,11 +60,19 @@ func (c *Cache) Get(_ context.Context, key string) ([]byte, bool, error) {
 }
 
 // Set stores value under key. ttl == 0 means never expire; a negative ttl
-// is already expired and stores nothing. A value that alone exceeds the cap
-// is not stored.
+// is already expired, so it only removes what the key held. A value that
+// alone exceeds the cap is not stored.
 func (c *Cache) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
 	cost := entryCost(key, len(value))
-	if ttl < 0 || (c.max > 0 && cost > c.max) {
+	if ttl < 0 {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if el, ok := c.m[key]; ok {
+			c.remove(el)
+		}
+		return nil
+	}
+	if c.max > 0 && cost > c.max {
 		return nil
 	}
 	var exp time.Time

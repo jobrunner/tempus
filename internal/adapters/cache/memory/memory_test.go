@@ -80,7 +80,8 @@ func TestMemoryCache_ValueExactlyAtCapIsStored(t *testing.T) {
 
 func TestMemoryCache_NegativeTTLStoresNothing(t *testing.T) {
 	c := New(0)
-	_ = c.Set(context.Background(), "k", []byte("v"), -time.Second)
+	_ = c.Set(context.Background(), "k", []byte("v"), 0)
+	_ = c.Set(context.Background(), "k", []byte("w"), -time.Second)
 	if _, ok, _ := c.Get(context.Background(), "k"); ok || c.Bytes() != 0 {
 		t.Error("a negative TTL must not store a never-expiring entry")
 	}
