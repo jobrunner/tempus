@@ -67,7 +67,7 @@ func req(instant time.Time) domain.QueryRequest {
 
 func opts() CachingOptions {
 	return CachingOptions{Version: "1", ArchiveDelay: 5 * 24 * time.Hour,
-		MatureTTL: 365 * 24 * time.Hour, ImmatureTTL: time.Hour, LatLonPrecision: 2}
+		MatureTTL: 365 * 24 * time.Hour, ImmatureTTL: time.Hour}
 }
 
 func TestCaching_MissThenHit(t *testing.T) {
@@ -109,12 +109,16 @@ func TestCaching_TTLByMaturity(t *testing.T) {
 	}
 }
 
-func TestCacheKey_RoundsCoords(t *testing.T) {
+// TestCacheKey_ExactCoords: every feature carries its point (geometry, and
+// isDay or the GDD start from the latitude), so two points never share an
+// entry, however close. The archive reads behind them are shared per model
+// cell by the series cache instead.
+func TestCacheKey_ExactCoords(t *testing.T) {
 	instant := time.Date(2025, 6, 15, 13, 0, 0, 0, time.UTC)
-	a := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.791, Lon: 9.934}, Instant: instant}, 2, "")
-	b := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.789, Lon: 9.931}, Instant: instant}, 2, "")
-	if a != b {
-		t.Errorf("coords within rounding must share a key: %s vs %s", a, b)
+	a := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.791, Lon: 9.934}, Instant: instant}, "")
+	b := CacheKey(testProviderID, "1", domain.QueryRequest{Coordinate: domain.Coordinate{Lat: 49.7912, Lon: 9.934}, Instant: instant}, "")
+	if a == b {
+		t.Error("different coordinates must not share a key")
 	}
 }
 
@@ -126,19 +130,19 @@ func TestCacheKey_RawFormat(t *testing.T) {
 		Elevation:  182.6,
 		Instant:    time.Date(2025, 6, 3, 14, 0, 0, 0, time.UTC),
 	}
-	raw := fmt.Sprintf("%s|%s|%.*f|%.*f|%s|%s",
-		"open-meteo", "1", 2, 49.79, 2, 9.95, "182.6", r.Instant.UTC().Format(time.RFC3339))
+	raw := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
+		"open-meteo", "1", "49.79345", "9.95341", "182.6", r.Instant.UTC().Format(time.RFC3339))
 	sum := sha256.Sum256([]byte(raw))
 	want := hex.EncodeToString(sum[:])
-	if got := CacheKey("open-meteo", "1", r, 2, ""); got != want {
+	if got := CacheKey("open-meteo", "1", r, ""); got != want {
 		t.Errorf("CacheKey with empty params = %s, want %s", got, want)
 	}
 	other := r
 	other.Elevation = 182.7
-	if CacheKey("open-meteo", "1", other, 2, "") == want {
+	if CacheKey("open-meteo", "1", other, "") == want {
 		t.Error("a different elevation must produce a different key")
 	}
-	if same := CacheKey("open-meteo", "1", r, 2, "gdd=7.00"); same == want {
+	if same := CacheKey("open-meteo", "1", r, "gdd=7.00"); same == want {
 		t.Error("non-empty params must produce a different key")
 	}
 }
@@ -150,7 +154,7 @@ func TestCachingProvider_KeyParamsSeparateEntries(t *testing.T) {
 	base7, base9 := 7.0, 9.0
 	inner := &countingProvider{}
 	cp := NewCachingProvider(inner, newFakeCache(), fixedClock{}, CachingOptions{
-		Version: "1", MatureTTL: time.Hour, ImmatureTTL: time.Hour, LatLonPrecision: 2,
+		Version: "1", MatureTTL: time.Hour, ImmatureTTL: time.Hour,
 		KeyParams: func(req domain.QueryRequest) string {
 			if req.GDDBaseCelsius == nil {
 				return ""
@@ -235,7 +239,7 @@ func TestCachingProvider_TreatsInvalidCacheHitAsMiss(t *testing.T) {
 	cp := NewCachingProvider(inner, cache, fixedClock{}, opts())
 
 	// Poison the cache under the key this request will use.
-	cache.store[CacheKey(testProviderID, "1", req, 2, "")] = raw
+	cache.store[CacheKey(testProviderID, "1", req, "")] = raw
 
 	res, err := cp.Fetch(context.Background(), req)
 	if err != nil {

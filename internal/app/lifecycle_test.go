@@ -170,7 +170,7 @@ func TestBuildRegistry_RespectsConfiguration(t *testing.T) {
 
 	kinds := func(cfg *config.Config) map[string]bool {
 		out := map[string]bool{}
-		for _, p := range buildRegistry(cfg, cache, stoppedClock{}, buildReanalysis(cfg, nil)).Providers(context.Background()) {
+		for _, p := range buildRegistry(cfg, cache, stoppedClock{}, buildReanalysis(cfg, cache, stoppedClock{}, nil)).Providers(context.Background()) {
 			out[p.Kind] = true
 		}
 		return out

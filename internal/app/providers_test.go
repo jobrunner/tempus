@@ -8,11 +8,11 @@ import (
 
 func TestBuildReanalysis_DisabledIsNil(t *testing.T) {
 	cfg := testConfig(t)
-	if buildReanalysis(cfg, nil) == nil {
+	if buildReanalysis(cfg, nil, clock.System{}, nil) == nil {
 		t.Fatal("enabled archive must be built")
 	}
 	cfg.Providers.Reanalysis.Enabled = false
-	if buildReanalysis(cfg, nil) != nil {
+	if buildReanalysis(cfg, nil, clock.System{}, nil) != nil {
 		t.Fatal("disabled archive must be nil, so its providers are not registered")
 	}
 }
@@ -28,7 +28,7 @@ func TestBuildReanalysis_DisabledIsNil(t *testing.T) {
 // to boot in production.
 func TestEveryRegisteredProviderDeclaresACompleteLicense(t *testing.T) {
 	cfg := testConfig(t)
-	reg := buildRegistry(cfg, nil, clock.System{}, buildReanalysis(cfg, nil))
+	reg := buildRegistry(cfg, nil, clock.System{}, buildReanalysis(cfg, nil, clock.System{}, nil))
 
 	all := reg.All()
 	if len(all) == 0 {
