@@ -76,13 +76,7 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, arc
 	// key via KeyParams.
 	if cfg.Providers.Aggregate.Enabled {
 		agg := aggregate.New(aggregate.Options{Reanalysis: archive, Clock: clk})
-		registry.Register(application.NewCachingProvider(agg, cache, clk, cachingOptions(maturity,
-			func(req domain.QueryRequest) string {
-				if req.GDDBaseCelsius == nil {
-					return ""
-				}
-				return fmt.Sprintf("gdd=%.2f", *req.GDDBaseCelsius)
-			})))
+		registry.Register(application.NewCachingProvider(agg, cache, clk, cachingOptions(maturity, gddKeyParam)))
 	}
 
 	// Bioclim (19 BIO variables + Köppen-Geiger) from 30-year normals. Time-
@@ -95,21 +89,29 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, arc
 	return registry
 }
 
-// resultMaturityMargin delays "final" for results past the maturity the
-// series cache uses. An archive block is never served once one of its hours
-// has turned final, but a result computed from it just before that moment is
-// written moments after; the margin keeps such a result on the short TTL. It
-// only has to exceed one query (query.timeout), not a fill.
-const resultMaturityMargin = 10 * time.Minute
+// gddKeyParam puts the aggregate provider's per-request gddBase override
+// into its cache key.
+func gddKeyParam(req domain.QueryRequest) string {
+	if req.GDDBaseCelsius == nil {
+		return ""
+	}
+	return fmt.Sprintf("gdd=%.2f", *req.GDDBaseCelsius)
+}
 
 // cachingOptions: hours older than maturity are final and cached for a year;
 // younger ones (the archive's newest IFS hours are still revised) for an hour.
 // Version 3 keys on the exact point; version 2 entries (0.01° keys) carried
 // the geometry of whichever nearby point asked first.
+//
+// Results turn final ten minutes after the maturity the series cache uses.
+// An archive block is never served once one of its hours has turned final,
+// but a result computed from it just before that moment is written moments
+// after; the margin keeps such a result on the short TTL. It only has to
+// exceed one query (query.timeout), not a fill.
 func cachingOptions(maturity time.Duration, keyParams func(domain.QueryRequest) string) application.CachingOptions {
 	return application.CachingOptions{
 		Version:      "3",
-		ArchiveDelay: maturity + resultMaturityMargin,
+		ArchiveDelay: maturity + 10*time.Minute,
 		MatureTTL:    365 * 24 * time.Hour,
 		ImmatureTTL:  time.Hour,
 		KeyParams:    keyParams,

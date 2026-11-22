@@ -2,8 +2,10 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/jobrunner/tempus/internal/adapters/clock"
+	"github.com/jobrunner/tempus/internal/domain"
 )
 
 func TestBuildReanalysis_DisabledIsNil(t *testing.T) {
@@ -38,5 +40,25 @@ func TestEveryRegisteredProviderDeclaresACompleteLicense(t *testing.T) {
 		if err := p.Attribution().Validate(); err != nil {
 			t.Errorf("provider %q (%s) declares an incomplete licence: %v", p.ID(), p.Kind(), err)
 		}
+	}
+}
+
+func TestCachingOptions_ResultsTurnFinalAfterTheSeriesCache(t *testing.T) {
+	o := cachingOptions(72*time.Hour, nil)
+	if o.ArchiveDelay != 72*time.Hour+10*time.Minute {
+		t.Errorf("ArchiveDelay = %v, want maturity + 10m", o.ArchiveDelay)
+	}
+	if o.Version != "3" || o.MatureTTL != 365*24*time.Hour || o.ImmatureTTL != time.Hour {
+		t.Errorf("options = %+v", o)
+	}
+}
+
+func TestGDDKeyParam(t *testing.T) {
+	if got := gddKeyParam(domain.QueryRequest{}); got != "" {
+		t.Errorf("no override: %q, want empty", got)
+	}
+	base := 7.5
+	if got := gddKeyParam(domain.QueryRequest{GDDBaseCelsius: &base}); got != "gdd=7.50" {
+		t.Errorf("override: %q, want gdd=7.50", got)
 	}
 }
