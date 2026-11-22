@@ -2,9 +2,11 @@
 # Build:  docker buildx build --platform linux/amd64,linux/arm64 -t tempus:dev .
 #
 # All base images are pinned by immutable digest (no floating tags, no :latest).
-# The runtime pulls in NO apk packages: CA roots are copied from the builder and
-# the IANA tz database is embedded into the binary (-tags timetzdata), so there
-# is nothing unpinnable fetched at build time.
+# The runtime installs NO new apk packages: CA roots are copied from the builder
+# and the IANA tz database is embedded into the binary (-tags timetzdata). The
+# one exception is `apk upgrade` of the base image's own packages (zlib,
+# openssl libs, …): Alpine ships security fixes days before the pinned digest
+# is rebuilt, and the weekly Trivy scan flags them meanwhile.
 
 # ---- builder: runs natively on $BUILDPLATFORM, cross-compiles to the target ----
 FROM --platform=$BUILDPLATFORM golang:1.26.11-alpine@sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb AS builder
@@ -42,7 +44,8 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 # user: a fresh named volume mounted at /data inherits this ownership (Docker
 # copies the mountpoint's owner), so the BoltDB cache is writable without any
 # init/chown step.
-RUN addgroup -S app && adduser -S app -G app \
+RUN apk upgrade --no-cache \
+    && addgroup -S app && adduser -S app -G app \
     && mkdir -p /app /data \
     && chown app:app /app /data
 WORKDIR /app
