@@ -1,9 +1,9 @@
-// Package openmeteo implements the weather FeatureProvider. It reads
+// Package weather implements the weather FeatureProvider. It reads
 // Open-Meteo's open-data reanalysis archive (ECMWF IFS, ERA5, ERA5-Land)
 // through the output.Reanalysis port rather than calling the Open-Meteo API,
 // and presents the hour the way the API used to: same property names, units
 // and display rounding.
-package openmeteo
+package weather
 
 import (
 	"context"

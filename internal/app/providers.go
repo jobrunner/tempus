@@ -10,10 +10,10 @@ import (
 	"github.com/jobrunner/tempus/internal/adapters/aggregate"
 	"github.com/jobrunner/tempus/internal/adapters/astronomy"
 	"github.com/jobrunner/tempus/internal/adapters/bioclim"
-	"github.com/jobrunner/tempus/internal/adapters/omhttp"
+	"github.com/jobrunner/tempus/internal/adapters/bucketio"
 	"github.com/jobrunner/tempus/internal/adapters/omstore"
-	"github.com/jobrunner/tempus/internal/adapters/openmeteo"
 	"github.com/jobrunner/tempus/internal/adapters/reanalysis"
+	"github.com/jobrunner/tempus/internal/adapters/weather"
 	"github.com/jobrunner/tempus/internal/application"
 	"github.com/jobrunner/tempus/internal/config"
 	"github.com/jobrunner/tempus/internal/domain"
@@ -32,7 +32,7 @@ func buildReanalysis(cfg *config.Config, tp trace.TracerProvider) output.Reanaly
 		Timeout: r.Timeout,
 		// No limiter and no budget: the bucket has no quota. The transport
 		// still retries 5xx/network failures and traces each attempt.
-		Transport: omhttp.NewTransport(omhttp.Options{RetryAttempts: r.RetryAttempts, TracerProvider: tp}),
+		Transport: bucketio.NewTransport(bucketio.Options{RetryAttempts: r.RetryAttempts, TracerProvider: tp}),
 	}
 	return reanalysis.NewService(omstore.New(omstore.Options{
 		BaseURL:     r.BaseURL,
@@ -61,7 +61,7 @@ func buildRegistry(cfg *config.Config, cache output.Cache, clk output.Clock, arc
 	maturity := cfg.Providers.Reanalysis.Maturity
 
 	registry.Register(application.NewCachingProvider(
-		openmeteo.New(openmeteo.Options{Reanalysis: archive, Clock: clk}),
+		weather.New(weather.Options{Reanalysis: archive, Clock: clk}),
 		cache, clk, cachingOptions(maturity, nil)))
 
 	// Weather aggregates: the per-request gddBase override is part of the cache

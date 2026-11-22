@@ -44,7 +44,7 @@ Every range request to the reanalysis bucket
 client span (with `http.response.status_code`) under the inbound request's
 span; result-cache hits and in-memory metadata hits make none. A cold 30-year
 bioclim read therefore shows about 90 client spans per variable read. Backoff
-waits are recorded as `open-meteo.retry` events on the inbound span
+waits are recorded as `bucket.retry` events on the inbound span
 (`retry.attempt`, `retry.wait_ms`, and the status code or error that triggered
 it). There is no rate limiter and no daily budget any more, so the former
 `open-meteo.budget_exhausted` event and the
