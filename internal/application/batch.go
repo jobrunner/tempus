@@ -11,22 +11,20 @@ import (
 )
 
 // BatchService processes batch points through the single-query path with a
-// bounded worker pool. Points sharing a rounded coordinate + instant + options
+// bounded worker pool. Points sharing coordinate, elevation, instant and options
 // are fetched once and fanned out; emission strictly follows input order, so
 // NDJSON consumers can track progress by counting lines.
 type BatchService struct {
 	features    input.FeatureService
 	concurrency int
-	precision   int
 }
 
-// NewBatchService builds the service; latLonPrecision must match the cache
-// decorator's rounding so dedup and cache agree on "same point".
-func NewBatchService(features input.FeatureService, concurrency, latLonPrecision int) *BatchService {
+// NewBatchService builds the service.
+func NewBatchService(features input.FeatureService, concurrency int) *BatchService {
 	if concurrency < 1 {
 		concurrency = 1
 	}
-	return &BatchService{features: features, concurrency: concurrency, precision: latLonPrecision}
+	return &BatchService{features: features, concurrency: concurrency}
 }
 
 // group is one deduplicated fetch: all points with the same key share it.
@@ -120,17 +118,16 @@ func (s *BatchService) awaitAndEmit(ctx context.Context, p input.BatchPoint, g *
 	return emit(input.BatchItem{ID: p.ID, QueryResult: &res})
 }
 
-// groupKey identifies "the same fetch": rounded coordinate, exact elevation,
-// instant, and the per-request options that change provider output.
+// groupKey identifies "the same fetch": the exact point (features carry it),
+// instant, and the per-request options that change provider output. It
+// matches CacheKey's notion of the same point.
 func (s *BatchService) groupKey(req domain.QueryRequest) string {
 	gdd := ""
 	if req.GDDBaseCelsius != nil {
 		gdd = fmt.Sprintf("%.2f", *req.GDDBaseCelsius)
 	}
-	return fmt.Sprintf("%.*f|%.*f|%s|%s|%s|%s|%s",
-		s.precision, roundTo(req.Coordinate.Lat, s.precision),
-		s.precision, roundTo(req.Coordinate.Lon, s.precision),
-		elevationKey(req.Elevation),
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s",
+		exact(req.Coordinate.Lat), exact(req.Coordinate.Lon), exact(req.Elevation),
 		req.Instant.UTC().Format(time.RFC3339),
 		gdd, req.RefPeriod, strings.Join(req.Providers, ","))
 }
