@@ -82,8 +82,10 @@ func TestMoonTimes_SearchTheLocalDay(t *testing.T) {
 		{50, 10, time.Date(2025, 6, 11, 12, 0, 0, 0, time.UTC)},
 	}
 	for _, c := range cases {
-		noon := *SolarEvents(c.lat, c.lon, c.q).SolarNoon
-		from, to := noon.Add(-12*time.Hour), noon.Add(12*time.Hour)
+		from, to := localDayBounds(c.lon, c.q)
+		if c.q.Before(from) || !c.q.Before(to) {
+			t.Errorf("lon %v: query %v outside its local day [%v, %v)", c.lon, c.q, from, to)
+		}
 		rise, set := MoonTimes(c.lat, c.lon, c.q)
 		if rise == nil && set == nil {
 			t.Errorf("lon %v: no moon event", c.lon)
@@ -92,6 +94,26 @@ func TestMoonTimes_SearchTheLocalDay(t *testing.T) {
 			if ev != nil && (ev.Before(from) || !ev.Before(to)) {
 				t.Errorf("lon %v: moon event %v outside the local day [%v, %v)", c.lon, ev, from, to)
 			}
+		}
+	}
+}
+
+// TestLocalDayBounds_TileWithoutGaps: solar noons are not exactly 24 h
+// apart, so fixed ±12 h windows left gaps (at lon 0, 2025-12-01T23:49:28Z
+// was in none). Adjacent local days must share their bounds.
+func TestLocalDayBounds_TileWithoutGaps(t *testing.T) {
+	gap := time.Date(2025, 12, 1, 23, 49, 28, 0, time.UTC)
+	if from, to := localDayBounds(0, gap); gap.Before(from) || !gap.Before(to) {
+		t.Fatalf("%v outside its local day [%v, %v)", gap, from, to)
+	}
+	for _, lon := range []float64{-179.9, -100, 0, 10, 100, 179.9} {
+		_, to := localDayBounds(lon, time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC))
+		for range 400 {
+			from, next := localDayBounds(lon, to)
+			if !from.Equal(to) {
+				t.Fatalf("lon %v: day after %v starts at %v (gap or overlap)", lon, to, from)
+			}
+			to = next
 		}
 	}
 }

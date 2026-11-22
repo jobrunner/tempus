@@ -461,11 +461,11 @@ components:
             moonrise:
               type: string
               nullable: true
-              description: Moonrise (RFC3339 UTC) within the local day of the instant (24 h centred on its solar noon), or null when the moon does not rise that day.
+              description: Moonrise (RFC3339 UTC) within the local day of the instant (halfway after the previous to halfway before the next solar noon), or null when the moon does not rise that day.
             moonset:
               type: string
               nullable: true
-              description: Moonset (RFC3339 UTC) within the local day of the instant (24 h centred on its solar noon), or null when the moon does not set that day.
+              description: Moonset (RFC3339 UTC) within the local day of the instant (halfway after the previous to halfway before the next solar noon), or null when the moon does not set that day.
     AggregateFeatureProperties:
       description: >
         Properties of a weather-aggregate feature (kind "aggregate"), computed

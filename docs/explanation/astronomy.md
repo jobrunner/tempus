@@ -60,8 +60,10 @@ Meeus (geozentrische Näherung), tempus".
 Sunrise, sunset, solar noon, twilight and moonrise/moonset belong to the day
 the instant falls into **at the coordinate**, not to its UTC calendar day: the
 solar day whose solar noon is nearest to the instant (at most twelve hours
-away). The moon is searched over the same 24 hours, centred on that solar
-noon.
+away). That day runs from halfway after the previous solar noon to halfway
+before the next — about 24 hours, but not exactly, since solar noons drift by
+up to half a minute a day — so consecutive local days follow each other
+without gaps. The moon is searched over the same span.
 
 Far from Greenwich the two differ. In Thailand (longitude 100°E, UTC+7) an
 instant at 06:30 local time on 19 May is 23:30 UTC on 18 May; the events
