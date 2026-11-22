@@ -31,6 +31,7 @@ nav:
       - Run the service: how-to/run-service.md
       - Query past weather: how-to/query-past-weather.md
       - Configure providers and cache: how-to/configure-providers.md
+      - Operate the reanalysis archive: how-to/operate-reanalysis.md
   - Reference:
       - Overview: reference/index.md
       - HTTP API: reference/http-api.md

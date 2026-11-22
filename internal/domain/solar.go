@@ -104,14 +104,13 @@ type SunTimes struct {
 }
 
 // SolarEvents computes sunrise, sunset, solar noon and the three twilight
-// phases for the UTC calendar day of t, at the given coordinate.
+// phases for the solar day t falls into at the given coordinate: the day
+// whose solar noon is nearest to t. Far from Greenwich that differs from the
+// UTC calendar day of t; the events are UTC instants either way. t need not
+// lie between them: before dawn or after dusk it is still night on its local
+// day (SunLightPhase gives the regime at t itself).
 func SolarEvents(latDeg, lonDeg float64, t time.Time) SunTimes {
-	day := t.UTC().Truncate(24 * time.Hour)
-	// Use declination/eqTime at local solar noon for the day.
-	noonProbe := day.Add(12 * time.Hour)
-	decl, eqTime := solarGeom(noonProbe)
-
-	noonMin := 720 - 4*lonDeg - eqTime
+	day, noonMin, decl := localSolarDay(lonDeg, t)
 	noon := day.Add(time.Duration(noonMin * float64(time.Minute)))
 	noonElev, _ := SunAltAz(latDeg, lonDeg, noon)
 

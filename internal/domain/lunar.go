@@ -276,36 +276,3 @@ func moonPhaseName(elongDeg float64) (de, en string) {
 		return "abnehmende Sichel", "Waning Crescent"
 	}
 }
-
-// MoonTimes computes moonrise and moonset (UTC) for the calendar day of t by
-// scanning the moon's altitude for crossings of the standard altitude. Either
-// value is nil when no such crossing occurs that day.
-func MoonTimes(latDeg, lonDeg float64, t time.Time) (rise, set *time.Time) {
-	day := t.UTC().Truncate(24 * time.Hour)
-	const step = 10 * time.Minute
-	steps := int(24 * time.Hour / step)
-
-	prevT := day
-	prevAlt, _ := moonAltAzGeo(latDeg, lonDeg, prevT)
-	for n := 1; n <= steps; n++ {
-		curT := day.Add(time.Duration(n) * step)
-		curAlt, _ := moonAltAzGeo(latDeg, lonDeg, curT)
-		if prevAlt < moonStandardAltDeg && curAlt >= moonStandardAltDeg && rise == nil {
-			c := interpCrossing(prevT, prevAlt, curT, curAlt)
-			rise = &c
-		}
-		if prevAlt >= moonStandardAltDeg && curAlt < moonStandardAltDeg && set == nil {
-			c := interpCrossing(prevT, prevAlt, curT, curAlt)
-			set = &c
-		}
-		prevT, prevAlt = curT, curAlt
-	}
-	return rise, set
-}
-
-// interpCrossing linearly interpolates the instant at which altitude equals the
-// standard altitude between two bracketing samples.
-func interpCrossing(t0 time.Time, a0 float64, t1 time.Time, a1 float64) time.Time {
-	frac := (moonStandardAltDeg - a0) / (a1 - a0)
-	return t0.Add(time.Duration(frac * float64(t1.Sub(t0))))
-}
