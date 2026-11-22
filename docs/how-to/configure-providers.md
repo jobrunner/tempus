@@ -43,6 +43,7 @@ All configuration is via environment variables with the prefix `TEMPUS_`.
 |---|---|---|
 | `TEMPUS_CACHE_TYPE` | `disk` | `disk`, `memory` |
 | `TEMPUS_CACHE_PATH` | `./data/cache.bolt` | File path for disk cache (bbolt) |
+| `TEMPUS_CACHE_MAX_BYTES` | `268435456` (256 MiB) | Size cap; least recently used entries are evicted first. `0` = unbounded |
 
 The cache stores provider results keyed by (rounded coordinate, exact
 elevation, hour); see [Caching model](../explanation/caching.md).

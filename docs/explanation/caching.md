@@ -60,3 +60,27 @@ restart costs a few extra range requests, nothing more.
 |---|---|---|
 | bbolt (disk) | `disk` | Persistent across restarts; file path via `TEMPUS_CACHE_PATH` |
 | In-memory | `memory` | Faster but lost on restart; suitable for development |
+
+## Size cap
+
+Both backends are capped by `TEMPUS_CACHE_MAX_BYTES` (default 256 MiB; `0`
+means unbounded). Every entry records when it was last read; going over the cap
+evicts the least recently used entries. The bbolt backend evicts down to 90 %
+of the cap (best effort: the entry just written is never evicted), so a full
+disk cache does not run an eviction transaction on every write; the in-memory
+backend, where eviction is cheap, evicts just enough to fit. A year-long TTL is therefore
+an upper bound, not a promise: a result nobody asks for again gives way to ones
+that are.
+
+The bbolt backend rewrites an entry's access time at most once an hour, so a
+warm read stays a read-only transaction; eviction is least-recently-used at
+that granularity.
+
+The cap counts **live entries, not the file**. bbolt never gives disk space
+back: pages freed by eviction are reused for new entries, so in steady state
+the file sits a little above the cap, but it keeps whatever size it once
+reached. A cache file written before the cap existed is emptied on the first
+start, and a file filled under a larger cap is trimmed to the new one — in
+both cases the entries go, the file size stays. To reclaim the space, stop
+the service and delete the file (`TEMPUS_CACHE_PATH`); it is only a cache and
+is rebuilt on demand.
