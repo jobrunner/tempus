@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.27.0](https://github.com/jobrunner/tempus/compare/v0.26.0...v0.27.0) (2026-11-22)
+
+
+### Features
+
+* **cache:** cap the cache in bytes and evict least recently used entries; new `TEMPUS_CACHE_MAX_BYTES`, default 256 MiB ([#104](https://github.com/jobrunner/tempus/pull/104))
+
+
+### Bug Fixes
+
+* **astronomy:** return sun and moon events for the local day of the instant, not its UTC calendar day ([#106](https://github.com/jobrunner/tempus/pull/106)), closes [#102](https://github.com/jobrunner/tempus/issues/102)
+* **cache:** cache archive reads per model cell and key results on the exact point; nearby points no longer get each other's feature ([#105](https://github.com/jobrunner/tempus/pull/105))
+* **deps:** patch x/net and the runtime image's Alpine packages ([#108](https://github.com/jobrunner/tempus/pull/108)), closes [#99](https://github.com/jobrunner/tempus/issues/99)
+
 ## [0.26.0](https://github.com/jobrunner/tempus/compare/v0.25.1...v0.26.0) (2026-11-21)
 
 
