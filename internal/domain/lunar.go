@@ -277,11 +277,13 @@ func moonPhaseName(elongDeg float64) (de, en string) {
 	}
 }
 
-// MoonTimes computes moonrise and moonset (UTC) for the calendar day of t by
-// scanning the moon's altitude for crossings of the standard altitude. Either
-// value is nil when no such crossing occurs that day.
+// MoonTimes computes moonrise and moonset (UTC) for the local day t falls
+// into at the coordinate — the 24 hours centred on the solar noon nearest to
+// t, as for SolarEvents — by scanning the moon's altitude for crossings of the
+// standard altitude. Either value is nil when no such crossing occurs that day.
 func MoonTimes(latDeg, lonDeg float64, t time.Time) (rise, set *time.Time) {
-	day := t.UTC().Truncate(24 * time.Hour)
+	utcDay, noonMin, _ := localSolarDay(lonDeg, t)
+	day := utcDay.Add(time.Duration(noonMin*float64(time.Minute)) - 12*time.Hour)
 	const step = 10 * time.Minute
 	steps := int(24 * time.Hour / step)
 

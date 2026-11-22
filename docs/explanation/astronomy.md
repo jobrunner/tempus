@@ -47,12 +47,33 @@ arcminute — more than sufficient for the intended use.
 | `phase` | Bilingual phase name (Neumond … abnehmende Sichel) |
 | `moonrise`, `moonset` | Event times (RFC3339 UTC), or `null` when no crossing |
 
-Rise and set are found by scanning the moon's altitude across the day and
+Rise and set are found by scanning the moon's altitude across the local day
+(see [Which day?](#which-day)) and
 interpolating the crossing of the standard altitude (+0.125°, combining mean
 parallax, refraction and the lunar semidiameter).
 
 Attribution: **Meeus, Astronomical Algorithms** — "Mondstand berechnet nach
 Meeus (geozentrische Näherung), tempus".
+
+## Which day?
+
+Sunrise, sunset, solar noon, twilight and moonrise/moonset belong to the day
+the instant falls into **at the coordinate**, not to its UTC calendar day: the
+solar day whose solar noon is nearest to the instant (at most twelve hours
+away). The moon is searched over the same 24 hours, centred on that solar
+noon.
+
+Far from Greenwich the two differ. In Thailand (longitude 100°E, UTC+7) an
+instant at 06:30 local time on 19 May is 23:30 UTC on 18 May; the events
+returned are those of the 19 May morning — sunrise just before the instant —
+not those around 18 May's UTC noon. Westwards, an evening at 18:30 local in
+Mexico (00:30 UTC the next day) gets that evening's sunset. Near Greenwich
+nothing changes. Wherever the sun rises and sets, the instant therefore lies
+between the events of its day, and a client that compares it with them gets
+the light regime it sees.
+
+`elevationDeg`, `azimuthDeg` and `lightPhase` are exact for the instant and
+not tied to any day.
 
 ## Time zones
 

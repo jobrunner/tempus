@@ -366,8 +366,10 @@ components:
         Properties of a sun feature (kind "sun"), computed from the coordinate
         and instant via the NOAA solar approximation. Available for any date
         (past or future). All angles are in degrees; azimuth is measured
-        clockwise from true north. Event times are RFC3339 UTC, or null when the
-        event does not occur that day (polar day/night at the given threshold).
+        clockwise from true north. Event times are RFC3339 UTC for the local
+        day the instant falls into at the coordinate (the solar day whose solar
+        noon is nearest to the instant), or null when the event does not occur
+        that day (polar day/night at the given threshold).
       allOf:
         - $ref: "#/components/schemas/FeaturePropertiesBase"
         - type: object
@@ -459,11 +461,11 @@ components:
             moonrise:
               type: string
               nullable: true
-              description: Moonrise (RFC3339 UTC), or null when the moon does not rise that day.
+              description: Moonrise (RFC3339 UTC) within the local day of the instant (24 h centred on its solar noon), or null when the moon does not rise that day.
             moonset:
               type: string
               nullable: true
-              description: Moonset (RFC3339 UTC), or null when the moon does not set that day.
+              description: Moonset (RFC3339 UTC) within the local day of the instant (24 h centred on its solar noon), or null when the moon does not set that day.
     AggregateFeatureProperties:
       description: >
         Properties of a weather-aggregate feature (kind "aggregate"), computed

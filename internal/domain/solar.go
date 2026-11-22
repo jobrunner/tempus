@@ -104,14 +104,12 @@ type SunTimes struct {
 }
 
 // SolarEvents computes sunrise, sunset, solar noon and the three twilight
-// phases for the UTC calendar day of t, at the given coordinate.
+// phases for the solar day t falls into at the given coordinate: the day
+// whose solar noon is nearest to t. Far from Greenwich that differs from the
+// UTC calendar day of t; the events are UTC instants either way, and t lies
+// between the day's events wherever the sun rises and sets.
 func SolarEvents(latDeg, lonDeg float64, t time.Time) SunTimes {
-	day := t.UTC().Truncate(24 * time.Hour)
-	// Use declination/eqTime at local solar noon for the day.
-	noonProbe := day.Add(12 * time.Hour)
-	decl, eqTime := solarGeom(noonProbe)
-
-	noonMin := 720 - 4*lonDeg - eqTime
+	day, noonMin, decl := localSolarDay(lonDeg, t)
 	noon := day.Add(time.Duration(noonMin * float64(time.Minute)))
 	noonElev, _ := SunAltAz(latDeg, lonDeg, noon)
 
@@ -129,6 +127,25 @@ func SolarEvents(latDeg, lonDeg float64, t time.Time) SunTimes {
 	st.NauticalDawn, st.NauticalDusk = sunEvent(latDeg, day, decl, noonMin, altNautical)
 	st.AstronomicalDawn, st.AstronomicalDusk = sunEvent(latDeg, day, decl, noonMin, altAstronomic)
 	return st
+}
+
+// localSolarDay picks the UTC day whose solar noon is nearest to t (at most
+// twelve hours away) and returns it with that noon in minutes after the day's
+// 00:00 UTC and the solar declination. The UTC day of t and its neighbours are
+// the only candidates: solar noon lies within ±12 h 16 min of 12:00 UTC.
+func localSolarDay(lonDeg float64, t time.Time) (day time.Time, noonMin, declRad float64) {
+	utcDay := t.UTC().Truncate(24 * time.Hour)
+	best := math.Inf(1)
+	for _, offset := range []int{-1, 0, 1} {
+		d := utcDay.AddDate(0, 0, offset)
+		// Declination and equation of time at 12:00 UTC of the day.
+		decl, eqTime := solarGeom(d.Add(12 * time.Hour))
+		nm := 720 - 4*lonDeg - eqTime
+		if dist := math.Abs(t.Sub(d.Add(time.Duration(nm * float64(time.Minute)))).Minutes()); dist < best {
+			best, day, noonMin, declRad = dist, d, nm, decl
+		}
+	}
+	return day, noonMin, declRad
 }
 
 // sunEvent returns the rising and setting instants (UTC) at which the sun
