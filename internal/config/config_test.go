@@ -19,6 +19,9 @@ func TestLoadDefaultsAndEnvOverride(t *testing.T) {
 	if cfg.Cache.Path == "" {
 		t.Error("cache.path default must be set")
 	}
+	if cfg.Cache.MaxBytes != 256<<20 {
+		t.Errorf("cache.max_bytes = %d, want 256 MiB", cfg.Cache.MaxBytes)
+	}
 	r := cfg.Providers.Reanalysis
 	if r.Timeout != 7*time.Second {
 		t.Errorf("reanalysis.timeout = %v, want 7s", r.Timeout)

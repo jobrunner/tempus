@@ -1,91 +1,74 @@
 // Package bolt is a persistent output.Cache backed by a single BoltDB file.
+//
+// The cache can be capped in bytes. Every entry carries its last access time
+// and an index orders entries by it, so going over the cap evicts the least
+// recently used ones. Access times are only rewritten once per touchInterval:
+// a read stays a read transaction on a warm entry, and the eviction order is
+// LRU at that granularity.
 package bolt
 
 import (
 	"context"
-	"encoding/binary"
-	"os"
-	"path/filepath"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
 
-var bucket = []byte("cache")
-
-// Cache is a BoltDB-backed cache.
-type Cache struct {
-	db *bolt.DB
-}
-
-// Open opens (creating parent dirs and the bucket as needed) the cache at path.
-func Open(path string) (*Cache, error) {
-	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, err
-		}
-	}
-	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: time.Second})
-	if err != nil {
-		return nil, err
-	}
-	if err := db.Update(func(tx *bolt.Tx) error {
-		_, e := tx.CreateBucketIfNotExists(bucket)
-		return e
-	}); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	return &Cache{db: db}, nil
-}
-
-// Close closes the underlying database.
-func (c *Cache) Close() error { return c.db.Close() }
-
 // Get returns the value if present and unexpired.
 func (c *Cache) Get(_ context.Context, key string) ([]byte, bool, error) {
+	k := []byte(key)
 	var (
-		out     []byte
-		found   bool
-		expired bool
+		out   []byte
+		found bool
+		h     header
 	)
+	now := c.now().UnixNano()
 	err := c.db.View(func(tx *bolt.Tx) error {
-		raw := tx.Bucket(bucket).Get([]byte(key))
-		if len(raw) < 8 {
+		rec := tx.Bucket(entriesBucket).Get(k)
+		if len(rec) < headerLen {
 			return nil
 		}
-		found = true
-		expNano := int64(binary.BigEndian.Uint64(raw[:8])) //nolint:gosec // nanosecond timestamp written by this same code; value is always a valid int64
-		if expNano != 0 && time.Now().UnixNano() > expNano {
-			expired = true
-			return nil
+		found, h = true, decodeHeader(rec)
+		if !h.expired(now) { // an expired value is never copied
+			out = append([]byte(nil), rec[headerLen:]...)
 		}
-		out = append(out, raw[8:]...)
 		return nil
 	})
-	if err != nil {
+	if err != nil || !found {
 		return nil, false, err
 	}
-	if expired {
-		_ = c.db.Update(func(tx *bolt.Tx) error { return tx.Bucket(bucket).Delete([]byte(key)) })
-		return nil, false, nil
+	if h.expired(now) {
+		return nil, false, c.db.Update(func(tx *bolt.Tx) error { return removeIfExpired(tx, k, now) })
 	}
-	if !found {
-		return nil, false, nil
+	if now-h.atime >= int64(touchInterval) {
+		_ = c.db.Update(func(tx *bolt.Tx) error { return touch(tx, k, now) })
 	}
 	return out, true, nil
 }
 
-// Set stores value under key. ttl == 0 means never expire.
+// Set stores value under key. ttl == 0 means never expire; a negative ttl
+// is already expired, so it only removes what the key held. A value that
+// alone exceeds the cap is not stored.
 func (c *Cache) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
-	var expNano int64
-	if ttl != 0 {
-		expNano = time.Now().Add(ttl).UnixNano()
+	k := []byte(key)
+	if ttl < 0 {
+		return c.db.Update(func(tx *bolt.Tx) error { return remove(tx, k) })
 	}
-	buf := make([]byte, 8+len(value))
-	binary.BigEndian.PutUint64(buf[:8], uint64(expNano))
-	copy(buf[8:], value)
+	if c.max > 0 && entryCost(k, len(value)) > c.max {
+		return nil
+	}
+	now := c.now()
+	h := header{atime: now.UnixNano()}
+	if ttl != 0 {
+		h.exp = now.Add(ttl).UnixNano()
+	}
 	return c.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(bucket).Put([]byte(key), buf)
+		if err := remove(tx, k); err != nil {
+			return err
+		}
+		if err := insert(tx, k, h, value); err != nil {
+			return err
+		}
+		return evict(tx, c.max, k)
 	})
 }
