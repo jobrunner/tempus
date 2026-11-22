@@ -1,4 +1,4 @@
-package openmeteo
+package weather
 
 import (
 	"context"

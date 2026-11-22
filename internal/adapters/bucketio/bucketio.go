@@ -1,10 +1,10 @@
-// Package omhttp provides the HTTP transport for the open-data bucket the
-// Open-Meteo store reads from: transparent retry of 429/5xx/network failures
+// Package bucketio provides the HTTP transport for the open-data bucket that
+// omstore reads from: transparent retry of 429/5xx/network failures
 // honoring Retry-After, and one client span per attempt. The bucket is plain
 // public object storage with no quota, so the transport neither rate-limits
 // nor budgets. Adapters receive it as a plain *http.Client, so no adapter
 // imports this package (composition happens in internal/app).
-package omhttp
+package bucketio
 
 import (
 	"io"
@@ -19,7 +19,7 @@ import (
 
 // eventRetry is the span event recorded on the caller's span (the inbound
 // request span) for each backoff wait between per-attempt client spans.
-const eventRetry = "open-meteo.retry"
+const eventRetry = "bucket.retry"
 
 // Options configures the transport.
 type Options struct {

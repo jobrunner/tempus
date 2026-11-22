@@ -1,4 +1,4 @@
-package openmeteo
+package weather
 
 import (
 	"math"
@@ -10,7 +10,7 @@ import (
 )
 
 // This file maps a reanalysis series onto a weather feature. It is kept apart
-// from the provider's port wiring (openmeteo.go) because the mapping is where
+// from the provider's port wiring (weather.go) because the mapping is where
 // the domain knowledge sits: which hour to pick, which variables are required,
 // how values are rounded for display, and which derived properties to enrich
 // with.
