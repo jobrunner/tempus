@@ -71,10 +71,10 @@ func collect(t *testing.T, svc input.BatchService, points []input.BatchPoint) []
 
 func TestBatchService_DedupsAndPreservesOrder(t *testing.T) {
 	f := &countingFeatures{}
-	svc := application.NewBatchService(f, 2, 2)
-	// p1 and p3 land in the same 0.01°-rounded cell → one upstream Query.
+	svc := application.NewBatchService(f, 2)
+	// a and c are the same point → one upstream Query.
 	items := collect(t, svc, []input.BatchPoint{
-		point("a", 49.791, 9.951),
+		point("a", 49.793, 9.952),
 		point("b", 47.420, 10.980),
 		point("c", 49.793, 9.952),
 	})
@@ -94,7 +94,7 @@ func TestBatchService_DedupsAndPreservesOrder(t *testing.T) {
 
 func TestBatchService_ParseErrorsBecomeErrorItems(t *testing.T) {
 	f := &countingFeatures{}
-	svc := application.NewBatchService(f, 2, 2)
+	svc := application.NewBatchService(f, 2)
 	items := collect(t, svc, []input.BatchPoint{
 		point("ok", 1, 2),
 		{ID: "bad", ParseError: "invalid lat: must be a number in [-90,90]"},
@@ -109,7 +109,7 @@ func TestBatchService_ParseErrorsBecomeErrorItems(t *testing.T) {
 
 func TestBatchService_BoundsConcurrency(t *testing.T) {
 	f := &countingFeatures{block: make(chan struct{})}
-	svc := application.NewBatchService(f, 2, 2)
+	svc := application.NewBatchService(f, 2)
 	done := make(chan struct{})
 	var pts []input.BatchPoint
 	for i := 0; i < 6; i++ {
@@ -129,12 +129,27 @@ func TestBatchService_BoundsConcurrency(t *testing.T) {
 
 func TestBatchService_EmitErrorAborts(t *testing.T) {
 	f := &countingFeatures{}
-	svc := application.NewBatchService(f, 1, 2)
+	svc := application.NewBatchService(f, 1)
 	wantErr := context.Canceled // any sentinel error works here
 	err := svc.QueryBatch(context.Background(),
 		[]input.BatchPoint{point("a", 1, 2), point("b", 3, 4)},
 		func(input.BatchItem) error { return wantErr })
 	if err != wantErr {
 		t.Fatalf("err = %v, want emit error propagated", err)
+	}
+}
+
+// TestBatchService_NearbyPointsAreNotMerged: a feature carries its point, so
+// two points 200 m apart must each be queried — merging them on a rounded
+// coordinate served one point's geometry for the other.
+func TestBatchService_NearbyPointsAreNotMerged(t *testing.T) {
+	f := &countingFeatures{}
+	svc := application.NewBatchService(f, 2)
+	collect(t, svc, []input.BatchPoint{
+		point("a", 49.791, 9.951),
+		point("b", 49.793, 9.952),
+	})
+	if f.calls != 2 {
+		t.Errorf("Query calls = %d, want 2 (distinct points)", f.calls)
 	}
 }

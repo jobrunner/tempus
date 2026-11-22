@@ -139,8 +139,8 @@ features are still computed.
 ## `POST /api/v1/query/batch`
 
 Query many coordinate+time points in one request through the same provider
-pipeline as `GET /api/v1/query`. Points that share a rounded coordinate,
-elevation (whole metres), instant, and options are fetched once and fanned out to every matching
+pipeline as `GET /api/v1/query`. Points that share coordinate,
+elevation, instant, and options are fetched once and fanned out to every matching
 result, so duplicate points in a batch cost nothing extra.
 
 ### Request — `BatchQueryRequest`

@@ -49,7 +49,7 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 	}
 
 	clk := clock.System{}
-	registry := buildRegistry(cfg, cache, clk, buildReanalysis(cfg, tp))
+	registry := buildRegistry(cfg, cache, clk, buildReanalysis(cfg, cache, clk, tp))
 
 	serverOpts, err := a.wireObservability(version, tp)
 	if err != nil {
@@ -58,7 +58,7 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 
 	derivers := []output.FeatureDeriver{dewpoint.New()}
 	features := application.NewFeatureService(registry, derivers, logger, cfg.Query.Timeout)
-	batch := application.NewBatchService(features, cfg.Query.Batch.Concurrency, 2)
+	batch := application.NewBatchService(features, cfg.Query.Batch.Concurrency)
 	addr := cfg.Server.Host + ":" + strconv.Itoa(cfg.Server.Port)
 	a.server = httpapi.NewServer(addr, features, batch, registry, readyAlways{}, clk, logger, serverOpts)
 	return a, nil
@@ -67,9 +67,9 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 func buildCache(cfg config.CacheConfig) (output.Cache, func() error, error) {
 	switch cfg.Type {
 	case cacheTypeMemory:
-		return memcache.New(), nil, nil
+		return memcache.New(cfg.MaxBytes), nil, nil
 	default: // "disk" or anything else
-		c, err := boltcache.Open(cfg.Path)
+		c, err := boltcache.Open(cfg.Path, boltcache.Options{MaxBytes: cfg.MaxBytes})
 		if err != nil {
 			return nil, nil, err
 		}
