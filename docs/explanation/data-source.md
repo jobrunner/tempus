@@ -48,9 +48,9 @@ For a coordinate, an **elevation** (metres above sea level) and a time range:
    the mean of the 24 hours, precipitation the sum of hours 00–23 UTC.
 
 The result matches the Open-Meteo archive's `best_match` for the same
-coordinate and elevation. An opt-in test compares both live
-(`TEMPUS_OM_LIVE=1 go test ./internal/app -run TestLive_ReanalysisMatchesOpenMeteoArchive`,
-in `internal/app/reanalysis_live_test.go`).
+coordinate and elevation. An opt-in live check compares both (`make
+om-conformance`, see
+[Operate the reanalysis archive](../how-to/operate-reanalysis.md#check-conformance-with-the-open-meteo-archive)).
 
 Every weather feature reports what it was computed for: `properties.elevation`
 is the request elevation and `properties.modelCells` lists the grid points
