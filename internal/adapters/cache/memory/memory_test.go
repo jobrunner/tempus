@@ -77,3 +77,11 @@ func TestMemoryCache_ValueExactlyAtCapIsStored(t *testing.T) {
 		t.Error("an entry exactly at the cap must be stored")
 	}
 }
+
+func TestMemoryCache_NegativeTTLStoresNothing(t *testing.T) {
+	c := New(0)
+	_ = c.Set(context.Background(), "k", []byte("v"), -time.Second)
+	if _, ok, _ := c.Get(context.Background(), "k"); ok || c.Bytes() != 0 {
+		t.Error("a negative TTL must not store a never-expiring entry")
+	}
+}

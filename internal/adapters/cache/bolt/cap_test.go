@@ -245,3 +245,13 @@ func TestBoltCache_ExpiredReadReturnsNoValue(t *testing.T) {
 		t.Errorf("expired read = (%v, %v, %v), want (nil, false, nil)", v, ok, err)
 	}
 }
+
+func TestBoltCache_NegativeTTLStoresNothing(t *testing.T) {
+	clk := &fakeClock{t: time.Unix(1_700_000_000, 0)}
+	c := openCapped(t, filepath.Join(t.TempDir(), "c.bolt"), 0, clk)
+	defer c.Close()
+	_ = c.Set(context.Background(), "k", value(10), -time.Second)
+	if c.Bytes() != 0 {
+		t.Errorf("bytes = %d, want 0 for an already expired entry", c.Bytes())
+	}
+}
