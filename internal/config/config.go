@@ -87,6 +87,9 @@ type AuthConfig struct {
 type CacheConfig struct {
 	Type string `mapstructure:"type"` // disk|memory|redis
 	Path string `mapstructure:"path"`
+	// MaxBytes caps the cache; the least recently used entries go first.
+	// Zero or negative means unbounded.
+	MaxBytes int64 `mapstructure:"max_bytes"`
 }
 
 type QueryConfig struct {
@@ -170,6 +173,7 @@ func Defaults() {
 
 	viper.SetDefault("cache.type", "disk")
 	viper.SetDefault("cache.path", "./data/cache.bolt")
+	viper.SetDefault("cache.max_bytes", 256<<20)
 	viper.SetDefault("query.timeout", 30*time.Second)
 	viper.SetDefault("query.batch.max_points", 10000)
 	viper.SetDefault("query.batch.max_sync_points", 1000)

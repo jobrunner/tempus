@@ -8,7 +8,7 @@ import (
 )
 
 func TestBoltCache_Roundtrip(t *testing.T) {
-	c, err := Open(filepath.Join(t.TempDir(), "c.bolt"))
+	c, err := Open(filepath.Join(t.TempDir(), "c.bolt"), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
