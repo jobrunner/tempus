@@ -76,6 +76,11 @@ day — so maturity only decides how long something is cached:
   and results count as final only ten minutes after their hour does, so a
   result computed from a block served just before the moment stays short-lived.
 
+Which models a query reads is decided from coverage: for cached months the
+hours that hold a value, for the others the bucket listing. A query whose
+months are all cached therefore needs the bucket for nothing, not even
+planning — it keeps working through a bucket outage.
+
 Concurrent misses for the same month of the same cell — nearby points in one
 batch, typically — share a single upstream read.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -321,4 +322,34 @@ func TestApp_RunStartsBackgroundTasksUntilCancelled(t *testing.T) {
 		t.Fatal("background task did not stop with Run's context")
 	}
 	<-done
+}
+
+// TestApp_BackgroundStopsWhenRunFails: when the server cannot start, Run
+// returns while the caller's context lives on — the background tasks must
+// stop anyway.
+func TestApp_BackgroundStopsWhenRunFails(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+	cfg := testConfig(t)
+	cfg.Server.Port = busy.Addr().(*net.TCPAddr).Port
+	a, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	stopped := make(chan struct{})
+	a.background = []func(context.Context){func(ctx context.Context) {
+		<-ctx.Done()
+		close(stopped)
+	}}
+	if err := a.Run(context.Background()); err == nil {
+		t.Fatal("Run on an occupied port must fail")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("background task still running after Run returned")
+	}
 }

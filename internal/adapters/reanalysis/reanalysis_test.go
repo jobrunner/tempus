@@ -103,12 +103,13 @@ type fakeReader struct {
 	at func(key string, t time.Time) float32
 	// uncovered lists model/variable keys the archive has no file for.
 	uncovered map[string]bool
-	// coverageErr fails every coverage lookup.
-	coverageErr error
+	// coverageErr fails coverage lookups — all, or only coverageErrOn's.
+	coverageErr   error
+	coverageErrOn string
 }
 
-func (f *fakeReader) Coverage(_ context.Context, model, variable string, from, to time.Time) (int, error) {
-	if f.coverageErr != nil {
+func (f *fakeReader) Coverage(_ context.Context, model, variable string, _ []uint64, from, to time.Time) (int, error) {
+	if f.coverageErr != nil && (f.coverageErrOn == "" || f.coverageErrOn == model+"/"+variable) {
 		return 0, f.coverageErr
 	}
 	if f.uncovered[model+"/"+variable] {
@@ -381,5 +382,18 @@ func TestArchiveDirectories(t *testing.T) {
 	// IFS and ERA5: 7 stored variables each (wind as u and v); ERA5-Land: 2.
 	if len(dirs) != 16 {
 		t.Errorf("%d directories, want 16", len(dirs))
+	}
+}
+
+// TestHourly_CoverageErrorOfAnUnneededModelIsIgnored: the IFS covers the
+// range without gaps, so a failed ERA5-Land listing must not fail the read.
+func TestHourly_CoverageErrorOfAnUnneededModelIsIgnored(t *testing.T) {
+	f := &fakeReader{
+		values:        map[string]float32{domainIFS + "/" + VarTemperature: 12},
+		coverageErr:   errors.New("listing failed"),
+		coverageErrOn: domainERA5Land + "/" + VarTemperature,
+	}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature); err != nil {
+		t.Errorf("unneeded model's coverage error failed the read: %v", err)
 	}
 }

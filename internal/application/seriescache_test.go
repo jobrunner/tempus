@@ -21,7 +21,7 @@ type fakeSeries struct {
 	onRead func() // runs inside every read, e.g. to move a clock
 }
 
-func (f *fakeSeries) Coverage(_ context.Context, _, _ string, from, to time.Time) (int, error) {
+func (f *fakeSeries) Coverage(_ context.Context, _, _ string, _ []uint64, from, to time.Time) (int, error) {
 	return int(to.Sub(from) / time.Hour), nil
 }
 
@@ -216,7 +216,7 @@ func TestSeriesCache_KeepsNaN(t *testing.T) {
 
 type nanSeries struct{ v float32 }
 
-func (n nanSeries) Coverage(_ context.Context, _, _ string, from, to time.Time) (int, error) {
+func (n nanSeries) Coverage(_ context.Context, _, _ string, _ []uint64, from, to time.Time) (int, error) {
 	return int(to.Sub(from) / time.Hour), nil
 }
 
@@ -383,5 +383,72 @@ func TestSeriesCache_ReadCrossingFinalityIsNotCached(t *testing.T) {
 	checkSeries(t, got, from, from.Add(time.Hour))
 	if cache.sets != 0 {
 		t.Errorf("a block read across a finality boundary was cached (TTL %v)", cache.setTTL)
+	}
+}
+
+// coverageSeries is fakeSeries with a configurable coverage answer.
+type coverageSeries struct {
+	fakeSeries
+	coverageCalls []readCall
+	coverageErr   error
+}
+
+func (c *coverageSeries) Coverage(_ context.Context, _, _ string, _ []uint64, from, to time.Time) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.coverageCalls = append(c.coverageCalls, readCall{from, to})
+	if c.coverageErr != nil {
+		return 0, c.coverageErr
+	}
+	return int(to.Sub(from) / time.Hour), nil
+}
+
+// TestSeriesCache_CoverageFromCachedMonthsNeedsNoBucket: once the months are
+// cached, coverage is answered without the inner reader — so a bucket outage
+// does not fail a query the cache can serve.
+func TestSeriesCache_CoverageFromCachedMonthsNeedsNoBucket(t *testing.T) {
+	inner := &coverageSeries{}
+	r := NewCachingSeriesReader(inner, newFakeLockedCache(), fixedClock{seriesNow}, seriesOpts())
+	from := time.Date(2020, 3, 5, 0, 0, 0, 0, time.UTC)
+	to := from.Add(24 * time.Hour)
+	if _, err := r.ReadSeries(context.Background(), "era5", "t", []uint64{1}, from, to); err != nil {
+		t.Fatal(err)
+	}
+	inner.coverageErr = errors.New("bucket down")
+	n, err := r.Coverage(context.Background(), "era5", "t", []uint64{1}, from, to)
+	if err != nil || n != 24 {
+		t.Fatalf("coverage = %d, %v; want 24 from the cache", n, err)
+	}
+	if len(inner.coverageCalls) != 0 {
+		t.Errorf("inner coverage asked %v although every month was cached", inner.coverageCalls)
+	}
+	// A range reaching into an uncached month needs the bucket for that part.
+	if _, err := r.Coverage(context.Background(), "era5", "t", []uint64{1}, from, from.AddDate(0, 1, 0)); err == nil {
+		t.Error("an uncached month must ask the bucket")
+	}
+	if c := inner.coverageCalls[0]; !c.from.Equal(time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC)) || !c.to.Equal(from.AddDate(0, 1, 0)) {
+		t.Errorf("inner asked for %v, want only the uncached part of April", c)
+	}
+}
+
+// TestSeriesCache_CoverageCountsOnlyCachedValues: a month cached empty (a
+// model without data then) is not covered.
+func TestSeriesCache_CoverageCountsOnlyCachedValues(t *testing.T) {
+	r := NewCachingSeriesReader(nanSeries{float32(math.NaN())}, newFakeLockedCache(), fixedClock{seriesNow}, seriesOpts())
+	from := time.Date(2005, 3, 5, 0, 0, 0, 0, time.UTC)
+	if _, err := r.ReadSeries(context.Background(), "ecmwf_ifs", "t", []uint64{1}, from, from.Add(24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := r.Coverage(context.Background(), "ecmwf_ifs", "t", []uint64{1}, from, from.Add(24*time.Hour)); err != nil || n != 0 {
+		t.Errorf("coverage of a month cached as NaN = %d, %v; want 0", n, err)
+	}
+}
+
+func TestSeriesCache_LongCoveragePassesThrough(t *testing.T) {
+	inner := &coverageSeries{}
+	r := NewCachingSeriesReader(inner, newFakeLockedCache(), fixedClock{seriesNow}, seriesOpts())
+	from, to := time.Date(1991, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
+	if n, _ := r.Coverage(context.Background(), "era5", "t", []uint64{1}, from, to); n != int(to.Sub(from)/time.Hour) || len(inner.coverageCalls) != 1 {
+		t.Errorf("coverage = %d after %d inner calls, want a single pass-through", n, len(inner.coverageCalls))
 	}
 }

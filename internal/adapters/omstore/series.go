@@ -46,8 +46,9 @@ func (s *Store) ReadSeries(ctx context.Context, domain, variable string, coord [
 }
 
 // Coverage reports how many of the hours [from, to) of variable in domain
-// lie in a file of the bucket. It costs a listing at most, never a data read.
-func (s *Store) Coverage(ctx context.Context, domain, variable string, from, to time.Time) (int, error) {
+// lie in a file of the bucket; every grid location has the same files, so
+// coord is not needed. It costs a listing at most, never a data read.
+func (s *Store) Coverage(ctx context.Context, domain, variable string, _ []uint64, from, to time.Time) (int, error) {
 	cat, err := s.catalog(ctx, domain, variable)
 	if err != nil {
 		return 0, err

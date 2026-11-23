@@ -403,7 +403,7 @@ func TestCoverage_CountsHoursWithAFileAndReadsNoData(t *testing.T) {
 	// 24 hours before the first year file (only a stale chunk) + 2 in 2001.
 	from := time.Date(2000, 12, 31, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2001, 1, 1, 2, 0, 0, 0, time.UTC)
-	n, err := s.Coverage(context.Background(), testDomain, varTemp, from, to)
+	n, err := s.Coverage(context.Background(), testDomain, varTemp, nil, from, to)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,10 +414,10 @@ func TestCoverage_CountsHoursWithAFileAndReadsNoData(t *testing.T) {
 		t.Errorf("data requests = %d, list pages = %d; want no data read, only the listing", b.requests, b.lists)
 	}
 	mid := time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC) // far from the file's first hour
-	if n, _ := s.Coverage(context.Background(), testDomain, varTemp, mid, mid.Add(48*time.Hour)); n != 48 {
+	if n, _ := s.Coverage(context.Background(), testDomain, varTemp, nil, mid, mid.Add(48*time.Hour)); n != 48 {
 		t.Errorf("coverage inside a year file = %d, want 48", n)
 	}
-	if n, _ := s.Coverage(context.Background(), testDomain, "absent", from, to); n != 0 {
+	if n, _ := s.Coverage(context.Background(), testDomain, "absent", nil, from, to); n != 0 {
 		t.Errorf("coverage of an empty directory = %d, want 0", n)
 	}
 }
@@ -511,5 +511,25 @@ func TestReadSeries_MetadataSurvivesARestart(t *testing.T) {
 		if first[i] != second[i] {
 			t.Fatalf("hour %d: %v after restart, %v before", i, second[i], first[i])
 		}
+	}
+}
+
+// TestReadSeries_NoETagNoPersistence: without an ETag the persistent key
+// would survive a file replacement, so such metadata is never persisted.
+func TestReadSeries_NoETagNoPersistence(t *testing.T) {
+	b := newFakeBucket(t)
+	for k := range b.etags {
+		b.etags[k] = ""
+	}
+	srv := httptest.NewServer(b)
+	t.Cleanup(srv.Close)
+	meta := &mapCache{m: map[string][]byte{}}
+	from := time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC)
+	s := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), Meta: meta})
+	if _, err := s.ReadSeries(context.Background(), testDomain, varTemp, []uint64{0, 0}, from, from.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if len(meta.m) != 0 {
+		t.Errorf("%d metadata entries persisted for files without an ETag", len(meta.m))
 	}
 }

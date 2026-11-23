@@ -17,7 +17,7 @@ func (s *Store) array(ctx context.Context, obj object) (omfile.Array, error) {
 		return a, nil
 	}
 	v, err := s.flight.do(ctx, key, func(ctx context.Context) (any, error) {
-		raw, err := s.persisted(ctx, "array|"+key, func(ctx context.Context) ([]byte, error) { return s.fetchVariable(ctx, obj) })
+		raw, err := s.persisted(ctx, obj, "array|"+key, func(ctx context.Context) ([]byte, error) { return s.fetchVariable(ctx, obj) })
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +66,7 @@ func (s *Store) lut(ctx context.Context, obj object, p omfile.Plan) ([]byte, err
 		return b, nil
 	}
 	v, err := s.flight.do(ctx, key, func(ctx context.Context) (any, error) {
-		b, err := s.persisted(ctx, "lut|"+key, func(ctx context.Context) ([]byte, error) { return s.get(ctx, obj, off, n) })
+		b, err := s.persisted(ctx, obj, "lut|"+key, func(ctx context.Context) ([]byte, error) { return s.get(ctx, obj, off, n) })
 		if err != nil {
 			return nil, err
 		}
@@ -89,11 +89,13 @@ const metaTTL = 30 * 24 * time.Hour
 const metaVersion = "omstore-meta|v1|"
 
 // persisted returns the bytes cached under key, or fetches, stores and
-// returns them. Without a persistent cache it only fetches. Metadata of the
-// files read so far then survives a restart, which saves the tail and LUT
-// round trips of the first read after every deploy.
-func (s *Store) persisted(ctx context.Context, key string, fetch func(context.Context) ([]byte, error)) ([]byte, error) {
-	if s.meta == nil {
+// returns them. Metadata of the files read so far then survives a restart,
+// which saves the tail and LUT round trips of the first read after every
+// deploy. Without a persistent cache, or for an object without an ETag —
+// whose key would then not change when the file is replaced — it only
+// fetches.
+func (s *Store) persisted(ctx context.Context, obj object, key string, fetch func(context.Context) ([]byte, error)) ([]byte, error) {
+	if s.meta == nil || obj.ETag == "" {
 		return fetch(ctx)
 	}
 	if raw, ok, err := s.meta.Get(ctx, metaVersion+key); err == nil && ok {

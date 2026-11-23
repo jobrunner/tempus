@@ -94,8 +94,12 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Background tasks end when Run does, on every path — also when the
+	// server fails to start while the caller's context lives on.
+	bgCtx, stopBackground := context.WithCancel(ctx)
+	defer stopBackground()
 	for _, task := range a.background {
-		go task(ctx)
+		go task(bgCtx)
 	}
 
 	errCh := make(chan error, 1)

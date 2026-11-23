@@ -2,7 +2,6 @@ package reanalysis
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 )
@@ -11,26 +10,28 @@ import (
 // by priority, whose files cover some of the hours, up to and including the
 // first that covers all of them: a model without files there would only
 // yield NaN (IFS before 2017), and models after a complete one are needed
-// only where its values have gaps. covered[m][vi] reports whether model m has
-// any file for variable vi, for the gap rounds after round 1. The coverage
-// comes from the bucket listings and costs no data read.
+// only where its values have gaps. covered[m][vi] reports whether model m may
+// have data for variable vi, for the gap rounds after round 1. The coverage
+// costs no data read. A failed coverage lookup only fails the read when the
+// model is needed in round 1; for the gap rounds it counts as covered, so the
+// read itself reports the trouble if it comes to that.
 func (a *Assembler) plan(ctx context.Context, sels []selection, vars []string, from, to time.Time) (first [][]int, covered [][]bool, err error) {
-	hours, err := a.coverage(ctx, sels, vars, from, to)
-	if err != nil {
-		return nil, nil, err
-	}
+	hours, errs := a.coverage(ctx, sels, vars, from, to)
 	total := int(to.Sub(from) / time.Hour)
 	first, covered = make([][]int, len(models)), make([][]bool, len(models))
 	for m := range models {
 		covered[m] = make([]bool, len(vars))
 		for vi := range vars {
-			covered[m][vi] = hours[m][vi] > 0
+			covered[m][vi] = hours[m][vi] > 0 || errs[m][vi] != nil
 		}
 	}
 	for vi := range vars {
 		for m := range models {
 			if !covered[m][vi] {
 				continue
+			}
+			if errs[m][vi] != nil {
+				return nil, nil, errs[m][vi]
 			}
 			first[m] = append(first[m], vi)
 			if hours[m][vi] >= total {
@@ -42,24 +43,23 @@ func (a *Assembler) plan(ctx context.Context, sels []selection, vars []string, f
 }
 
 // coverage asks the reader, for every model and the variables it provides,
-// all at once, how many hours of [from, to) have a file.
-func (a *Assembler) coverage(ctx context.Context, sels []selection, vars []string, from, to time.Time) ([][]int, error) {
-	hours := make([][]int, len(models))
-	errs := make([]error, len(models)*len(vars))
+// all at once, how many hours of [from, to) it can serve at the model's cell.
+func (a *Assembler) coverage(ctx context.Context, sels []selection, vars []string, from, to time.Time) (hours [][]int, errs [][]error) {
+	hours, errs = make([][]int, len(models)), make([][]error, len(models))
 	var wg sync.WaitGroup
 	for m, sel := range sels {
-		hours[m] = make([]int, len(vars))
+		hours[m], errs[m] = make([]int, len(vars)), make([]error, len(vars))
 		for vi, v := range vars {
 			if !sel.model.vars[v] {
 				continue
 			}
 			wg.Go(func() {
-				hours[m][vi], errs[m*len(vars)+vi] = a.reader.Coverage(ctx, sel.model.name, storedName(v), from, to)
+				hours[m][vi], errs[m][vi] = a.reader.Coverage(ctx, sel.model.name, storedName(v), sel.cell.Coord, from, to)
 			})
 		}
 	}
 	wg.Wait()
-	return hours, errors.Join(errs...)
+	return hours, errs
 }
 
 // storedName is the archive variable an output variable is read from (the
