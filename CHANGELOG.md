@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.27.1](https://github.com/jobrunner/tempus/compare/v0.27.0...v0.27.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* **reanalysis:** cancel left-behind lookups and reads when a read returns ([bd10b85](https://github.com/jobrunner/tempus/commit/bd10b85b355cc0313ddd258e81bd06649d30535a))
+* **reanalysis:** collect round 1 in priority order and never publish a superseded listing ([dbf1640](https://github.com/jobrunner/tempus/commit/dbf164095029f84be1b729ea5ed34c49391b7b70))
+* **reanalysis:** plan from cached months, fail only on needed models, stop background with Run ([88659d0](https://github.com/jobrunner/tempus/commit/88659d069a96c73c0f4ef85d02665808c2898100))
+* **reanalysis:** wait only for needed coverage answers, cancel refresh listings, copy the root variable ([4336e9f](https://github.com/jobrunner/tempus/commit/4336e9f5c08568e5ca849a54be98e9d0900c4069))
+
+
+### Performance Improvements
+
+* **reanalysis:** read every model and variable in one round and keep bucket metadata warm ([027523d](https://github.com/jobrunner/tempus/commit/027523d3b923eabd6afc16b3af618d11cf16aa7c))
+
 ## [0.27.0](https://github.com/jobrunner/tempus/compare/v0.26.0...v0.27.0) (2026-11-22)
 
 
