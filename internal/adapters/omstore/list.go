@@ -6,10 +6,13 @@ import (
 	"time"
 )
 
-// invalidate drops the listing that contains key.
+// invalidate drops the listing that contains key. A listing that started
+// before the invalidation must not bring it back when it finishes.
 func (s *Store) invalidate(key string) {
 	dir := key[:max(0, lastSlash(key))]
 	s.mu.Lock()
+	s.listSeq++
+	s.dropped[dir] = s.listSeq
 	delete(s.catalogs, dir)
 	s.mu.Unlock()
 }
@@ -69,15 +72,41 @@ func (s *Store) relist(ctx context.Context, dir string) (*catalog, error) {
 	return v.(*catalog), nil
 }
 
-// listInto lists dir on ctx and caches the result.
+// listInto lists dir on ctx and caches the result, unless a newer listing
+// or an invalidation got there first.
 func (s *Store) listInto(ctx context.Context, dir string) (*catalog, error) {
+	seq := s.beginListing()
 	objs, err := s.list(ctx, dir+"/")
 	if err != nil {
 		return nil, err
 	}
 	c := newCatalog(objs, s.now())
+	c.seq = seq
+	return s.publish(dir, c), nil
+}
+
+// beginListing numbers a listing as it starts.
+func (s *Store) beginListing() uint64 {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.listSeq++
+	return s.listSeq
+}
+
+// publish caches c as dir's catalog when it is the newest view: no listing
+// that started later has been published and the directory was not
+// invalidated after c's listing started. A delayed background refresh thus
+// never replaces a newer catalog with an older snapshot. It returns the
+// catalog that is current afterwards.
+func (s *Store) publish(dir string, c *catalog) *catalog {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cur, ok := s.catalogs[dir]; ok && cur.seq > c.seq {
+		return cur
+	}
+	if s.dropped[dir] > c.seq {
+		return c
+	}
 	s.catalogs[dir] = c
-	s.mu.Unlock()
-	return c, nil
+	return c
 }

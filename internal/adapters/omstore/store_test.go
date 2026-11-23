@@ -578,3 +578,32 @@ func TestFetchVariable_ReturnsACompactCopy(t *testing.T) {
 		t.Errorf("len %d, cap %d: the slice still pins the %d-byte tail buffer", len(raw), cap(raw), tailBytes)
 	}
 }
+
+// TestPublish_DelayedListingNeverReplacesANewerView: a background listing
+// that started before an invalidation and a newer listing must not overwrite
+// the newer catalog, nor resurrect the invalidated one.
+func TestPublish_DelayedListingNeverReplacesANewerView(t *testing.T) {
+	s := New(Options{BaseURL: "http://unused"})
+	const dir = "data/d/v"
+	cat := func(seq uint64) *catalog { c := newCatalog(nil, time.Now()); c.seq = seq; return c }
+
+	stale := s.beginListing()
+	s.invalidate(dir + "/chunk_1.om") // a 412: the file was rewritten
+	fresh := s.beginListing()
+	if got := s.publish(dir, cat(fresh)); got.seq != fresh {
+		t.Fatalf("fresh listing not published: seq %d", got.seq)
+	}
+	if got := s.publish(dir, cat(stale)); got.seq != fresh {
+		t.Errorf("delayed listing replaced the newer catalog: seq %d", got.seq)
+	}
+
+	older := s.beginListing()
+	s.invalidate(dir + "/chunk_1.om")
+	s.publish(dir, cat(older))
+	s.mu.Lock()
+	_, cached := s.catalogs[dir]
+	s.mu.Unlock()
+	if cached {
+		t.Error("a listing begun before the invalidation was cached")
+	}
+}

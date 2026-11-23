@@ -9,8 +9,10 @@ import (
 // first that covers all of them: a model without files there would only
 // yield NaN (IFS before 2017), and models after a complete one are needed
 // only where its values have gaps. It waits for a model's answer only when it
-// gets to that model, and a failed lookup fails the read only then.
-func plan(ctx context.Context, lookups [][]*lookup, vars []string, total int) ([][]int, error) {
+// gets to that model. A failed lookup schedules the read anyway: whether its
+// failure matters is decided by collect, once it is clear whether the higher
+// models leave anything for this one.
+func plan(ctx context.Context, lookups [][]*lookup, vars []string, total int) [][]int {
 	first := make([][]int, len(models))
 	for vi := range vars {
 		for m := range models {
@@ -19,19 +21,16 @@ func plan(ctx context.Context, lookups [][]*lookup, vars []string, total int) ([
 				continue
 			}
 			hours, err := l.wait(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if hours == 0 {
+			if err == nil && hours == 0 {
 				continue
 			}
 			first[m] = append(first[m], vi)
-			if hours >= total {
+			if err == nil && hours >= total {
 				break
 			}
 		}
 	}
-	return first, nil
+	return first
 }
 
 // storedName is the archive variable an output variable is read from (the

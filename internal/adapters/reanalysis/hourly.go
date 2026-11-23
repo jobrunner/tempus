@@ -6,8 +6,6 @@ package reanalysis
 
 import (
 	"context"
-	"errors"
-	"sync"
 	"time"
 
 	ra "github.com/jobrunner/tempus/internal/domain/reanalysis"
@@ -92,7 +90,8 @@ func rawOrder(need map[string]bool) []string {
 }
 
 // readModels reads vars from every model into perVar[variable][model].
-// Round 1 reads, all models at once, what plan picked; further rounds read a
+// Round 1 starts, all models at once, what plan picked and collects it in
+// priority order (see collect); further rounds read a
 // lower-priority model only for variables whose mix of everything read so far
 // still has a gap (sea hours of a land model, a partly written file). Mixing
 // takes a lower model only where the higher ones have gaps, so reading it in
@@ -103,17 +102,9 @@ func (a *Assembler) readModels(ctx context.Context, sels []selection, loc Locati
 		perVar[i] = make([][]float32, len(models))
 	}
 	lookups := a.coverage(ctx, sels, vars, from, to)
-	first, err := plan(ctx, lookups, vars, int(to.Sub(from)/time.Hour))
-	if err != nil {
-		return nil, err
-	}
-	errs := make([]error, len(models))
-	var wg sync.WaitGroup
-	for m := range models {
-		wg.Go(func() { errs[m] = a.readRound(ctx, sels[m], loc, vars, first[m], perVar, m, from, to) })
-	}
-	wg.Wait()
-	if err := errors.Join(errs...); err != nil {
+	first := plan(ctx, lookups, vars, int(to.Sub(from)/time.Hour))
+	pending := a.startRound(ctx, sels, loc, vars, first, from, to)
+	if err := collect(ctx, vars, perVar, pending); err != nil {
 		return nil, err
 	}
 	for m := range models {
