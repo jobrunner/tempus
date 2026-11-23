@@ -101,6 +101,20 @@ type fakeReader struct {
 	// at, when set, serves the value of model/variable at hour t instead of
 	// the constant from values.
 	at func(key string, t time.Time) float32
+	// uncovered lists model/variable keys the archive has no file for.
+	uncovered map[string]bool
+	// coverageErr fails every coverage lookup.
+	coverageErr error
+}
+
+func (f *fakeReader) Coverage(_ context.Context, model, variable string, from, to time.Time) (int, error) {
+	if f.coverageErr != nil {
+		return 0, f.coverageErr
+	}
+	if f.uncovered[model+"/"+variable] {
+		return 0, nil
+	}
+	return int(to.Sub(from) / time.Hour), nil
 }
 
 func (f *fakeReader) ReadSeries(_ context.Context, model, variable string, _ []uint64, from, to time.Time) ([]float32, error) {
@@ -286,5 +300,86 @@ func TestDaily_WindowAndDayBoundaries(t *testing.T) {
 		if d.TMin[i] > 10*dom+shift+1e-3 || d.TMax[i] < 10*(dom+1)+shift-1e-3 {
 			t.Errorf("day %d: extrema %v/%v", i, d.TMin[i], d.TMax[i])
 		}
+	}
+}
+
+// TestHourly_SkipsModelsWithoutFilesAndReadsTheRestAtOnce: before 2017 the
+// IFS has no files; it must not be read, and ERA5-Land and ERA5 are read in
+// the same round instead of one after the other.
+func TestHourly_SkipsModelsWithoutFilesAndReadsTheRestAtOnce(t *testing.T) {
+	uncovered := map[string]bool{}
+	for _, v := range []string{VarTemperature, VarDewPoint, VarPrecip, varSnowfallWater, varWindU, VarCloud} {
+		uncovered[domainIFS+"/"+v] = true
+	}
+	f := &fakeReader{uncovered: uncovered, values: map[string]float32{
+		domainERA5Land + "/" + VarTemperature: 20, domainERA5Land + "/" + VarDewPoint: 10,
+		domainERA5 + "/" + VarPrecip: 0.4, domainERA5 + "/" + VarCloud: 90,
+		domainERA5 + "/" + varSnowfallWater: 0,
+		domainERA5 + "/" + varWindU:         3, domainERA5 + "/" + varWindV: 4,
+	}}
+	h, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour),
+		domain.VarTemperature, domain.VarWeatherCode, domain.VarWind)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range f.reads {
+		if strings.HasPrefix(r, domainIFS+"/") {
+			t.Errorf("read %s although the IFS has no file for the range", r)
+		}
+	}
+	if f.didRead(domainERA5 + "/" + VarTemperature) {
+		t.Error("ERA5 temperature read although ERA5-Land covers the range without gaps")
+	}
+	if got := h.Values[domain.VarWind][0]; math.Abs(got-18) > 1e-4 {
+		t.Errorf("wind = %v km/h, want 18 (5 m/s from u=3, v=4)", got)
+	}
+}
+
+// TestHourly_CompleteHighModelReadsNothingBelow: when the IFS covers the
+// range and has no gaps, the lower models are never read.
+func TestHourly_CompleteHighModelReadsNothingBelow(t *testing.T) {
+	f := &fakeReader{values: map[string]float32{
+		domainIFS + "/" + VarTemperature: 12, domainIFS + "/" + VarPrecip: 0.5,
+	}}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour),
+		domain.VarTemperature, domain.VarPrecip); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range f.reads {
+		if !strings.HasPrefix(r, domainIFS+"/") {
+			t.Errorf("read %s although the IFS filled every hour", r)
+		}
+	}
+}
+
+func TestHourly_CoverageErrorFails(t *testing.T) {
+	f := &fakeReader{coverageErr: errors.New("listing failed")}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature); err == nil {
+		t.Error("a failed coverage lookup must fail the read")
+	}
+}
+
+func TestArchiveDirectories(t *testing.T) {
+	dirs := ArchiveDirectories()
+	want := map[string]bool{
+		domainIFS + "/" + varWindU: true, domainIFS + "/" + varWindV: true,
+		domainIFS + "/" + varSnowfallWater: true, domainERA5Land + "/" + VarTemperature: true,
+		domainERA5 + "/" + VarCloud: true,
+	}
+	got := map[string]bool{}
+	for _, d := range dirs {
+		got[d] = true
+	}
+	for d := range want {
+		if !got[d] {
+			t.Errorf("missing %s in %v", d, dirs)
+		}
+	}
+	if got[domainERA5Land+"/"+VarPrecip] {
+		t.Error("ERA5-Land provides no precipitation")
+	}
+	// IFS and ERA5: 7 stored variables each (wind as u and v); ERA5-Land: 2.
+	if len(dirs) != 16 {
+		t.Errorf("%d directories, want 16", len(dirs))
 	}
 }

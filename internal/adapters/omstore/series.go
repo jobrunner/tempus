@@ -45,6 +45,24 @@ func (s *Store) ReadSeries(ctx context.Context, domain, variable string, coord [
 	return out, nil
 }
 
+// Coverage reports how many of the hours [from, to) of variable in domain
+// lie in a file of the bucket. It costs a listing at most, never a data read.
+func (s *Store) Coverage(ctx context.Context, domain, variable string, from, to time.Time) (int, error) {
+	cat, err := s.catalog(ctx, domain, variable)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, seg := range cat.resolve(from.Unix()/3600, to.Unix()/3600) {
+		hours := seg.t1 - seg.t0
+		if hours > math.MaxInt32 { // a segment spans one file, a year at most
+			return 0, fmt.Errorf("omstore: %s: segment of %d hours", seg.obj.Key, hours)
+		}
+		n += int(hours)
+	}
+	return n, nil
+}
+
 func (s *Store) readSegment(ctx context.Context, seg segment, coord []uint64) ([]float32, error) {
 	a, err := s.array(ctx, seg.obj)
 	if err != nil {

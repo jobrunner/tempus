@@ -77,3 +77,19 @@ func TestTransport_NoRetryOn400(t *testing.T) {
 		t.Fatalf("upstream calls = %d, want 1 (4xx must not retry)", calls.Load())
 	}
 }
+
+func TestDefaultBase_KeepsIdleConnectionsForParallelReads(t *testing.T) {
+	tr, ok := defaultBase(32).(*http.Transport)
+	if !ok {
+		t.Fatal("default base must be an *http.Transport")
+	}
+	if tr.MaxIdleConnsPerHost != 32 || tr.MaxIdleConns < 32 {
+		t.Errorf("idle per host = %d, total = %d; want 32 and >= 32", tr.MaxIdleConnsPerHost, tr.MaxIdleConns)
+	}
+	if tr == http.DefaultTransport {
+		t.Error("the shared default transport must not be modified")
+	}
+	if d := defaultBase(0).(*http.Transport); d.MaxIdleConnsPerHost != http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost {
+		t.Errorf("zero must keep Go's default, got %d", d.MaxIdleConnsPerHost)
+	}
+}

@@ -396,3 +396,120 @@ func TestList_StopsAfterMaxPages(t *testing.T) {
 		t.Fatalf("endless listing: err = %v", err)
 	}
 }
+
+func TestCoverage_CountsHoursWithAFileAndReadsNoData(t *testing.T) {
+	b := newFakeBucket(t)
+	s := newTestStore(t, b, time.Now)
+	// 24 hours before the first year file (only a stale chunk) + 2 in 2001.
+	from := time.Date(2000, 12, 31, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2001, 1, 1, 2, 0, 0, 0, time.UTC)
+	n, err := s.Coverage(context.Background(), testDomain, varTemp, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("coverage = %d, want 2", n)
+	}
+	if b.requests != 0 || b.lists == 0 {
+		t.Errorf("data requests = %d, list pages = %d; want no data read, only the listing", b.requests, b.lists)
+	}
+	mid := time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC) // far from the file's first hour
+	if n, _ := s.Coverage(context.Background(), testDomain, varTemp, mid, mid.Add(48*time.Hour)); n != 48 {
+		t.Errorf("coverage inside a year file = %d, want 48", n)
+	}
+	if n, _ := s.Coverage(context.Background(), testDomain, "absent", from, to); n != 0 {
+		t.Errorf("coverage of an empty directory = %d, want 0", n)
+	}
+}
+
+func TestKeepListed_ListsUpFrontAndStopsWithItsContext(t *testing.T) {
+	b := newFakeBucket(t)
+	s := newTestStore(t, b, time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		s.KeepListed(ctx, []string{testDomain + "/" + varTemp, testDomain + "/" + varCloud})
+		close(done)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		n := len(s.catalogs)
+		s.mu.Unlock()
+		if n == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("listings cached: %d, want 2", n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	b.mu.Lock()
+	lists := b.lists
+	b.mu.Unlock()
+	if _, err := s.ReadSeries(context.Background(), testDomain, varTemp, []uint64{0, 0},
+		time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2001, 6, 2, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if b.lists != lists {
+		t.Error("a query listed again although the refresher had listed the directory")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("KeepListed did not stop with its context")
+	}
+}
+
+// mapCache is a minimal output.Cache for the persistence test.
+type mapCache struct {
+	mu sync.Mutex
+	m  map[string][]byte
+}
+
+func (c *mapCache) Get(_ context.Context, k string) ([]byte, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	v, ok := c.m[k]
+	return v, ok, nil
+}
+
+func (c *mapCache) Set(_ context.Context, k string, v []byte, _ time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.m[k] = v
+	return nil
+}
+
+// TestReadSeries_MetadataSurvivesARestart: a new store on the same persistent
+// cache (a restarted process) needs only the data read, not tail and LUT.
+func TestReadSeries_MetadataSurvivesARestart(t *testing.T) {
+	b := newFakeBucket(t)
+	srv := httptest.NewServer(b)
+	t.Cleanup(srv.Close)
+	meta := &mapCache{m: map[string][]byte{}}
+	from := time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(48 * time.Hour)
+	read := func() []float32 {
+		s := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), Meta: meta})
+		got, err := s.ReadSeries(context.Background(), testDomain, varTemp, []uint64{0, 0}, from, to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	first := read()
+	if b.requests != 3 {
+		t.Fatalf("first process: %d requests, want 3 (tail, LUT, data)", b.requests)
+	}
+	second := read()
+	if b.requests != 4 {
+		t.Errorf("restarted process: %d more requests, want 1 (data only)", b.requests-3)
+	}
+	for i := range first {
+		if first[i] != second[i] {
+			t.Fatalf("hour %d: %v after restart, %v before", i, second[i], first[i])
+		}
+	}
+}

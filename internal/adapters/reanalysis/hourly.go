@@ -6,6 +6,8 @@ package reanalysis
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"time"
 
 	ra "github.com/jobrunner/tempus/internal/domain/reanalysis"
@@ -89,16 +91,32 @@ func rawOrder(need map[string]bool) []string {
 	return vars
 }
 
-// readModels reads vars from every model into perVar[variable][model]. Round
-// 1 reads the highest-priority model; later rounds only the variables that
-// still have gaps, exactly where mixing would look.
+// readModels reads vars from every model into perVar[variable][model].
+// Round 1 reads, all models at once, what plan picked; further rounds read a
+// lower-priority model only for variables whose mix of everything read so far
+// still has a gap (sea hours of a land model, a partly written file). Mixing
+// takes a lower model only where the higher ones have gaps, so reading it in
+// round 1 changes nothing — it only saves a round-trip chain.
 func (a *Assembler) readModels(ctx context.Context, sels []selection, loc Location, vars []string, from, to time.Time) ([][][]float32, error) {
 	perVar := make([][][]float32, len(vars))
 	for i := range perVar {
 		perVar[i] = make([][]float32, len(models))
 	}
+	first, covered, err := a.plan(ctx, sels, vars, from, to)
+	if err != nil {
+		return nil, err
+	}
+	errs := make([]error, len(models))
+	var wg sync.WaitGroup
 	for m := range models {
-		need := gapped(sels[m].model, vars, perVar, m)
+		wg.Go(func() { errs[m] = a.readRound(ctx, sels[m], loc, vars, first[m], perVar, m, from, to) })
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	for m := range models {
+		need := gapped(sels[m].model, vars, perVar, covered[m], m)
 		if err := a.readRound(ctx, sels[m], loc, vars, need, perVar, m, from, to); err != nil {
 			return nil, err
 		}
@@ -106,16 +124,13 @@ func (a *Assembler) readModels(ctx context.Context, sels []selection, loc Locati
 	return perVar, nil
 }
 
-// gapped returns the indices of the variables model m (provided by mdl)
-// should read: all it provides in round 1, afterwards those whose mix of the
-// earlier models still has a gap.
-func gapped(mdl model, vars []string, perVar [][][]float32, m int) []int {
+// gapped returns the variables model m (provided by mdl) still has to read:
+// those it covers and has not read whose mix of everything read so far still
+// has a gap.
+func gapped(mdl model, vars []string, perVar [][][]float32, covered []bool, m int) []int {
 	var need []int
 	for vi, v := range vars {
-		if !mdl.vars[v] {
-			continue
-		}
-		if m == 0 || hasGap(ra.Mix(perVar[vi][:m], true)) {
+		if mdl.vars[v] && covered[vi] && perVar[vi][m] == nil && hasGap(ra.Mix(perVar[vi], true)) {
 			need = append(need, vi)
 		}
 	}

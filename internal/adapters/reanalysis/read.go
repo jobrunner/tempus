@@ -9,6 +9,13 @@ import (
 	ra "github.com/jobrunner/tempus/internal/domain/reanalysis"
 )
 
+// Archive variables read under another name than the output variable.
+const (
+	varSnowfallWater = "snowfall_water_equivalent"
+	varWindU         = "wind_u_component_10m"
+	varWindV         = "wind_v_component_10m"
+)
+
 // readRound reads the variables need of one model in parallel.
 func (a *Assembler) readRound(ctx context.Context, sel selection, loc Location, vars []string, need []int, perVar [][][]float32, m int, from, to time.Time) error {
 	errs := make([]error, len(need))
@@ -38,18 +45,21 @@ func (a *Assembler) read(ctx context.Context, sel selection, v string, from, to 
 	}
 	switch v {
 	case VarSnowfall:
-		s, err := get("snowfall_water_equivalent")
+		s, err := get(varSnowfallWater)
 		for i := range s {
 			s[i] = ra.SnowfallCm(s[i])
 		}
 		return s, err
 	case VarWind:
-		u, err := get("wind_u_component_10m")
-		if err != nil {
-			return nil, err
-		}
-		w, err := get("wind_v_component_10m")
-		if err != nil {
+		// Both components at once: one after the other costs a second
+		// round-trip chain to the bucket.
+		var u, w []float32
+		var errU, errV error
+		var wg sync.WaitGroup
+		wg.Go(func() { u, errU = get(varWindU) })
+		wg.Go(func() { w, errV = get(varWindV) })
+		wg.Wait()
+		if err := errors.Join(errU, errV); err != nil {
 			return nil, err
 		}
 		for i := range u {

@@ -69,7 +69,10 @@ and can change which model cell is selected.
 ## Cost per request
 
 Reads are HTTP range requests against the bucket; tempus fetches only the bytes
-a series needs and keeps file metadata (headers, lookup tables) in memory.
+a series needs, reads every model and variable a query needs at once, and keeps
+file metadata (headers, lookup tables) in memory and in the cache. See
+[Operate the reanalysis archive](../how-to/operate-reanalysis.md#latency-and-parallelism)
+for what that means for latency.
 Measured against the bucket (us-west-2):
 
 - **One weather day** for one location: tens of kB.

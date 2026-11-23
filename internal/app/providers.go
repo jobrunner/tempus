@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -23,31 +24,34 @@ import (
 // buildReanalysis wires the reanalysis archive: the open-data store behind a
 // retrying (and, with tp, traced) transport, its month blocks cached per
 // model cell, and the service that selects, corrects and mixes the model
-// series. Nil when the archive is disabled.
-func buildReanalysis(cfg *config.Config, cache output.Cache, clk output.Clock, tp trace.TracerProvider) output.Reanalysis {
+// series. The returned background task keeps the bucket listings warm for as
+// long as its context lives. Both are nil when the archive is disabled.
+func buildReanalysis(cfg *config.Config, cache output.Cache, clk output.Clock, tp trace.TracerProvider) (output.Reanalysis, func(context.Context)) {
 	r := cfg.Providers.Reanalysis
 	if !r.Enabled {
-		return nil
+		return nil, nil
 	}
 	client := &http.Client{
 		Timeout: r.Timeout,
 		// No limiter and no budget: the bucket has no quota. The transport
 		// still retries 5xx/network failures and traces each attempt.
-		Transport: bucketio.NewTransport(bucketio.Options{RetryAttempts: r.RetryAttempts, TracerProvider: tp}),
+		Transport: bucketio.NewTransport(bucketio.Options{RetryAttempts: r.RetryAttempts, TracerProvider: tp, IdleConnsPerHost: r.MaxParallel}),
 	}
 	store := omstore.New(omstore.Options{
 		BaseURL:     r.BaseURL,
 		HTTPClient:  client,
 		MaxParallel: r.MaxParallel,
 		ListTTL:     r.ListTTL,
+		Meta:        cache,
 	})
+	keepListed := func(ctx context.Context) { store.KeepListed(ctx, reanalysis.ArchiveDirectories()) }
 	return reanalysis.NewService(application.NewCachingSeriesReader(store, cache, clk, application.SeriesCacheOptions{
 		Version:     "1",
 		Maturity:    r.Maturity,
 		MatureTTL:   365 * 24 * time.Hour,
 		ImmatureTTL: time.Hour,
 		MaxSpan:     400 * 24 * time.Hour,
-	}))
+	})), keepListed
 }
 
 // buildRegistry decides which providers this configuration runs. It is separate

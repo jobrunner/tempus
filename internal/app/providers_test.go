@@ -1,20 +1,22 @@
 package app
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/jobrunner/tempus/internal/adapters/clock"
 	"github.com/jobrunner/tempus/internal/domain"
+	"github.com/jobrunner/tempus/internal/ports/output"
 )
 
 func TestBuildReanalysis_DisabledIsNil(t *testing.T) {
 	cfg := testConfig(t)
-	if buildReanalysis(cfg, nil, clock.System{}, nil) == nil {
+	if archive, keepListed := buildReanalysis(cfg, nil, clock.System{}, nil); archive == nil || keepListed == nil {
 		t.Fatal("enabled archive must be built")
 	}
 	cfg.Providers.Reanalysis.Enabled = false
-	if buildReanalysis(cfg, nil, clock.System{}, nil) != nil {
+	if archive, keepListed := buildReanalysis(cfg, nil, clock.System{}, nil); archive != nil || keepListed != nil {
 		t.Fatal("disabled archive must be nil, so its providers are not registered")
 	}
 }
@@ -30,7 +32,7 @@ func TestBuildReanalysis_DisabledIsNil(t *testing.T) {
 // to boot in production.
 func TestEveryRegisteredProviderDeclaresACompleteLicense(t *testing.T) {
 	cfg := testConfig(t)
-	reg := buildRegistry(cfg, nil, clock.System{}, buildReanalysis(cfg, nil, clock.System{}, nil))
+	reg := buildRegistry(cfg, nil, clock.System{}, archiveOnly(buildReanalysis(cfg, nil, clock.System{}, nil)))
 
 	all := reg.All()
 	if len(all) == 0 {
@@ -61,4 +63,9 @@ func TestGDDKeyParam(t *testing.T) {
 	if got := gddKeyParam(domain.QueryRequest{GDDBaseCelsius: &base}); got != "gdd=7.50" {
 		t.Errorf("override: %q, want gdd=7.50", got)
 	}
+}
+
+// archiveOnly drops the background task of buildReanalysis.
+func archiveOnly(archive output.Reanalysis, _ func(context.Context)) output.Reanalysis {
+	return archive
 }

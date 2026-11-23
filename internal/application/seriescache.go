@@ -44,6 +44,12 @@ func NewCachingSeriesReader(inner output.SeriesReader, cache output.Cache, clock
 	return &CachingSeriesReader{inner: inner, cache: cache, clock: clock, opts: opts}
 }
 
+// Coverage implements output.SeriesReader; the inner reader answers it from
+// its listings.
+func (c *CachingSeriesReader) Coverage(ctx context.Context, domain, variable string, from, to time.Time) (int, error) {
+	return c.inner.Coverage(ctx, domain, variable, from, to)
+}
+
 // series names one variable at one grid location of one model.
 type series struct {
 	domain, variable string

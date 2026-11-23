@@ -23,6 +23,8 @@ type App struct {
 	logger  *slog.Logger
 	server  *httpapi.Server
 	closers []func() error
+	// background runs for as long as Run's context lives.
+	background []func(context.Context)
 }
 
 const cacheTypeMemory = "memory"
@@ -49,7 +51,11 @@ func New(cfg *config.Config, logger *slog.Logger, version string) (*App, error) 
 	}
 
 	clk := clock.System{}
-	registry := buildRegistry(cfg, cache, clk, buildReanalysis(cfg, cache, clk, tp))
+	archive, keepListed := buildReanalysis(cfg, cache, clk, tp)
+	if keepListed != nil {
+		a.background = append(a.background, keepListed)
+	}
+	registry := buildRegistry(cfg, cache, clk, archive)
 
 	serverOpts, err := a.wireObservability(version, tp)
 	if err != nil {
@@ -87,6 +93,10 @@ func (a *App) Run(ctx context.Context) error {
 			_ = c()
 		}
 	}()
+
+	for _, task := range a.background {
+		go task(ctx)
+	}
 
 	errCh := make(chan error, 1)
 	go func() {

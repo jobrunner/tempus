@@ -21,6 +21,10 @@ type fakeSeries struct {
 	onRead func() // runs inside every read, e.g. to move a clock
 }
 
+func (f *fakeSeries) Coverage(_ context.Context, _, _ string, from, to time.Time) (int, error) {
+	return int(to.Sub(from) / time.Hour), nil
+}
+
 func (f *fakeSeries) ReadSeries(_ context.Context, _, _ string, _ []uint64, from, to time.Time) ([]float32, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -211,6 +215,10 @@ func TestSeriesCache_KeepsNaN(t *testing.T) {
 }
 
 type nanSeries struct{ v float32 }
+
+func (n nanSeries) Coverage(_ context.Context, _, _ string, from, to time.Time) (int, error) {
+	return int(to.Sub(from) / time.Hour), nil
+}
 
 func (n nanSeries) ReadSeries(_ context.Context, _, _ string, _ []uint64, from, to time.Time) ([]float32, error) {
 	out := make([]float32, int(to.Sub(from)/time.Hour))

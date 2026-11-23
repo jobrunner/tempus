@@ -85,9 +85,12 @@ in) are never cached.
 ## What is not cached on disk
 
 The archive is not mirrored wholesale — only the months points were actually
-asked about. The store keeps bucket listings (for
-`TEMPUS_PROVIDERS_REANALYSIS_LIST_TTL`) and file metadata in memory only, so a
-restart costs a few extra range requests, nothing more.
+asked about. Bucket listings live in memory only (refreshed in the background,
+see `TEMPUS_PROVIDERS_REANALYSIS_LIST_TTL`). File metadata — the root variable
+from each file's tail and the lookup-table blocks reads needed — lives in
+memory and, keyed by file and ETag, in the cache for up to 30 days, so the
+first reads after a restart skip those round trips. A rewritten file has a new
+ETag and therefore never gets stale metadata.
 
 ## Cache backends
 
