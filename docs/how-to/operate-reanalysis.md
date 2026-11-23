@@ -25,13 +25,33 @@ rate limit to stay under; the bucket is anonymous AWS Open Data.
 ## Latency and parallelism
 
 The bucket lives in AWS `us-west-2` (Oregon), so from Europe every round trip
-crosses the Atlantic. tempus therefore reads all files of a series in parallel,
-fetches only the byte ranges a series needs, and caches file metadata in
-memory. Measured against the bucket:
+crosses the Atlantic (about 190 ms). A cold read of one file is a chain of
+round trips — directory listing, file tail, lookup-table block, data — so
+latency comes from how many such chains run one after the other, not from the
+bytes. tempus keeps that to one chain per query:
+
+- all files of a series, all variables (both wind components included) and
+  all models a query needs are read at once; a model is read only when the
+  bucket listing shows files for the period (the IFS starts in 2017), and a
+  lower-priority model afterwards only where the higher ones leave gaps;
+- the listings are refreshed in the background (at three quarters of
+  `LIST_TTL`), so no query waits for one;
+- file tails and lookup-table blocks are kept in the cache as well as in
+  memory, so they survive a restart;
+- the transport keeps `MAX_PARALLEL` idle connections to the bucket instead of
+  Go's two, so parallel requests reuse TLS connections.
+
+Measured from Germany for one weather day (21 range requests):
+
+| Situation | v0.27.0 | Now |
+|---|---|---|
+| Cold, listings warm (the normal cold case) | about 3.3 s (2025), 6.5 s (2005) | about 1.1 s |
+| File metadata cached (another week of the same files, or after a restart) | about 2 s | about 0.75 s |
+| Month already in the cache | — | no request |
 
 | Read | Range requests | Cost |
 |---|---|---|
-| One weather day for one location | a few per model | tens of kB transferred |
+| One weather day for one location | about 21 | tens of kB transferred |
 | 30 years of one variable in one cell, cold | about 90 | about 2.6 s, 1.2 MB |
 | The same, metadata cached | one per file | about 1 s |
 
@@ -44,8 +64,9 @@ uplink changes.
 The knobs (see [Configure providers](configure-providers.md#providers-reanalysis-archive)):
 
 - `TEMPUS_PROVIDERS_REANALYSIS_MAX_PARALLEL` (default `32`) — concurrent range
-  requests per tempus process. Raise it for many concurrent cold bioclim
-  queries; lower it on a thin uplink.
+  requests per tempus process, and the number of idle connections kept to the
+  bucket. Raise it for many concurrent cold bioclim queries; lower it on a
+  thin uplink.
 - `TEMPUS_PROVIDERS_REANALYSIS_TIMEOUT` (default `30s`) — the whole budget of
   one range request: all its attempts **and** the backoff waits between them
   share it, so a slow first attempt or a long `Retry-After` can use it up
@@ -57,7 +78,8 @@ The knobs (see [Configure providers](configure-providers.md#providers-reanalysis
 - `TEMPUS_PROVIDERS_REANALYSIS_LIST_TTL` (default `1h`) — how long a directory
   listing, and with it the ETags that pin cached metadata, is trusted. The
   newest chunk files are rewritten daily; a longer TTL means fewer listings but
-  a later view of the newest hours.
+  a later view of the newest hours. tempus re-lists the 16 directories it
+  reads in the background at three quarters of this TTL, from start-up on.
 
 Every request that goes over the wire is a client span in the trace (see
 [Observability](../reference/observability.md#tracing-opentelemetry)); that is
@@ -71,8 +93,10 @@ the image). It holds the archive months that queries actually touched (one
 month of one variable at one model cell, about 3 KB) and finished results.
 
 - **Memory:** the store keeps directory listings and up to 4096 file headers
-  and 4096 lookup-table blocks per process (bounded LRU caches). A restart only
-  costs some extra range requests.
+  and 4096 lookup-table blocks per process (bounded LRU caches). Headers and
+  lookup-table blocks also go to the cache (a few KiB per file, keyed by the
+  file's ETag, kept up to 30 days), so a restart costs only the listings, which
+  the background refresh fetches right away.
 - **Cache size:** `TEMPUS_CACHE_MAX_BYTES` (default 256 MiB, `0` = unbounded)
   caps the live entries of either backend; going over it evicts the least
   recently used ones. Final data is kept for a year at most, data younger than

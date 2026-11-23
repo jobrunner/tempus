@@ -22,6 +22,8 @@ type catalog struct {
 	years   map[int]object
 	chunks  map[int64]object
 	fetched time.Time
+	// seq numbers the listing this catalog came from (Store.beginListing).
+	seq uint64
 }
 
 func newCatalog(objs []object, fetched time.Time) *catalog {

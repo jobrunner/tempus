@@ -29,6 +29,12 @@ type Options struct {
 	// TracerProvider, when non-nil, wraps Base so each actual attempt becomes
 	// its own client span under the caller's span. Nil disables that tracing.
 	TracerProvider trace.TracerProvider
+	// IdleConnsPerHost is how many idle connections to the bucket the default
+	// base keeps for reuse; it should match the store's parallelism. Go keeps
+	// two, so every burst of parallel range requests would otherwise open new
+	// connections and pay a TCP and TLS handshake each. Zero keeps Go's
+	// default. Ignored when Base is set.
+	IdleConnsPerHost int
 }
 
 // Transport retries GET requests on 429/5xx/network failures, honoring
@@ -39,12 +45,12 @@ type Transport struct {
 	base     http.RoundTripper
 }
 
-// NewTransport builds the transport; a nil Base falls back to
-// http.DefaultTransport.
+// NewTransport builds the transport; a nil Base falls back to a copy of
+// http.DefaultTransport keeping IdleConnsPerHost idle connections.
 func NewTransport(opts Options) *Transport {
 	base := opts.Base
 	if base == nil {
-		base = http.DefaultTransport
+		base = defaultBase(opts.IdleConnsPerHost)
 	}
 	if opts.TracerProvider != nil {
 		// Wrapping the base (not this Transport) gives one span per attempt, so
@@ -56,6 +62,15 @@ func NewTransport(opts Options) *Transport {
 		)
 	}
 	return &Transport{attempts: opts.RetryAttempts, base: base}
+}
+
+func defaultBase(idlePerHost int) http.RoundTripper {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	if idlePerHost > 0 {
+		t.MaxIdleConnsPerHost = idlePerHost
+		t.MaxIdleConns = max(t.MaxIdleConns, idlePerHost)
+	}
+	return t
 }
 
 // RoundTrip implements http.RoundTripper.

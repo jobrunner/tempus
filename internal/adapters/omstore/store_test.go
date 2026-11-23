@@ -396,3 +396,214 @@ func TestList_StopsAfterMaxPages(t *testing.T) {
 		t.Fatalf("endless listing: err = %v", err)
 	}
 }
+
+func TestCoverage_CountsHoursWithAFileAndReadsNoData(t *testing.T) {
+	b := newFakeBucket(t)
+	s := newTestStore(t, b, time.Now)
+	// 24 hours before the first year file (only a stale chunk) + 2 in 2001.
+	from := time.Date(2000, 12, 31, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2001, 1, 1, 2, 0, 0, 0, time.UTC)
+	n, err := s.Coverage(context.Background(), testDomain, varTemp, nil, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("coverage = %d, want 2", n)
+	}
+	if b.requests != 0 || b.lists == 0 {
+		t.Errorf("data requests = %d, list pages = %d; want no data read, only the listing", b.requests, b.lists)
+	}
+	mid := time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC) // far from the file's first hour
+	if n, _ := s.Coverage(context.Background(), testDomain, varTemp, nil, mid, mid.Add(48*time.Hour)); n != 48 {
+		t.Errorf("coverage inside a year file = %d, want 48", n)
+	}
+	if n, _ := s.Coverage(context.Background(), testDomain, "absent", nil, from, to); n != 0 {
+		t.Errorf("coverage of an empty directory = %d, want 0", n)
+	}
+}
+
+func TestKeepListed_ListsUpFrontAndStopsWithItsContext(t *testing.T) {
+	b := newFakeBucket(t)
+	s := newTestStore(t, b, time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		s.KeepListed(ctx, []string{testDomain + "/" + varTemp, testDomain + "/" + varCloud})
+		close(done)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		n := len(s.catalogs)
+		s.mu.Unlock()
+		if n == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("listings cached: %d, want 2", n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	b.mu.Lock()
+	lists := b.lists
+	b.mu.Unlock()
+	if _, err := s.ReadSeries(context.Background(), testDomain, varTemp, []uint64{0, 0},
+		time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2001, 6, 2, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if b.lists != lists {
+		t.Error("a query listed again although the refresher had listed the directory")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("KeepListed did not stop with its context")
+	}
+}
+
+// mapCache is a minimal output.Cache for the persistence test.
+type mapCache struct {
+	mu sync.Mutex
+	m  map[string][]byte
+}
+
+func (c *mapCache) Get(_ context.Context, k string) ([]byte, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	v, ok := c.m[k]
+	return v, ok, nil
+}
+
+func (c *mapCache) Set(_ context.Context, k string, v []byte, _ time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.m[k] = v
+	return nil
+}
+
+// TestReadSeries_MetadataSurvivesARestart: a new store on the same persistent
+// cache (a restarted process) needs only the data read, not tail and LUT.
+func TestReadSeries_MetadataSurvivesARestart(t *testing.T) {
+	b := newFakeBucket(t)
+	srv := httptest.NewServer(b)
+	t.Cleanup(srv.Close)
+	meta := &mapCache{m: map[string][]byte{}}
+	from := time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(48 * time.Hour)
+	read := func() []float32 {
+		s := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), Meta: meta})
+		got, err := s.ReadSeries(context.Background(), testDomain, varTemp, []uint64{0, 0}, from, to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	first := read()
+	if b.requests != 3 {
+		t.Fatalf("first process: %d requests, want 3 (tail, LUT, data)", b.requests)
+	}
+	second := read()
+	if b.requests != 4 {
+		t.Errorf("restarted process: %d more requests, want 1 (data only)", b.requests-3)
+	}
+	for i := range first {
+		if first[i] != second[i] {
+			t.Fatalf("hour %d: %v after restart, %v before", i, second[i], first[i])
+		}
+	}
+}
+
+// TestReadSeries_NoETagNoPersistence: without an ETag the persistent key
+// would survive a file replacement, so such metadata is never persisted.
+func TestReadSeries_NoETagNoPersistence(t *testing.T) {
+	b := newFakeBucket(t)
+	for k := range b.etags {
+		b.etags[k] = ""
+	}
+	srv := httptest.NewServer(b)
+	t.Cleanup(srv.Close)
+	meta := &mapCache{m: map[string][]byte{}}
+	from := time.Date(2001, 6, 1, 0, 0, 0, 0, time.UTC)
+	s := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), Meta: meta})
+	if _, err := s.ReadSeries(context.Background(), testDomain, varTemp, []uint64{0, 0}, from, from.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if len(meta.m) != 0 {
+		t.Errorf("%d metadata entries persisted for files without an ETag", len(meta.m))
+	}
+}
+
+// TestKeepListed_CancelStopsInFlightListings: shutting down must cancel the
+// listing requests themselves, not only stop waiting for them.
+func TestKeepListed_CancelStopsInFlightListings(t *testing.T) {
+	started, aborted := make(chan struct{}, 1), make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		started <- struct{}{}
+		<-r.Context().Done()
+		aborted <- struct{}{}
+	}))
+	t.Cleanup(srv.Close)
+	s := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		s.KeepListed(ctx, []string{"d/v"})
+		close(done)
+	}()
+	<-started
+	cancel()
+	select {
+	case <-aborted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the in-flight listing request was not cancelled")
+	}
+	<-done
+}
+
+// TestFetchVariable_ReturnsACompactCopy: the root variable may be kept in a
+// cache; it must not pin the whole tail buffer.
+func TestFetchVariable_ReturnsACompactCopy(t *testing.T) {
+	b := newFakeBucket(t)
+	s := newTestStore(t, b, time.Now)
+	cat, err := s.catalog(context.Background(), testDomain, varTemp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := s.fetchVariable(context.Background(), cat.years[2001])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) >= tailBytes/2 || cap(raw) >= tailBytes {
+		t.Errorf("len %d, cap %d: the slice still pins the %d-byte tail buffer", len(raw), cap(raw), tailBytes)
+	}
+}
+
+// TestPublish_DelayedListingNeverReplacesANewerView: a background listing
+// that started before an invalidation and a newer listing must not overwrite
+// the newer catalog, nor resurrect the invalidated one.
+func TestPublish_DelayedListingNeverReplacesANewerView(t *testing.T) {
+	s := New(Options{BaseURL: "http://unused"})
+	const dir = "data/d/v"
+	cat := func(seq uint64) *catalog { c := newCatalog(nil, time.Now()); c.seq = seq; return c }
+
+	stale := s.beginListing()
+	s.invalidate(dir + "/chunk_1.om") // a 412: the file was rewritten
+	fresh := s.beginListing()
+	if got := s.publish(dir, cat(fresh)); got.seq != fresh {
+		t.Fatalf("fresh listing not published: seq %d", got.seq)
+	}
+	if got := s.publish(dir, cat(stale)); got.seq != fresh {
+		t.Errorf("delayed listing replaced the newer catalog: seq %d", got.seq)
+	}
+
+	older := s.beginListing()
+	s.invalidate(dir + "/chunk_1.om")
+	s.publish(dir, cat(older))
+	s.mu.Lock()
+	_, cached := s.catalogs[dir]
+	s.mu.Unlock()
+	if cached {
+		t.Error("a listing begun before the invalidation was cached")
+	}
+}

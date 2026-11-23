@@ -52,6 +52,9 @@ type Options struct {
 	// pin cached metadata) is trusted. Recent chunk files are rewritten daily.
 	ListTTL time.Duration
 	Now     func() time.Time
+	// Meta, when set, keeps file metadata (root variables, LUT blocks) across
+	// restarts; nil keeps it in memory only.
+	Meta output.Cache
 }
 
 // Store reads series from the bucket. It is safe for concurrent use.
@@ -64,10 +67,15 @@ type Store struct {
 
 	mu       sync.Mutex
 	catalogs map[string]*catalog
+	// listSeq numbers listings and invalidations; dropped holds, per
+	// directory, the number of its last invalidation (all guarded by mu).
+	listSeq uint64
+	dropped map[string]uint64
 
 	flight flightGroup
 	arrays *lru[string, omfile.Array]
 	luts   *lru[string, []byte]
+	meta   output.Cache
 
 	stats Stats
 }
@@ -118,8 +126,10 @@ func New(opts Options) *Store {
 		listTTL:  ttl,
 		now:      now,
 		catalogs: map[string]*catalog{},
+		dropped:  map[string]uint64{},
 		arrays:   newLRU[string, omfile.Array](defaultCacheItems),
 		luts:     newLRU[string, []byte](defaultCacheItems),
+		meta:     opts.Meta,
 	}
 }
 

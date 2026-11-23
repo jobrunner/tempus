@@ -101,6 +101,37 @@ type fakeReader struct {
 	// at, when set, serves the value of model/variable at hour t instead of
 	// the constant from values.
 	at func(key string, t time.Time) float32
+	// uncovered lists model/variable keys the archive has no file for.
+	uncovered map[string]bool
+	// coverageErr fails coverage lookups — all, or only coverageErrOn's.
+	coverageErr   error
+	coverageErrOn string
+	// coverageHangOn makes that model/variable's coverage lookup hang until
+	// its context ends; hangEnded is closed then (if set).
+	coverageHangOn string
+	hangEnded      chan struct{}
+	// coverageHours overrides the covered hours per model/variable.
+	coverageHours map[string]int
+}
+
+func (f *fakeReader) Coverage(ctx context.Context, model, variable string, _ []uint64, from, to time.Time) (int, error) {
+	if f.coverageHangOn == model+"/"+variable {
+		<-ctx.Done()
+		if f.hangEnded != nil {
+			close(f.hangEnded)
+		}
+		return 0, ctx.Err()
+	}
+	if f.coverageErr != nil && (f.coverageErrOn == "" || f.coverageErrOn == model+"/"+variable) {
+		return 0, f.coverageErr
+	}
+	if n, ok := f.coverageHours[model+"/"+variable]; ok {
+		return n, nil
+	}
+	if f.uncovered[model+"/"+variable] {
+		return 0, nil
+	}
+	return int(to.Sub(from) / time.Hour), nil
 }
 
 func (f *fakeReader) ReadSeries(_ context.Context, model, variable string, _ []uint64, from, to time.Time) ([]float32, error) {
@@ -126,6 +157,8 @@ func (f *fakeReader) ReadSeries(_ context.Context, model, variable string, _ []u
 }
 
 func (f *fakeReader) didRead(key string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, r := range f.reads {
 		if r == key {
 			return true
@@ -286,5 +319,256 @@ func TestDaily_WindowAndDayBoundaries(t *testing.T) {
 		if d.TMin[i] > 10*dom+shift+1e-3 || d.TMax[i] < 10*(dom+1)+shift-1e-3 {
 			t.Errorf("day %d: extrema %v/%v", i, d.TMin[i], d.TMax[i])
 		}
+	}
+}
+
+// TestHourly_SkipsModelsWithoutFilesAndReadsTheRestAtOnce: before 2017 the
+// IFS has no files; it must not be read, and ERA5-Land and ERA5 are read in
+// the same round instead of one after the other.
+func TestHourly_SkipsModelsWithoutFilesAndReadsTheRestAtOnce(t *testing.T) {
+	uncovered := map[string]bool{}
+	for _, v := range []string{VarTemperature, VarDewPoint, VarPrecip, varSnowfallWater, varWindU, VarCloud} {
+		uncovered[domainIFS+"/"+v] = true
+	}
+	f := &fakeReader{uncovered: uncovered, values: map[string]float32{
+		domainERA5Land + "/" + VarTemperature: 20, domainERA5Land + "/" + VarDewPoint: 10,
+		domainERA5 + "/" + VarPrecip: 0.4, domainERA5 + "/" + VarCloud: 90,
+		domainERA5 + "/" + varSnowfallWater: 0,
+		domainERA5 + "/" + varWindU:         3, domainERA5 + "/" + varWindV: 4,
+	}}
+	h, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour),
+		domain.VarTemperature, domain.VarWeatherCode, domain.VarWind)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range f.reads {
+		if strings.HasPrefix(r, domainIFS+"/") {
+			t.Errorf("read %s although the IFS has no file for the range", r)
+		}
+	}
+	if f.didRead(domainERA5 + "/" + VarTemperature) {
+		t.Error("ERA5 temperature read although ERA5-Land covers the range without gaps")
+	}
+	if got := h.Values[domain.VarWind][0]; math.Abs(got-18) > 1e-4 {
+		t.Errorf("wind = %v km/h, want 18 (5 m/s from u=3, v=4)", got)
+	}
+}
+
+// TestHourly_CompleteHighModelReadsNothingBelow: when the IFS covers the
+// range and has no gaps, the lower models are never read.
+func TestHourly_CompleteHighModelReadsNothingBelow(t *testing.T) {
+	f := &fakeReader{values: map[string]float32{
+		domainIFS + "/" + VarTemperature: 12, domainIFS + "/" + VarPrecip: 0.5,
+	}}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour),
+		domain.VarTemperature, domain.VarPrecip); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range f.reads {
+		if !strings.HasPrefix(r, domainIFS+"/") {
+			t.Errorf("read %s although the IFS filled every hour", r)
+		}
+	}
+	if len(f.reads) != 2 {
+		t.Errorf("reads %v, want each needed series exactly once", f.reads)
+	}
+}
+
+// TestHourly_FailedLookupStillReads: an unknown coverage schedules the read
+// instead of failing the query; only the read's own failure counts.
+func TestHourly_FailedLookupStillReads(t *testing.T) {
+	f := &fakeReader{coverageErr: errors.New("listing failed"), values: map[string]float32{domainIFS + "/" + VarTemperature: 12}}
+	h, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature)
+	if err != nil {
+		t.Fatalf("a failed lookup alone must not fail the read: %v", err)
+	}
+	if h.Values[domain.VarTemperature][0] != h.Values[domain.VarTemperature][0] {
+		t.Error("temperature missing although the IFS read succeeded")
+	}
+	f = &fakeReader{coverageErr: errors.New("listing failed"), err: errors.New("bucket down")}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature); err == nil {
+		t.Error("a failed lookup and a failed read must fail the query")
+	}
+}
+
+// TestHourly_LowerModelFailureIgnoredWhenHigherModelsComplete: IFS and
+// ERA5-Land cover complementary hours; ERA5 is scheduled but not needed, so
+// its read failure must not fail the query.
+func TestHourly_LowerModelFailureIgnoredWhenHigherModelsComplete(t *testing.T) {
+	half := day.Add(12 * time.Hour)
+	f := &fakeReader{
+		at: func(key string, at time.Time) float32 {
+			switch {
+			case key == domainIFS+"/"+VarTemperature && !at.Before(half):
+				return 12
+			case key == domainERA5Land+"/"+VarTemperature && at.Before(half):
+				return 10
+			}
+			return nan32
+		},
+		err:    errors.New("bucket down"),
+		failOn: domainERA5 + "/" + VarTemperature,
+		// Each covers half the day, so ERA5 is scheduled in round 1.
+		coverageHours: map[string]int{domainIFS + "/" + VarTemperature: 12, domainERA5Land + "/" + VarTemperature: 12},
+	}
+	h, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour), domain.VarTemperature)
+	if err != nil {
+		t.Fatalf("unneeded ERA5 failure failed the query: %v", err)
+	}
+	for i, v := range h.Values[domain.VarTemperature] {
+		if v != v {
+			t.Fatalf("hour %d has no value", i)
+		}
+	}
+	if !f.didRead(domainERA5 + "/" + VarTemperature) {
+		t.Error("the test needs ERA5 scheduled in round 1")
+	}
+}
+
+func TestArchiveDirectories(t *testing.T) {
+	dirs := ArchiveDirectories()
+	want := map[string]bool{
+		domainIFS + "/" + varWindU: true, domainIFS + "/" + varWindV: true,
+		domainIFS + "/" + varSnowfallWater: true, domainERA5Land + "/" + VarTemperature: true,
+		domainERA5 + "/" + VarCloud: true,
+	}
+	got := map[string]bool{}
+	for _, d := range dirs {
+		got[d] = true
+	}
+	for d := range want {
+		if !got[d] {
+			t.Errorf("missing %s in %v", d, dirs)
+		}
+	}
+	if got[domainERA5Land+"/"+VarPrecip] {
+		t.Error("ERA5-Land provides no precipitation")
+	}
+	// IFS and ERA5: 7 stored variables each (wind as u and v); ERA5-Land: 2.
+	if len(dirs) != 16 {
+		t.Errorf("%d directories, want 16", len(dirs))
+	}
+}
+
+// TestHourly_CoverageErrorOfAnUnneededModelIsIgnored: the IFS covers the
+// range without gaps, so a failed ERA5-Land listing must not fail the read.
+func TestHourly_CoverageErrorOfAnUnneededModelIsIgnored(t *testing.T) {
+	f := &fakeReader{
+		values:        map[string]float32{domainIFS + "/" + VarTemperature: 12},
+		coverageErr:   errors.New("listing failed"),
+		coverageErrOn: domainERA5Land + "/" + VarTemperature,
+	}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature); err != nil {
+		t.Errorf("unneeded model's coverage error failed the read: %v", err)
+	}
+}
+
+// TestHourly_HangingLookupOfAnUnneededModelDoesNotHold: the IFS covers the
+// range; a lookup for ERA5-Land that never answers (a bucket outage) must
+// not delay the read.
+func TestHourly_HangingLookupOfAnUnneededModelDoesNotHold(t *testing.T) {
+	f := &fakeReader{
+		values:         map[string]float32{domainIFS + "/" + VarTemperature: 12},
+		coverageHangOn: domainERA5Land + "/" + VarTemperature,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	if _, err := NewService(f).Hourly(ctx, munich, day, day.Add(time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("read took %v, held by an unneeded lookup", d)
+	}
+}
+
+// ifsGapAtFirstHour serves IFS temperature with a gap in the first hour and
+// a constant elsewhere; every other model has a constant everywhere.
+func ifsGapAtFirstHour(key string, at time.Time) float32 {
+	if key == domainIFS+"/"+VarTemperature && at.Equal(day) {
+		return nan32
+	}
+	return 12
+}
+
+// TestHourly_GapRoundSkipsModelsWithoutFiles: a gap in the IFS is filled
+// from the next model that has files, not from one that has none.
+func TestHourly_GapRoundSkipsModelsWithoutFiles(t *testing.T) {
+	f := &fakeReader{at: ifsGapAtFirstHour, uncovered: map[string]bool{domainERA5Land + "/" + VarTemperature: true}}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	if f.didRead(domainERA5Land + "/" + VarTemperature) {
+		t.Error("gap round read ERA5-Land although it has no files")
+	}
+	if !f.didRead(domainERA5 + "/" + VarTemperature) {
+		t.Error("gap round did not read ERA5 to fill the IFS gap")
+	}
+}
+
+// TestHourly_GapRoundTriesAModelWhoseLookupFailed: an unknown coverage is
+// no reason to leave a gap; the read is attempted.
+func TestHourly_GapRoundTriesAModelWhoseLookupFailed(t *testing.T) {
+	f := &fakeReader{at: ifsGapAtFirstHour, coverageErr: errors.New("listing failed"), coverageErrOn: domainERA5Land + "/" + VarTemperature}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	if !f.didRead(domainERA5Land + "/" + VarTemperature) {
+		t.Error("gap round skipped ERA5-Land although only its lookup failed")
+	}
+}
+
+// TestHourly_DewPointIsHeightCorrectedInEveryRound: like the temperature,
+// the dew point is moved to the target height — from round 1 (IFS) and
+// from a gap round (ERA5-Land fills the IFS gap).
+func TestHourly_DewPointIsHeightCorrectedInEveryRound(t *testing.T) {
+	f := &fakeReader{at: func(key string, at time.Time) float32 {
+		switch key {
+		case domainIFS + "/" + VarDewPoint:
+			if at.Equal(day) {
+				return nan32
+			}
+			return 10
+		case domainERA5Land + "/" + VarDewPoint:
+			return 8
+		}
+		return nan32
+	}}
+	// Far enough above the cells that no 100 m shortcut skips the correction.
+	alp := domain.GeoPoint{Lat: munich.Lat, Lon: munich.Lon, Elevation: 900}
+	h, err := NewService(f).Hourly(context.Background(), alp, day, day.Add(2*time.Hour), domain.VarDewPoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shift := func(model int) float64 {
+		return float64(float32(float32(float32(h.Cells[model].Elevation)-float32(alp.Elevation)) * ra.LapseRate))
+	}
+	if h.Cells[0].Elevation == alp.Elevation || h.Cells[1].Elevation == alp.Elevation {
+		t.Fatalf("the test needs cells off the target height: %+v", h.Cells)
+	}
+	if got, want := h.Values[domain.VarDewPoint][1], 10+shift(0); math.Abs(got-want) > 1e-4 {
+		t.Errorf("IFS dew point %v, want %v (height-corrected)", got, want)
+	}
+	if got, want := h.Values[domain.VarDewPoint][0], 8+shift(1); math.Abs(got-want) > 1e-4 {
+		t.Errorf("ERA5-Land dew point in the gap %v, want %v (height-corrected)", got, want)
+	}
+}
+
+// TestHourly_LeftBehindLookupsEndWithTheRead: an unneeded lookup that was
+// left waiting is cancelled when the read returns, not when the caller's
+// context ends.
+func TestHourly_LeftBehindLookupsEndWithTheRead(t *testing.T) {
+	f := &fakeReader{
+		values:         map[string]float32{domainIFS + "/" + VarTemperature: 12},
+		coverageHangOn: domainERA5Land + "/" + VarTemperature,
+		hangEnded:      make(chan struct{}),
+	}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-f.hangEnded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the left-behind lookup is still running after the read returned")
 	}
 }

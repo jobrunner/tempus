@@ -2,16 +2,17 @@ package omstore
 
 import (
 	"context"
-	"encoding/xml"
-	"io"
-	"net/http"
-	"net/url"
+	"sync"
+	"time"
 )
 
-// invalidate drops the listing that contains key.
+// invalidate drops the listing that contains key. A listing that started
+// before the invalidation must not bring it back when it finishes.
 func (s *Store) invalidate(key string) {
 	dir := key[:max(0, lastSlash(key))]
 	s.mu.Lock()
+	s.listSeq++
+	s.dropped[dir] = s.listSeq
 	delete(s.catalogs, dir)
 	s.mu.Unlock()
 }
@@ -34,16 +35,36 @@ func (s *Store) catalog(ctx context.Context, domain, variable string) (*catalog,
 	if ok && s.now().Sub(c.fetched) < s.listTTL {
 		return c, nil
 	}
-	v, err := s.flight.do(ctx, "list:"+dir, func(ctx context.Context) (any, error) {
-		objs, err := s.list(ctx, dir+"/")
-		if err != nil {
-			return nil, err
+	return s.relist(ctx, dir)
+}
+
+// KeepListed lists the variable directories ("<domain>/<variable>") now and
+// again whenever three quarters of the listing TTL have passed, until ctx is
+// done. A query then never waits for a listing — on a cold path that is a
+// full round trip to the bucket before any data read can start. A failed
+// refresh is left to the next one; queries still list on demand.
+func (s *Store) KeepListed(ctx context.Context, dirs []string) {
+	for {
+		var wg sync.WaitGroup
+		for _, d := range dirs {
+			// Directly, not through the flight group: shared work runs
+			// detached from its caller, so a shutdown would not stop it.
+			wg.Go(func() { _, _ = s.listInto(ctx, "data/"+d) })
 		}
-		c := newCatalog(objs, s.now())
-		s.mu.Lock()
-		s.catalogs[dir] = c
-		s.mu.Unlock()
-		return c, nil
+		wg.Wait()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(s.listTTL / 4 * 3):
+		}
+	}
+}
+
+// relist fetches the listing of dir and caches it; concurrent callers share
+// one listing.
+func (s *Store) relist(ctx context.Context, dir string) (*catalog, error) {
+	v, err := s.flight.do(ctx, "list:"+dir, func(ctx context.Context) (any, error) {
+		return s.listInto(ctx, dir)
 	})
 	if err != nil {
 		return nil, err
@@ -51,61 +72,41 @@ func (s *Store) catalog(ctx context.Context, domain, variable string) (*catalog,
 	return v.(*catalog), nil
 }
 
-type listResult struct {
-	Contents []struct {
-		Key  string `xml:"Key"`
-		ETag string `xml:"ETag"`
-		Size uint64 `xml:"Size"`
-	} `xml:"Contents"`
-	IsTruncated           bool   `xml:"IsTruncated"`
-	NextContinuationToken string `xml:"NextContinuationToken"`
+// listInto lists dir on ctx and caches the result, unless a newer listing
+// or an invalidation got there first.
+func (s *Store) listInto(ctx context.Context, dir string) (*catalog, error) {
+	seq := s.beginListing()
+	objs, err := s.list(ctx, dir+"/")
+	if err != nil {
+		return nil, err
+	}
+	c := newCatalog(objs, s.now())
+	c.seq = seq
+	return s.publish(dir, c), nil
 }
 
-// maxListPages bounds the continuation loop: a variable directory holds a few
-// hundred files (1000 per page), so this is far beyond any real listing.
-const maxListPages = 100
-
-// list runs S3 ListObjectsV2 over prefix, following continuation tokens.
-func (s *Store) list(ctx context.Context, prefix string) ([]object, error) {
-	var objs []object
-	token := ""
-	for page := 0; ; page++ {
-		if page >= maxListPages {
-			return nil, upstream("list %s: more than %d pages", prefix, maxListPages)
-		}
-		res, err := s.listPage(ctx, prefix, token)
-		if err != nil {
-			return nil, err
-		}
-		for _, c := range res.Contents {
-			objs = append(objs, object{Key: c.Key, ETag: c.ETag, Size: c.Size})
-		}
-		if !res.IsTruncated || res.NextContinuationToken == "" {
-			return objs, nil
-		}
-		token = res.NextContinuationToken
-	}
+// beginListing numbers a listing as it starts.
+func (s *Store) beginListing() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.listSeq++
+	return s.listSeq
 }
 
-// listPage fetches one ListObjectsV2 page; token is empty for the first.
-func (s *Store) listPage(ctx context.Context, prefix, token string) (listResult, error) {
-	var res listResult
-	q := url.Values{"list-type": {"2"}, "prefix": {prefix}}
-	if token != "" {
-		q.Set("continuation-token", token)
+// publish caches c as dir's catalog when it is the newest view: no listing
+// that started later has been published and the directory was not
+// invalidated after c's listing started. A delayed background refresh thus
+// never replaces a newer catalog with an older snapshot. It returns the
+// catalog that is current afterwards.
+func (s *Store) publish(dir string, c *catalog) *catalog {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cur, ok := s.catalogs[dir]; ok && cur.seq > c.seq {
+		return cur
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.base+"/?"+q.Encode(), nil)
-	if err != nil {
-		return res, err
+	if s.dropped[dir] > c.seq {
+		return c
 	}
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return res, upstream("list %s: %w", prefix, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return res, upstream("list %s: status %d", prefix, resp.StatusCode)
-	}
-	err = xml.NewDecoder(io.LimitReader(resp.Body, maxBodyBytes)).Decode(&res)
-	return res, err
+	s.catalogs[dir] = c
+	return c
 }

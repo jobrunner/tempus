@@ -76,6 +76,11 @@ day — so maturity only decides how long something is cached:
   and results count as final only ten minutes after their hour does, so a
   result computed from a block served just before the moment stays short-lived.
 
+Which models a query reads is decided from coverage: for cached months the
+hours that hold a value, for the others the bucket listing. A query whose
+months are all cached therefore needs the bucket for nothing, not even
+planning — it keeps working through a bucket outage.
+
 Concurrent misses for the same month of the same cell — nearby points in one
 batch, typically — share a single upstream read.
 
@@ -85,9 +90,12 @@ in) are never cached.
 ## What is not cached on disk
 
 The archive is not mirrored wholesale — only the months points were actually
-asked about. The store keeps bucket listings (for
-`TEMPUS_PROVIDERS_REANALYSIS_LIST_TTL`) and file metadata in memory only, so a
-restart costs a few extra range requests, nothing more.
+asked about. Bucket listings live in memory only (refreshed in the background,
+see `TEMPUS_PROVIDERS_REANALYSIS_LIST_TTL`). File metadata — the root variable
+from each file's tail and the lookup-table blocks reads needed — lives in
+memory and, keyed by file and ETag, in the cache for up to 30 days, so the
+first reads after a restart skip those round trips. A rewritten file has a new
+ETag and therefore never gets stale metadata.
 
 ## Cache backends
 

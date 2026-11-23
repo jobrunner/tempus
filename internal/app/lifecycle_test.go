@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -31,6 +32,9 @@ func testConfig(t *testing.T) *config.Config {
 	// with, say, TEMPUS_PROVIDERS_BIOCLIM_ENABLED=false would fail the registry
 	// test for reasons that have nothing to do with the code.
 	cfg.Providers.Reanalysis.Enabled = true
+	// Run starts the listing refresher; it must never reach the real bucket
+	// from a unit test. Nothing listens on port 1.
+	cfg.Providers.Reanalysis.BaseURL = "http://127.0.0.1:1"
 	cfg.Providers.Aggregate.Enabled = true
 	cfg.Providers.Bioclim.Enabled = true
 	cfg.Tracing.Enabled = false
@@ -170,7 +174,7 @@ func TestBuildRegistry_RespectsConfiguration(t *testing.T) {
 
 	kinds := func(cfg *config.Config) map[string]bool {
 		out := map[string]bool{}
-		for _, p := range buildRegistry(cfg, cache, stoppedClock{}, buildReanalysis(cfg, cache, stoppedClock{}, nil)).Providers(context.Background()) {
+		for _, p := range buildRegistry(cfg, cache, stoppedClock{}, archiveOnly(buildReanalysis(cfg, cache, stoppedClock{}, nil))).Providers(context.Background()) {
 			out[p.Kind] = true
 		}
 		return out
@@ -284,5 +288,68 @@ func TestApp_RateLimitReachesTheRouter(t *testing.T) {
 	}
 	if got := do("/health/ready"); got != http.StatusOK {
 		t.Errorf("readiness probe = %d, want 200 even when the API is limited", got)
+	}
+}
+
+// TestApp_RunStartsBackgroundTasksUntilCancelled: background tasks (the
+// listing refresher) run on Run's context and stop with it.
+func TestApp_RunStartsBackgroundTasksUntilCancelled(t *testing.T) {
+	a, err := New(testConfig(t), slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if len(a.background) == 0 {
+		t.Fatal("an enabled archive must register its listing refresher")
+	}
+	started, stopped := make(chan struct{}), make(chan struct{})
+	a.background = []func(context.Context){func(ctx context.Context) {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- a.Run(ctx) }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("background task not started")
+	}
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("background task did not stop with Run's context")
+	}
+	<-done
+}
+
+// TestApp_BackgroundStopsWhenRunFails: when the server cannot start, Run
+// returns while the caller's context lives on — the background tasks must
+// stop anyway.
+func TestApp_BackgroundStopsWhenRunFails(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+	cfg := testConfig(t)
+	cfg.Server.Port = busy.Addr().(*net.TCPAddr).Port
+	a, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), "test")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	stopped := make(chan struct{})
+	a.background = []func(context.Context){func(ctx context.Context) {
+		<-ctx.Done()
+		close(stopped)
+	}}
+	if err := a.Run(context.Background()); err == nil {
+		t.Fatal("Run on an occupied port must fail")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("background task still running after Run returned")
 	}
 }
