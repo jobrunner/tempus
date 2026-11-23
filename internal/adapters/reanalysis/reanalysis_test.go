@@ -107,8 +107,9 @@ type fakeReader struct {
 	coverageErr   error
 	coverageErrOn string
 	// coverageHangOn makes that model/variable's coverage lookup hang until
-	// its context ends.
+	// its context ends; hangEnded is closed then (if set).
 	coverageHangOn string
+	hangEnded      chan struct{}
 	// coverageHours overrides the covered hours per model/variable.
 	coverageHours map[string]int
 }
@@ -116,6 +117,9 @@ type fakeReader struct {
 func (f *fakeReader) Coverage(ctx context.Context, model, variable string, _ []uint64, from, to time.Time) (int, error) {
 	if f.coverageHangOn == model+"/"+variable {
 		<-ctx.Done()
+		if f.hangEnded != nil {
+			close(f.hangEnded)
+		}
 		return 0, ctx.Err()
 	}
 	if f.coverageErr != nil && (f.coverageErrOn == "" || f.coverageErrOn == model+"/"+variable) {
@@ -547,5 +551,24 @@ func TestHourly_DewPointIsHeightCorrectedInEveryRound(t *testing.T) {
 	}
 	if got, want := h.Values[domain.VarDewPoint][0], 8+shift(1); math.Abs(got-want) > 1e-4 {
 		t.Errorf("ERA5-Land dew point in the gap %v, want %v (height-corrected)", got, want)
+	}
+}
+
+// TestHourly_LeftBehindLookupsEndWithTheRead: an unneeded lookup that was
+// left waiting is cancelled when the read returns, not when the caller's
+// context ends.
+func TestHourly_LeftBehindLookupsEndWithTheRead(t *testing.T) {
+	f := &fakeReader{
+		values:         map[string]float32{domainIFS + "/" + VarTemperature: 12},
+		coverageHangOn: domainERA5Land + "/" + VarTemperature,
+		hangEnded:      make(chan struct{}),
+	}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-f.hangEnded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the left-behind lookup is still running after the read returned")
 	}
 }

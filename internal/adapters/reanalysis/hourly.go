@@ -101,6 +101,10 @@ func (a *Assembler) readModels(ctx context.Context, sels []selection, loc Locati
 	for i := range perVar {
 		perVar[i] = make([][]float32, len(models))
 	}
+	// Lookups and reads that turn out unneeded are left behind by collect;
+	// they end when this read does.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	lookups := a.coverage(ctx, sels, vars, from, to)
 	first := plan(ctx, lookups, vars, int(to.Sub(from)/time.Hour))
 	pending := a.startRound(ctx, sels, loc, vars, first, from, to)
