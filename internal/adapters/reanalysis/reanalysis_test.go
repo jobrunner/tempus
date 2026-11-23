@@ -106,9 +106,16 @@ type fakeReader struct {
 	// coverageErr fails coverage lookups — all, or only coverageErrOn's.
 	coverageErr   error
 	coverageErrOn string
+	// coverageHangOn makes that model/variable's coverage lookup hang until
+	// its context ends.
+	coverageHangOn string
 }
 
-func (f *fakeReader) Coverage(_ context.Context, model, variable string, _ []uint64, from, to time.Time) (int, error) {
+func (f *fakeReader) Coverage(ctx context.Context, model, variable string, _ []uint64, from, to time.Time) (int, error) {
+	if f.coverageHangOn == model+"/"+variable {
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}
 	if f.coverageErr != nil && (f.coverageErrOn == "" || f.coverageErrOn == model+"/"+variable) {
 		return 0, f.coverageErr
 	}
@@ -395,5 +402,60 @@ func TestHourly_CoverageErrorOfAnUnneededModelIsIgnored(t *testing.T) {
 	}
 	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(time.Hour), domain.VarTemperature); err != nil {
 		t.Errorf("unneeded model's coverage error failed the read: %v", err)
+	}
+}
+
+// TestHourly_HangingLookupOfAnUnneededModelDoesNotHold: the IFS covers the
+// range; a lookup for ERA5-Land that never answers (a bucket outage) must
+// not delay the read.
+func TestHourly_HangingLookupOfAnUnneededModelDoesNotHold(t *testing.T) {
+	f := &fakeReader{
+		values:         map[string]float32{domainIFS + "/" + VarTemperature: 12},
+		coverageHangOn: domainERA5Land + "/" + VarTemperature,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	if _, err := NewService(f).Hourly(ctx, munich, day, day.Add(time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("read took %v, held by an unneeded lookup", d)
+	}
+}
+
+// ifsGapAtFirstHour serves IFS temperature with a gap in the first hour and
+// a constant elsewhere; every other model has a constant everywhere.
+func ifsGapAtFirstHour(key string, at time.Time) float32 {
+	if key == domainIFS+"/"+VarTemperature && at.Equal(day) {
+		return nan32
+	}
+	return 12
+}
+
+// TestHourly_GapRoundSkipsModelsWithoutFiles: a gap in the IFS is filled
+// from the next model that has files, not from one that has none.
+func TestHourly_GapRoundSkipsModelsWithoutFiles(t *testing.T) {
+	f := &fakeReader{at: ifsGapAtFirstHour, uncovered: map[string]bool{domainERA5Land + "/" + VarTemperature: true}}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	if f.didRead(domainERA5Land + "/" + VarTemperature) {
+		t.Error("gap round read ERA5-Land although it has no files")
+	}
+	if !f.didRead(domainERA5 + "/" + VarTemperature) {
+		t.Error("gap round did not read ERA5 to fill the IFS gap")
+	}
+}
+
+// TestHourly_GapRoundTriesAModelWhoseLookupFailed: an unknown coverage is
+// no reason to leave a gap; the read is attempted.
+func TestHourly_GapRoundTriesAModelWhoseLookupFailed(t *testing.T) {
+	f := &fakeReader{at: ifsGapAtFirstHour, coverageErr: errors.New("listing failed"), coverageErrOn: domainERA5Land + "/" + VarTemperature}
+	if _, err := NewService(f).Hourly(context.Background(), munich, day, day.Add(24*time.Hour), domain.VarTemperature); err != nil {
+		t.Fatal(err)
+	}
+	if !f.didRead(domainERA5Land + "/" + VarTemperature) {
+		t.Error("gap round skipped ERA5-Land although only its lookup failed")
 	}
 }

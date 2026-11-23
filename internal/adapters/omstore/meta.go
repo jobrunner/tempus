@@ -55,7 +55,9 @@ func (s *Store) fetchVariable(ctx context.Context, obj object) ([]byte, error) {
 		}
 		start = off
 	}
-	return tail[off-start : off-start+size], nil
+	// A copy: a cache may keep the bytes, and the slice would pin the whole
+	// tail buffer while only the slice is accounted for.
+	return append([]byte(nil), tail[off-start:off-start+size]...), nil
 }
 
 // lut returns the plan's LUT blocks, cached per key, ETag and block range.

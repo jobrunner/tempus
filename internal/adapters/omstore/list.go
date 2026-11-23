@@ -44,7 +44,9 @@ func (s *Store) KeepListed(ctx context.Context, dirs []string) {
 	for {
 		var wg sync.WaitGroup
 		for _, d := range dirs {
-			wg.Go(func() { _, _ = s.relist(ctx, "data/"+d) })
+			// Directly, not through the flight group: shared work runs
+			// detached from its caller, so a shutdown would not stop it.
+			wg.Go(func() { _, _ = s.listInto(ctx, "data/"+d) })
 		}
 		wg.Wait()
 		select {
@@ -55,21 +57,27 @@ func (s *Store) KeepListed(ctx context.Context, dirs []string) {
 	}
 }
 
-// relist fetches the listing of dir and caches it.
+// relist fetches the listing of dir and caches it; concurrent callers share
+// one listing.
 func (s *Store) relist(ctx context.Context, dir string) (*catalog, error) {
 	v, err := s.flight.do(ctx, "list:"+dir, func(ctx context.Context) (any, error) {
-		objs, err := s.list(ctx, dir+"/")
-		if err != nil {
-			return nil, err
-		}
-		c := newCatalog(objs, s.now())
-		s.mu.Lock()
-		s.catalogs[dir] = c
-		s.mu.Unlock()
-		return c, nil
+		return s.listInto(ctx, dir)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return v.(*catalog), nil
+}
+
+// listInto lists dir on ctx and caches the result.
+func (s *Store) listInto(ctx context.Context, dir string) (*catalog, error) {
+	objs, err := s.list(ctx, dir+"/")
+	if err != nil {
+		return nil, err
+	}
+	c := newCatalog(objs, s.now())
+	s.mu.Lock()
+	s.catalogs[dir] = c
+	s.mu.Unlock()
+	return c, nil
 }

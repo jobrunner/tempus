@@ -533,3 +533,48 @@ func TestReadSeries_NoETagNoPersistence(t *testing.T) {
 		t.Errorf("%d metadata entries persisted for files without an ETag", len(meta.m))
 	}
 }
+
+// TestKeepListed_CancelStopsInFlightListings: shutting down must cancel the
+// listing requests themselves, not only stop waiting for them.
+func TestKeepListed_CancelStopsInFlightListings(t *testing.T) {
+	started, aborted := make(chan struct{}, 1), make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		started <- struct{}{}
+		<-r.Context().Done()
+		aborted <- struct{}{}
+	}))
+	t.Cleanup(srv.Close)
+	s := New(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		s.KeepListed(ctx, []string{"d/v"})
+		close(done)
+	}()
+	<-started
+	cancel()
+	select {
+	case <-aborted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the in-flight listing request was not cancelled")
+	}
+	<-done
+}
+
+// TestFetchVariable_ReturnsACompactCopy: the root variable may be kept in a
+// cache; it must not pin the whole tail buffer.
+func TestFetchVariable_ReturnsACompactCopy(t *testing.T) {
+	b := newFakeBucket(t)
+	s := newTestStore(t, b, time.Now)
+	cat, err := s.catalog(context.Background(), testDomain, varTemp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := s.fetchVariable(context.Background(), cat.years[2001])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) >= tailBytes/2 || cap(raw) >= tailBytes {
+		t.Errorf("len %d, cap %d: the slice still pins the %d-byte tail buffer", len(raw), cap(raw), tailBytes)
+	}
+}

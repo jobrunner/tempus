@@ -102,7 +102,8 @@ func (a *Assembler) readModels(ctx context.Context, sels []selection, loc Locati
 	for i := range perVar {
 		perVar[i] = make([][]float32, len(models))
 	}
-	first, covered, err := a.plan(ctx, sels, vars, from, to)
+	lookups := a.coverage(ctx, sels, vars, from, to)
+	first, err := plan(ctx, lookups, vars, int(to.Sub(from)/time.Hour))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +117,7 @@ func (a *Assembler) readModels(ctx context.Context, sels []selection, loc Locati
 		return nil, err
 	}
 	for m := range models {
-		need := gapped(sels[m].model, vars, perVar, covered[m], m)
+		need := gapped(ctx, sels[m].model, vars, perVar, lookups[m], m)
 		if err := a.readRound(ctx, sels[m], loc, vars, need, perVar, m, from, to); err != nil {
 			return nil, err
 		}
@@ -125,12 +126,12 @@ func (a *Assembler) readModels(ctx context.Context, sels []selection, loc Locati
 }
 
 // gapped returns the variables model m (provided by mdl) still has to read:
-// those it covers and has not read whose mix of everything read so far still
-// has a gap.
-func gapped(mdl model, vars []string, perVar [][][]float32, covered []bool, m int) []int {
+// those it has not read whose mix of everything read so far still has a gap
+// and which it may cover. Its coverage answer is awaited only then.
+func gapped(ctx context.Context, mdl model, vars []string, perVar [][][]float32, lookups []*lookup, m int) []int {
 	var need []int
 	for vi, v := range vars {
-		if mdl.vars[v] && covered[vi] && perVar[vi][m] == nil && hasGap(ra.Mix(perVar[vi], true)) {
+		if mdl.vars[v] && perVar[vi][m] == nil && hasGap(ra.Mix(perVar[vi], true)) && mayCover(ctx, lookups[vi]) {
 			need = append(need, vi)
 		}
 	}
